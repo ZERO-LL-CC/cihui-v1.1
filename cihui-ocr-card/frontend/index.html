@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>词慧 · 智能识别</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --primary: #0ea5a4;
+  --primary-dark: #0d9488;
+  --primary-light: #ccfbf1;
+  --bg: #f4f6f8;
+  --card: #ffffff;
+  --text: #1f2937;
+  --text-secondary: #6b7280;
+  --text-light: #9ca3af;
+  --border: #e5e7eb;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --shadow: 0 2px 12px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.1);
+  --radius: 16px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding-bottom: 40px;
+}
+
+/* 顶部导航 */
+.header {
+  background: linear-gradient(135deg, #0d9488 0%, #0ea5a4 100%);
+  color: white;
+  padding: 20px 16px 28px;
+  position: relative;
+  overflow: hidden;
+}
+.header::after {
+  content: '';
+  position: absolute;
+  right: -30px; top: -30px;
+  width: 140px; height: 140px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 50%;
+}
+.header h1 { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+
+/* 主容器 */
+.container { max-width: 600px; margin: 0 auto; padding: 0 14px; }
+
+/* 卡片 */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  margin-top: -16px;
+  position: relative;
+}
+
+/* 模式切换 */
+.mode-tabs {
+  display: flex;
+  background: #f3f4f6;
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 16px;
+}
+.mode-tab {
+  flex: 1;
+  text-align: center;
+  padding: 9px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.25s;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+}
+.mode-tab.active {
+  background: white;
+  color: var(--primary-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+/* 上传区域 */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s;
+  background: #fafbfc;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+.upload-icon {
+  width: 52px; height: 52px;
+  margin: 0 auto 12px;
+  background: var(--primary-light);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+}
+.upload-zone h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.upload-zone p { font-size: 13px; color: var(--text-secondary); }
+
+#fileInput { display: none; }
+
+/* 图片预览 */
+.preview-wrap {
+  margin-top: 14px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: none;
+  position: relative;
+}
+.preview-wrap.show { display: block; }
+.preview-wrap img { width: 100%; display: block; max-height: 320px; object-fit: contain; background: #f9fafb; }
+
+/* 按钮 */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 13px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 12px;
+}
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
+.btn-secondary { background: #f3f4f6; color: var(--text); }
+.btn-secondary:hover { background: #e5e7eb; }
+
+/* 加载动画 */
+.loading {
+  display: none;
+  text-align: center;
+  padding: 30px 20px;
+}
+.loading.show { display: block; }
+.spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--primary-light);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 14px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading p { font-size: 14px; color: var(--text-secondary); }
+.loading .time-info { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+
+/* 结果区域 */
+.result-section { margin-top: 16px; display: none; }
+.result-section.show { display: block; }
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.result-title { font-size: 16px; font-weight: 600; }
+.result-meta { font-size: 12px; color: var(--text-light); }
+
+/* 结果标签页 */
+.result-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.result-tab {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-weight: 500;
+}
+.result-tab.active { color: var(--primary-dark); border-bottom-color: var(--primary); }
+
+/* 文本结果 */
+.full-text-box {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+}
+
+/* Markdown 结果 */
+.markdown-box {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 14px;
+  line-height: 1.7;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+}
+.markdown-box table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+.markdown-box th, .markdown-box td { border: 1px solid var(--border); padding: 6px 10px; font-size: 13px; }
+.markdown-box th { background: #f3f4f6; }
+
+/* 行列表 */
+.line-list { max-height: 400px; overflow-y: auto; }
+.line-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.line-item:hover { background: #f9fafb; }
+.line-num {
+  min-width: 24px;
+  font-size: 12px;
+  color: var(--text-light);
+  text-align: right;
+  padding-top: 2px;
+}
+.line-content { flex: 1; font-size: 14px; line-height: 1.5; }
+.line-confidence {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.conf-high { background: #d1fae5; color: #065f46; }
+.conf-mid { background: #fef3c7; color: #92400e; }
+.conf-low { background: #fee2e2; color: #991b1b; }
+
+/* 元素标签 */
+.element-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.element-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #f3f4f6;
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.element-tag.table { background: #dbeafe; color: #1e40af; }
+.element-tag.formula { background: #fce7f3; color: #9d174d; }
+.element-tag.seal { background: #fef3c7; color: #92400e; }
+
+/* 错误提示 */
+.error-box {
+  display: none;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: #991b1b;
+}
+.error-box.show { display: block; }
+
+/* 复制按钮 */
+.copy-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.copy-btn:hover { border-color: var(--primary); color: var(--primary-dark); }
+
+/* 底部信息 */
+.footer-info {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-light);
+  margin-top: 20px;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="container">
+    <h1>词慧 · 智能识别</h1>
+    <p>基于 PaddleOCR 开源文档 AI 引擎</p>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <!-- 模式切换 -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="text" onclick="switchMode('text')">文字识别</button>
+      <button class="mode-tab" data-mode="document" onclick="switchMode('document')">文档解析</button>
+    </div>
+
+    <!-- 上传区域 -->
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">📄</div>
+      <h3>点击上传图片</h3>
+      <p>支持 JPG / PNG / BMP，可拖拽上传</p>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(event)">
+
+    <!-- 图片预览 -->
+    <div class="preview-wrap" id="previewWrap">
+      <img id="previewImg" src="" alt="预览">
+    </div>
+
+    <!-- 识别按钮 -->
+    <button class="btn btn-primary" id="recognizeBtn" onclick="startRecognize()" disabled>
+      开始识别
+    </button>
+    <button class="btn btn-secondary" onclick="resetAll()">重新选择</button>
+
+    <!-- 加载状态 -->
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p id="loadingText">正在识别中...</p>
+      <div class="time-info">首次加载模型可能需要较长时间</div>
+    </div>
+
+    <!-- 错误提示 -->
+    <div class="error-box" id="errorBox"></div>
+
+    <!-- 结果区域 -->
+    <div class="result-section" id="resultSection">
+      <div class="result-header">
+        <div class="result-title">识别结果</div>
+        <div class="result-meta" id="resultMeta"></div>
+      </div>
+
+      <div class="result-tabs" id="resultTabs">
+        <button class="result-tab active" data-tab="full" onclick="switchResultTab('full')">完整文本</button>
+        <button class="result-tab" data-tab="lines" onclick="switchResultTab('lines')">逐行详情</button>
+        <button class="result-tab" data-tab="elements" onclick="switchResultTab('elements')" style="display:none">文档元素</button>
+      </div>
+
+      <div id="tab-full">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+          <button class="copy-btn" onclick="copyText()">复制文本</button>
+        </div>
+        <div class="full-text-box" id="fullTextBox"></div>
+      </div>
+
+      <div id="tab-lines" style="display:none">
+        <div class="line-list" id="lineList"></div>
+      </div>
+
+      <div id="tab-elements" style="display:none">
+        <div class="element-tags" id="elementTags"></div>
+        <div id="markdownSection" style="margin-top:14px;display:none">
+          <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">结构化解析：</div>
+          <div class="markdown-box" id="markdownBox"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-info">
+    Powered by PaddleOCR · Apache 2.0 开源
+  </div>
+</div>
+
+<script>
+let currentMode = 'text';
+let selectedFile = null;
+let currentResult = null;
+
+// 切换识别模式
+function switchMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.mode === mode);
+  });
+}
+
+// 拖拽上传
+const uploadZone = document.getElementById('uploadZone');
+['dragenter', 'dragover'].forEach(evt => {
+  uploadZone.addEventListener(evt, e => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+  });
+});
+['dragleave', 'drop'].forEach(evt => {
+  uploadZone.addEventListener(evt, e => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+  });
+});
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  const files = e.dataTransfer.files;
+  if (files.length > 0) {
+    handleFile(files[0]);
+  }
+});
+
+// 文件选择
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  if (file) handleFile(file);
+}
+
+function handleFile(file) {
+  if (!file.type.startsWith('image/')) {
+    showError('请选择图片文件');
+    return;
+  }
+  selectedFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('previewImg').src = e.target.result;
+    document.getElementById('previewWrap').classList.add('show');
+    document.getElementById('recognizeBtn').disabled = false;
+  };
+  reader.readAsDataURL(file);
+  hideError();
+}
+
+// 开始识别
+async function startRecognize() {
+  if (!selectedFile) return;
+
+  const btn = document.getElementById('recognizeBtn');
+  const loading = document.getElementById('loading');
+  const resultSection = document.getElementById('resultSection');
+
+  btn.disabled = true;
+  loading.classList.add('show');
+  resultSection.classList.remove('show');
+  hideError();
+
+  document.getElementById('loadingText').textContent =
+    currentMode === 'text' ? '正在识别文字...' : '正在解析文档...';
+
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+  formData.append('mode', currentMode);
+
+  const startTime = Date.now();
+
+  try {
+    const endpoint = currentMode === 'text' ? '/api/ocr/text' : '/api/ocr/document';
+    const response = await fetch(endpoint, { method: 'POST', body: formData });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: '识别失败' }));
+      throw new Error(err.detail || '识别失败');
+    }
+
+    const data = await response.json();
+    currentResult = data;
+    renderResult(data);
+  } catch (err) {
+    showError(err.message || '识别失败，请重试');
+  } finally {
+    loading.classList.remove('show');
+    btn.disabled = false;
+  }
+}
+
+// 渲染结果
+function renderResult(data) {
+  const resultSection = document.getElementById('resultSection');
+  resultSection.classList.add('show');
+
+  // 元信息
+  const meta = `${data.elapsed_ms}ms · ${data.line_count || data.element_count || 0} 项`;
+  document.getElementById('resultMeta').textContent = meta;
+
+  // 完整文本
+  const fullText = data.full_text || data.markdown || '';
+  document.getElementById('fullTextBox').textContent = fullText;
+
+  // 逐行详情
+  const lineList = document.getElementById('lineList');
+  lineList.innerHTML = '';
+  (data.lines || []).forEach((line, idx) => {
+    const conf = line.confidence;
+    const confClass = conf > 0.9 ? 'conf-high' : conf > 0.7 ? 'conf-mid' : 'conf-low';
+    const item = document.createElement('div');
+    item.className = 'line-item';
+    item.innerHTML = `
+      <div class="line-num">${idx + 1}</div>
+      <div class="line-content">${escapeHtml(line.text)}</div>
+      <div class="line-confidence ${confClass}">${(conf * 100).toFixed(1)}%</div>
+    `;
+    lineList.appendChild(item);
+  });
+
+  // 文档元素标签
+  const elementsTab = document.querySelector('[data-tab="elements"]');
+  const elementTags = document.getElementById('elementTags');
+  const markdownSection = document.getElementById('markdownSection');
+
+  if (data.elements && data.elements.length > 0) {
+    elementsTab.style.display = 'block';
+    elementTags.innerHTML = '';
+    const typeCount = {};
+    data.elements.forEach(el => {
+      const type = el.type || 'unknown';
+      typeCount[type] = (typeCount[type] || 0) + 1;
+    });
+    Object.entries(typeCount).forEach(([type, count]) => {
+      const tagClass = type.toLowerCase().includes('table') ? 'table'
+        : type.toLowerCase().includes('formula') ? 'formula'
+        : type.toLowerCase().includes('seal') ? 'seal' : '';
+      const tag = document.createElement('span');
+      tag.className = `element-tag ${tagClass}`;
+      tag.textContent = `${type} × ${count}`;
+      elementTags.appendChild(tag);
+    });
+  } else {
+    elementsTab.style.display = 'none';
+  }
+
+  if (data.markdown) {
+    markdownSection.style.display = 'block';
+    // 简单渲染 markdown 表格
+    document.getElementById('markdownBox').innerHTML = renderMarkdown(data.markdown);
+  } else {
+    markdownSection.style.display = 'none';
+  }
+
+  // 重置标签页
+  switchResultTab('full');
+}
+
+// 结果标签切换
+function switchResultTab(tab) {
+  document.querySelectorAll('.result-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  ['full', 'lines', 'elements'].forEach(name => {
+    document.getElementById('tab-' + name).style.display = name === tab ? 'block' : 'none';
+  });
+}
+
+// 简单 Markdown 渲染（表格）
+function renderMarkdown(text) {
+  let html = escapeHtml(text);
+  // 表格
+  const lines = html.split('\n');
+  let result = [];
+  let inTable = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.includes('|')) {
+      if (!inTable) { result.push('<table>'); inTable = true; }
+      const isHeader = i + 1 < lines.length && /^[\s|:-]+$/.test(lines[i + 1]);
+      const cells = line.split('|').filter(c => c.trim());
+      const tag = isHeader ? 'th' : 'td';
+      result.push('<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>');
+      if (isHeader) i++;
+    } else {
+      if (inTable) { result.push('</table>'); inTable = false; }
+      result.push(line + '<br>');
+    }
+  }
+  if (inTable) result.push('</table>');
+  return result.join('');
+}
+
+// 复制文本
+function copyText() {
+  const text = currentResult ? (currentResult.full_text || currentResult.markdown || '') : '';
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = '已复制';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+}
+
+// 重置
+function resetAll() {
+  selectedFile = null;
+  currentResult = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('previewWrap').classList.remove('show');
+  document.getElementById('resultSection').classList.remove('show');
+  document.getElementById('recognizeBtn').disabled = true;
+  hideError();
+}
+
+// 工具函数
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.classList.add('show');
+}
+function hideError() {
+  document.getElementById('errorBox').classList.remove('show');
+}
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+</script>
+
+</body>
+</html>
