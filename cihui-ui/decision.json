@@ -1,0 +1,13 @@
+{
+  "audience": "产品/UI 设计与 HarmonyOS 开发（含产品负责人本人）",
+  "reader_task": "按文档还原词慧 App 的页面结构、手势交互线、动效参数与视觉规范，并据此开发与评审",
+  "genre_contract": null,
+  "adapter": null,
+  "presentation_mode": "rich",
+  "visual_plan": {
+    "reason": "UI/交互说明文档，需要逐屏插入高保真界面图作为视觉证据，并配交互线与动效说明",
+    "blocks": [
+      {"type": "img", "min_count": 10, "purpose": "10 个关键界面高保真预览，逐屏配图"}
+    ]
+  }
+}

@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>词慧 · UI 设计预览（26 屏 · v1.2）</title>
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap">
+<style>
+:root{
+  --brand:#0A59F7; --brand-d:#0846C0; --brand-w:#E9F0FE;
+  --ink:#17202E; --ink2:#5A6575; --ink3:#98A2B2;
+  --line:#E7EAF1; --bg:#EDF0F6; --card:#FFFFFF;
+  --ok:#179C5B; --ok-bg:#E5F5EC; --warn:#EC8A12; --warn-bg:#FDF1DE;
+  --bad:#E14B4B; --bad-bg:#FCEAEA; --cyan:#1FA9C9; --violet:#6E5CF6;
+  --shadow:0 10px 30px rgba(23,42,84,.10); --shadow-sm:0 3px 10px rgba(23,42,84,.07);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:"HarmonyOS Sans SC","Noto Sans SC","Microsoft YaHei",-apple-system,"PingFang SC",sans-serif;
+  background:#CFD6E2;color:var(--ink);padding:46px 40px 70px;}
+.page-head-main{max-width:1360px;margin:0 auto 34px;color:#1B2433;}
+.page-head-main h1{font-size:30px;font-weight:900;letter-spacing:1px;}
+.page-head-main p{font-size:14px;color:#46516A;margin-top:9px;line-height:1.8;}
+.tokens{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
+.tok{background:rgba(255,255,255,.75);border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;color:#33405a;}
+.grid{max-width:1360px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:34px 28px;}
+.board{display:flex;flex-direction:column;align-items:center;}
+.phone{width:304px;height:658px;border-radius:36px;overflow:hidden;position:relative;background:var(--bg);
+  box-shadow:0 0 0 9px #0C0F15,0 26px 60px rgba(10,20,40,.4);transform:scale(1);transform-origin:top center;}
+.cap{margin-top:20px;background:#fff;border-radius:16px;padding:13px 15px;width:304px;box-shadow:0 6px 18px rgba(20,36,70,.10);}
+.cap b{font-size:14.5px;display:block;margin-bottom:7px;}
+.cap span{display:block;font-size:11.5px;color:var(--ink2);line-height:1.75;}
+.cap .k{color:var(--brand);font-weight:700;}
+/* ---- 缩放容器：内部按 390×844 设计再整体缩放 ---- */
+.scale{position:relative;width:304px;height:658px;overflow:hidden;}
+.scale .inner{position:absolute;top:0;left:0;width:390px;height:844px;transform:scale(.78);transform-origin:top left;}
+.sb{position:absolute;top:0;left:0;right:0;height:42px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px 0 28px;font-size:14px;font-weight:600;z-index:40;}
+.scr{position:absolute;inset:0;overflow:hidden;}
+.pad{padding:0 18px;}
+.ph{padding:48px 20px 5px;}.ph h1{font-size:27px;font-weight:900;}.ph .sub{font-size:12.5px;color:var(--ink3);margin-top:5px;}
+.card{background:#fff;border-radius:20px;box-shadow:var(--shadow-sm);}
+.sec{font-size:15px;font-weight:700;margin:10px 2px 7px;}
+.scr.vc{display:flex;flex-direction:column;}
+.scr.vc .pad{margin-top:auto;margin-bottom:auto;}
+/* 首页 */
+.hello{display:flex;align-items:center;justify-content:space-between;}
+.streak{display:flex;align-items:center;gap:5px;background:#fff;border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:700;color:var(--warn);box-shadow:var(--shadow-sm);}
+.hero{margin-top:14px;border-radius:24px;padding:20px;color:#fff;background:linear-gradient(135deg,#1E6BFB,#0A59F7 55%,#0842B8);box-shadow:0 14px 30px rgba(10,89,247,.32);position:relative;overflow:hidden;}
+.hero::after{content:"";position:absolute;right:-46px;top:-46px;width:170px;height:170px;border-radius:50%;background:rgba(255,255,255,.1);}
+.ht{display:flex;gap:16px;align-items:center;position:relative;z-index:1;}
+.ring{width:86px;height:86px;flex:none;position:relative;}.ring .rt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.ring b{font-size:21px;font-weight:900;}.ring span{font-size:10px;opacity:.85;}
+.hi .lbl{font-size:12.5px;opacity:.9;}.hi .big{font-size:19px;font-weight:800;margin:5px 0 3px;}.hi .eta{font-size:11.5px;opacity:.85;}
+.hbtn{margin-top:15px;width:100%;height:48px;border-radius:15px;background:#fff;color:var(--brand);font-size:16px;font-weight:800;letter-spacing:2px;position:relative;z-index:1;}
+.bks{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:13px;}
+.bk{background:#fff;border-radius:13px;padding:9px 2px;text-align:center;box-shadow:var(--shadow-sm);}
+.bk .n{font-size:16px;font-weight:900;}.bk .t{font-size:9.5px;color:var(--ink3);margin-top:2px;}
+.bk.new .n{color:var(--brand);}.bk.r1 .n{color:var(--ok);}.bk.r2 .n{color:var(--cyan);}.bk.r4 .n{color:var(--violet);}.bk.r7 .n{color:var(--warn);}.bk.r15 .n{color:var(--bad);}
+.backlog{margin-top:10px;background:var(--warn-bg);color:#B5680B;border-radius:12px;padding:9px 12px;font-size:11.5px;}
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:4px;}
+.qb{background:#fff;border-radius:20px;padding:14px;display:flex;gap:11px;align-items:center;box-shadow:var(--shadow-sm);}
+.qb .ic{width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:none;}
+.qb b{font-size:14px;display:block;}.qb span.s{font-size:11px;color:var(--ink3);}
+.wrong{margin-top:11px;background:#fff;border-radius:20px;box-shadow:var(--shadow-sm);padding:14px 16px;display:flex;align-items:center;gap:13px;}
+.wrong .ic{width:42px;height:42px;border-radius:13px;background:var(--bad-bg);color:var(--bad);display:flex;align-items:center;justify-content:center;flex:none;}
+.wrong b{font-size:14px;}.wrong .d{font-size:11px;color:var(--ink3);}.wrong .cnt{margin-left:auto;font-size:12.5px;color:var(--bad);font-weight:700;}
+/* tabbar */
+.tabbar{position:absolute;left:14px;right:14px;bottom:14px;height:68px;background:rgba(255,255,255,.9);backdrop-filter:blur(18px);
+  border-radius:24px;box-shadow:0 12px 34px rgba(20,36,70,.16);display:flex;z-index:30;border:1px solid rgba(255,255,255,.6);}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:var(--ink3);font-weight:600;position:relative;}
+.tab.on{color:var(--brand);}.tab .pill{position:absolute;top:9px;width:46px;height:27px;border-radius:999px;background:var(--brand-w);z-index:0;}
+.tab svg{position:relative;z-index:1;}.tab span{position:relative;z-index:1;}
+/* 打卡 */
+.gate{background:#fff;border-radius:22px;box-shadow:var(--shadow-sm);padding:13px 15px;}
+.gate h3{font-size:15px;font-weight:800;margin-bottom:2px;}
+.gr{display:flex;align-items:center;gap:11px;padding:8px 2px;border-bottom:1px solid var(--line);}
+.gr:last-of-type{border-bottom:0;}
+.gi{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex:none;}
+.gr .gt{flex:1;}.gr .gt b{font-size:14px;display:block;}.gr .gt span{font-size:11.5px;color:var(--ink3);}
+.gs{font-size:12px;font-weight:700;}.gs.ok{color:var(--ok);}.gs.wait{color:var(--ink3);}
+.cbtn{width:100%;height:54px;border-radius:18px;font-size:16.5px;font-weight:900;letter-spacing:3px;margin-top:14px;background:#D7DDE8;color:#fff;}
+.cbtn.ready{background:linear-gradient(135deg,#1E6BFB,#0A59F7);box-shadow:0 12px 26px rgba(10,89,247,.4);}
+.cal{margin-top:4px;background:#fff;border-radius:22px;box-shadow:var(--shadow-sm);padding:11px 10px;}
+.cal-week{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:10.5px;color:var(--ink3);padding:0 2px 6px;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.cc{border-radius:10px;aspect-ratio:1/.82;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:700;position:relative;}
+.cc .d{font-size:11.5px;}.cc .mk{display:flex;gap:2px;margin-top:2px;}
+.cc.past{background:var(--ok-bg);color:var(--ok);}.cc.today{background:var(--brand);color:#fff;}.cc.future{background:#F3F5F9;color:var(--ink3);}.cc.overdue{background:var(--bad-bg);color:var(--bad);}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin:12px 4px 0;font-size:10.5px;color:var(--ink2);}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;}
+.makeup{margin-top:10px;background:#fff;border-radius:18px;padding:10px 14px;box-shadow:var(--shadow-sm);font-size:11px;color:var(--ink2);line-height:1.6;}
+/* 个人 */
+.ptop{display:flex;align-items:center;gap:13px;background:#fff;border-radius:22px;padding:13px 15px;box-shadow:var(--shadow-sm);}
+.ptop.off{border:1.5px dashed #C8D0DE;background:#FCFDFF;}
+.av{width:52px;height:52px;border-radius:17px;background:linear-gradient(135deg,#1E6BFB,#0842B8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:900;flex:none;}
+.av.gray{background:#EEF1F6;color:var(--ink3);}
+.ptop .nm{font-size:16.5px;font-weight:800;display:flex;align-items:center;gap:7px;}
+.cb{font-size:10px;background:var(--ok-bg);color:var(--ok);padding:2.5px 8px;border-radius:999px;font-weight:700;}
+.ptop .ds{font-size:11.5px;color:var(--ink3);margin-top:4px;}
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:9px;}
+.st{background:#fff;border-radius:16px;padding:5px 6px;text-align:center;box-shadow:var(--shadow-sm);}
+.st b{font-size:18px;font-weight:900;}.st span{font-size:10.5px;color:var(--ink3);display:block;margin-top:2px;}
+.gp{background:#fff;border-radius:20px;box-shadow:var(--shadow-sm);margin-top:9px;overflow:hidden;}
+.grow{display:flex;align-items:center;gap:12px;padding:5px 15px;border-bottom:1px solid var(--line);min-height:40px;}
+.grow:last-child{border-bottom:0;}
+.gi2{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex:none;}
+.grow .gt{flex:1;font-size:13.5px;font-weight:600;}.grow .gs{font-size:11px;color:var(--ink3);display:block;margin-top:2px;}
+.sw{width:46px;height:27px;border-radius:999px;background:#D6DCE7;position:relative;flex:none;}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.2);}
+.sw.on{background:var(--brand);}.sw.on::after{transform:translateX(19px);}
+.cloudline{background:var(--ok-bg);border-radius:13px;padding:8px 12px;font-size:10.5px;color:#12704B;line-height:1.5;margin:8px 12px;display:flex;gap:6px;align-items:flex-start;}
+.cloudline.blue{background:var(--brand-w);color:var(--brand-d);}
+/* 二级页通用导航 */
+.nb{height:92px;display:flex;align-items:flex-end;padding:0 10px 8px;position:relative;flex:none;}
+.nb .bkbtn{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--ink);flex:none;}
+.nb .ttl{position:absolute;left:60px;right:60px;text-align:center;font-size:16.5px;font-weight:900;bottom:15px;pointer-events:none;}
+.nact{margin-left:auto;height:36px;padding:0 12px;border-radius:99px;background:var(--brand-w);color:var(--brand);font-size:12px;font-weight:800;display:flex;align-items:center;gap:4px;margin-bottom:2px;white-space:nowrap;flex:none;}
+.nact.p{background:var(--brand);color:#fff;box-shadow:0 6px 14px rgba(10,89,247,.3);}
+.body2{padding:0 16px;}
+/* 全屏相机 */
+.camf{position:absolute;inset:0;background:#0B0E13;color:#fff;overflow:hidden;}
+.cf-view{position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 30%,#232A36 0%,#12161E 60%,#0B0E13 100%);}
+.cf-view::before{content:"";position:absolute;left:9%;right:9%;top:16%;bottom:23%;border-radius:10px;background:linear-gradient(160deg,rgba(255,255,255,.055),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.08);}
+.cf-view::after{content:"abandon  抛弃；放弃\A abandon  抛弃；放弃\A benefit  利益；好处\A capable  有能力的\A declare  宣布；声明\A eager  渴望的\A fabric  织物；布料\A gentle  温和的\A horizon  地平线；眼界";
+  white-space:pre;position:absolute;left:13%;right:13%;top:20%;font-size:14px;line-height:2.5;color:rgba(255,255,255,.32);font-family:Georgia,serif;}
+.cf-top{position:absolute;top:0;left:0;right:0;height:96px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 12px;z-index:6;background:linear-gradient(180deg,rgba(0,0,0,.55),transparent);}
+.cf-top button{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;}
+.cf-top .ct{font-size:15px;font-weight:700;padding-bottom:8px;}
+.cf-frame{position:absolute;left:7%;right:7%;top:14%;bottom:24%;border-radius:14px;z-index:4;}
+.cf-frame i{position:absolute;width:30px;height:30px;border:3px solid #2F74FF;}
+.cf-frame i:nth-child(1){left:-2px;top:-2px;border-right:0;border-bottom:0;border-radius:10px 0 0 0;}
+.cf-frame i:nth-child(2){right:-2px;top:-2px;border-left:0;border-bottom:0;border-radius:0 10px 0 0;}
+.cf-frame i:nth-child(3){left:-2px;bottom:-2px;border-right:0;border-top:0;border-radius:0 0 0 10px;}
+.cf-frame i:nth-child(4){right:-2px;bottom:-2px;border-left:0;border-top:0;border-radius:0 0 10px 0;}
+.cf-scan{position:absolute;left:8%;right:8%;top:40%;height:2px;background:linear-gradient(90deg,transparent,#3D82FF,transparent);box-shadow:0 0 16px 3px rgba(47,116,255,.65);}
+.cf-tip{position:absolute;top:11.5%;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.85);z-index:5;}
+.cf-bottom{position:absolute;left:0;right:0;bottom:0;padding:8px 34px 40px;background:linear-gradient(0deg,rgba(0,0,0,.72),transparent);display:flex;align-items:center;justify-content:space-between;z-index:6;}
+.cf-album{width:52px;height:52px;border-radius:13px;background:linear-gradient(135deg,#39424F,#222831);border:1.5px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.85);}
+.cf-shutter{width:76px;height:76px;border-radius:50%;border:5px solid #fff;display:flex;align-items:center;justify-content:center;}
+.cf-shutter i{width:60px;height:60px;border-radius:50%;background:#fff;display:block;}
+.cf-multi{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.85);font-size:11px;font-weight:700;flex-direction:column;gap:2px;}
+/* 定格 */
+.fz-img{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:74px 22px 150px;background:#0B0E13;}
+.fz-paper{width:100%;border-radius:8px;background:#F6F2E8;box-shadow:0 24px 60px rgba(0,0,0,.6);padding:28px 24px;transform:rotate(-1.4deg);font-family:Georgia,serif;color:#2A2F38;font-size:15px;line-height:2.65;}
+.cmask{position:absolute;inset:0;background:rgba(8,11,17,.55);z-index:20;display:flex;align-items:center;justify-content:center;}
+.lcard{background:#fff;color:var(--ink);border-radius:22px;padding:26px 30px;width:230px;text-align:center;}
+.spin{width:46px;height:46px;border-radius:50%;border:4px solid var(--brand-w);border-top-color:var(--brand);margin:0 auto 14px;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.lcard b{font-size:15px;display:block;}.lcard .lp{font-size:12px;color:var(--ink3);margin-top:6px;}
+.lbar{height:6px;border-radius:99px;background:var(--line);margin-top:14px;overflow:hidden;}
+.lbar i{display:block;height:100%;background:var(--brand);border-radius:99px;}
+/* OCR */
+.ocr-tip{font-size:12px;color:var(--ink3);margin:6px 2px 12px;line-height:1.7;}
+.ocr{display:flex;flex-direction:column;gap:9px;}
+.orr{background:#fff;border-radius:15px;padding:11px 13px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow-sm);}
+.orr .en{font-weight:800;font-size:14.5px;width:82px;flex:none;}
+.orr .cn{flex:1;font-size:13px;color:var(--ink2);}
+.orr .miss{color:var(--warn);font-weight:700;font-size:11.5px;background:var(--warn-bg);padding:4px 9px;border-radius:99px;}
+.ocrfoot{margin-top:16px;}
+.btn{height:48px;border-radius:15px;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+.btn-p{background:var(--brand);color:#fff;box-shadow:0 9px 20px rgba(10,89,247,.28);}
+.btn-g{background:#fff;color:var(--ink2);box-shadow:var(--shadow-sm);}
+/* 登录 */
+.lg-hero{display:flex;flex-direction:column;align-items:center;padding:20px 0 16px;}
+.lg-logo{width:70px;height:70px;border-radius:22px;background:linear-gradient(135deg,#1E6BFB,#0842B8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;box-shadow:0 14px 30px rgba(10,89,247,.32);}
+.lg-hero h2{font-size:20px;font-weight:900;margin-top:12px;}.lg-hero p{font-size:12px;color:var(--ink3);margin-top:5px;text-align:center;line-height:1.7;}
+.wxbtn{height:48px;border-radius:15px;background:#07C160;color:#fff;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:9px;box-shadow:0 9px 20px rgba(7,193,96,.28);}
+.lg-div{display:flex;align-items:center;gap:12px;margin:16px 0 13px;color:var(--ink3);font-size:11px;}
+.lg-div::before,.lg-div::after{content:"";flex:1;height:1px;background:var(--line);}
+.fld{background:#fff;border-radius:15px;box-shadow:var(--shadow-sm);margin-bottom:10px;padding:12px 15px;display:flex;align-items:center;gap:11px;}
+.fld label{font-size:12.5px;color:var(--ink2);width:48px;flex:none;font-weight:600;}
+.fld .inp{flex:1;font-size:13px;color:var(--ink3);}
+.lg-agree{font-size:10.5px;color:var(--ink3);text-align:center;line-height:1.7;margin-top:12px;}
+.lg-agree a{color:var(--brand);}
+/* 词本列表 */
+.wbli{background:#fff;border-radius:16px;padding:13px 15px;box-shadow:var(--shadow-sm);margin-bottom:10px;display:flex;align-items:center;gap:13px;}
+.wbli .wic{width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:none;}
+.wbli b{font-size:14.5px;display:block;}.wbli .wd{font-size:11.5px;color:var(--ink3);margin-top:3px;display:block;}
+.bcover{width:44px;height:56px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:800;text-align:center;line-height:1.3;padding:4px;box-shadow:0 5px 12px rgba(20,40,90,.18);}
+.tagnew{font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;background:var(--ok-bg);color:var(--ok);white-space:nowrap;}
+.fab{position:absolute;right:20px;bottom:36px;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#1E6BFB,#0A59F7);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 14px 30px rgba(10,89,247,.45);z-index:15;}
+/* 云词本库 */
+.sfake{display:flex;align-items:center;gap:9px;background:#fff;border-radius:999px;padding:12px 16px;box-shadow:var(--shadow-sm);font-size:13px;color:var(--ink3);}
+.ctt{font-size:14px;font-weight:800;margin:16px 2px 9px;}
+.cbook{background:#fff;border-radius:17px;box-shadow:var(--shadow-sm);padding:11px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;}
+.cbook b{font-size:14px;display:block;}.cbook .cm{font-size:11px;color:var(--ink3);margin-top:2px;display:block;}
+.ggrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.gchip{background:#fff;border-radius:13px;box-shadow:var(--shadow-sm);padding:11px 4px;text-align:center;font-size:12px;font-weight:700;}
+.gchip span{display:block;font-size:10px;color:var(--ink3);font-weight:400;margin-top:2px;}
+/* 搜索 */
+.stop{display:flex;align-items:center;gap:10px;padding:52px 16px 10px;}
+.sinput{flex:1;display:flex;align-items:center;gap:8px;background:#fff;border-radius:999px;padding:11px 16px;box-shadow:var(--shadow-sm);font-size:13.5px;color:var(--ink3);}
+.scancel{font-size:14px;color:var(--brand);font-weight:600;}
+.hottags{display:flex;flex-wrap:wrap;gap:9px;}
+.hottags div{background:#fff;border-radius:999px;padding:8px 14px;font-size:12.5px;color:var(--ink2);box-shadow:var(--shadow-sm);}
+.hottags div b{color:var(--bad);margin-right:5px;}
+.hist{background:#fff;border-radius:16px;box-shadow:var(--shadow-sm);padding:0 14px;}
+.hist div{display:flex;align-items:center;gap:10px;padding:12px 2px;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink2);}
+.hist div:last-child{border-bottom:0;}
+/* 词书详情 */
+.dhero{background:#fff;border-radius:22px;box-shadow:var(--shadow-sm);padding:20px 17px;display:flex;gap:16px;align-items:center;}
+.dhero .bcover{width:82px;height:106px;border-radius:10px;font-size:13px;}
+.dhero h2{font-size:19px;font-weight:900;}
+.vp{display:flex;gap:7px;margin:9px 0 7px;flex-wrap:wrap;}
+.vp span{font-size:10px;background:var(--brand-w);color:var(--brand);border-radius:99px;padding:3px 9px;font-weight:700;}
+.dhero .cnt{font-size:11.5px;color:var(--ink3);line-height:1.6;}
+.pvw{display:flex;align-items:baseline;gap:12px;background:#fff;border-radius:13px;padding:9px 15px;margin-bottom:7px;box-shadow:var(--shadow-sm);}
+.pvw .en{font-weight:800;font-size:14px;width:88px;flex:none;}.pvw .cn{font-size:12.5px;color:var(--ink2);}
+/* DIY */
+.drow{background:#fff;border-radius:14px;padding:10px 13px;margin-bottom:8px;box-shadow:var(--shadow-sm);display:flex;align-items:center;gap:10px;}
+.drow .pv .en{font-weight:800;font-size:14.5px;}.drow .pv .cn{font-size:12.5px;color:var(--ink2);margin-top:2px;}
+.dinp{border:0;border-radius:9px;background:var(--bg);padding:7px 10px;font-size:13px;font-family:inherit;}
+.dinp.en{width:100px;font-weight:700;flex:none;}.dinp.cn{flex:1;}
+.ddel{color:var(--bad);flex:none;display:flex;}
+.dfoot{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 26px;background:linear-gradient(0deg,var(--bg) 70%,transparent);}
+/* 账号 */
+.acard{background:#fff;border-radius:20px;box-shadow:var(--shadow-sm);padding:4px 16px;}
+.arow{display:flex;align-items:center;gap:12px;padding:14px 2px;border-bottom:1px solid var(--line);font-size:13.5px;}
+.arow:last-child{border-bottom:0;}.arow .k{color:var(--ink3);width:62px;flex:none;}.arow .v{flex:1;font-weight:600;}
+.btn-r{background:var(--bad-bg);color:var(--bad);height:48px;border-radius:15px;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:10px;}
+/* 首学 */
+.dots{display:flex;gap:5px;margin:10px 4px 14px;}
+.dots i{width:8px;height:8px;border-radius:50%;background:#D7DDE8;}.dots i.on{background:var(--brand);transform:scale(1.25);}.dots i.pass{background:var(--ok);}
+.slide{background:#fff;border-radius:26px;box-shadow:var(--shadow);padding:32px 24px;min-height:380px;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;}
+.slide .tag{position:absolute;top:15px;left:17px;font-size:11px;color:var(--brand);background:var(--brand-w);padding:4px 10px;border-radius:999px;font-weight:700;}
+.slide .word{font-size:42px;font-weight:900;margin-top:30px;}.slide .pho{font-size:14.5px;color:var(--ink3);margin-top:9px;font-family:Georgia,serif;}
+.speak{margin-top:16px;width:52px;height:52px;border-radius:50%;background:var(--brand-w);display:flex;align-items:center;justify-content:center;color:var(--brand);}
+.slide .mean{margin-top:22px;font-size:24px;font-weight:800;}.slide .tip{margin-top:14px;font-size:12px;color:var(--ink3);line-height:1.7;}
+.sctrl{display:flex;gap:11px;margin-top:18px;}.sctrl>div{flex:1;}
+/* 语音 */
+.vstage{display:flex;flex-direction:column;align-items:center;margin-top:14px;}
+.vw{font-size:44px;font-weight:900;}.vph{font-size:14px;color:var(--ink3);margin-top:8px;font-family:Georgia,serif;}
+.wave{height:70px;display:flex;align-items:center;gap:5px;margin:24px 0 6px;}
+.wave i{width:5px;border-radius:3px;background:var(--brand);animation:wv .9s ease-in-out infinite;}
+.wave i:nth-child(3n){animation-delay:.15s;}.wave i:nth-child(3n+1){animation-delay:.3s;}.wave i:nth-child(3n+2){animation-delay:.45s;}
+@keyframes wv{0%,100%{height:12px;opacity:.4;}50%{height:52px;opacity:1;}}
+.vcap{margin:0;width:100%;background:#fff;border-radius:20px;box-shadow:var(--shadow-sm);padding:15px 18px;min-height:86px;display:flex;flex-direction:column;justify-content:center;}
+.vcap .l{font-size:11px;color:var(--ink3);}.vcap .t{font-size:25px;font-weight:800;margin-top:7px;color:var(--ok);}
+.mic{width:74px;height:74px;border-radius:50%;background:var(--bad);color:#fff;display:flex;align-items:center;justify-content:center;margin:20px auto 14px;box-shadow:0 12px 26px rgba(225,75,75,.35);}
+.va3{display:flex;gap:9px;width:100%;}.va3 div{flex:1;height:42px;border-radius:12px;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;white-space:nowrap;}
+.va3 .k{background:var(--ok-bg);color:var(--ok);}.va3 .f{background:var(--warn-bg);color:var(--warn);}.va3 .n{background:var(--bad-bg);color:var(--bad);}
+.vprog{margin-top:14px;font-size:12px;color:var(--ink3);text-align:center;}
+/* 闪卡 */
+.fwrap{perspective:1200px;margin-top:14px;}
+.fcard{position:relative;width:100%;height:380px;transform-style:preserve-3d;transform:rotateY(180deg);}
+.face{position:absolute;inset:0;backface-visibility:hidden;border-radius:26px;background:#fff;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:26px;}
+.face.back2{transform:rotateY(180deg);background:linear-gradient(160deg,#fff,#F3F7FF);}
+.rtag{position:absolute;top:15px;left:17px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--ok-bg);color:var(--ok);}
+.fmean{font-size:27px;font-weight:900;color:var(--brand);}.fex{font-size:13px;color:var(--ink2);margin-top:14px;line-height:1.7;text-align:center;}
+.fhint{position:absolute;bottom:15px;font-size:11px;color:var(--ink3);width:100%;text-align:center;left:0;}
+.fr{display:flex;justify-content:space-between;margin:14px 4px 6px;font-size:12px;color:var(--ink2);}.fr .must{color:var(--bad);font-weight:700;}
+.judge{display:flex;gap:10px;}.judge div{flex:1;height:54px;border-radius:16px;font-size:14px;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;}
+.judge span{font-size:10px;font-weight:500;opacity:.85;}
+.j-no{background:var(--bad-bg);color:var(--bad);}.j-fz{background:var(--warn-bg);color:var(--warn);}.j-ok{background:var(--ok-bg);color:var(--ok);}
+/* 错词本 */
+.wli{background:#fff;border-radius:15px;padding:13px 15px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-sm);margin-bottom:9px;}
+.wli .en{font-weight:800;font-size:15px;}.wli .cn{font-size:12.5px;color:var(--ink2);margin-top:2px;}
+.tag2{margin-left:auto;font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap;}
+.tag2.red{background:var(--bad-bg);color:var(--bad);}.tag2.amber{background:var(--warn-bg);color:var(--warn);}
+/* 成功弹层 */
+.dim{position:absolute;inset:0;background:rgba(20,30,55,.55);z-index:20;display:flex;align-items:center;justify-content:center;}
+.scard{background:#fff;border-radius:28px;width:300px;padding:32px 26px 24px;text-align:center;}
+.scheck{width:86px;height:86px;border-radius:50%;background:var(--ok-bg);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;}
+.scard h2{font-size:21px;font-weight:900;}.scard p{font-size:13px;color:var(--ink3);margin:8px 0 18px;line-height:1.7;}
+.sbtn{height:46px;border-radius:14px;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+
+/* ===== v1.2 ===== */
+:root{--ease:cubic-bezier(.2,0,0,1);--ease-out:cubic-bezier(.05,.7,.1,1);}
+/* 小米笔记风 checkbox */
+.mx{width:23px;height:23px;border-radius:7px;border:2px solid #C8D0DE;background:#fff;flex:none;display:flex;align-items:center;justify-content:center;transition:all .2s var(--ease);}
+.mx svg{opacity:0;transform:scale(.4);transition:all .2s var(--ease-out);}
+.mx.on{background:var(--ok);border-color:var(--ok);}
+.mx.on svg{opacity:1;transform:scale(1);}
+.gr.done .gt b{color:var(--ink3);text-decoration:line-through;text-decoration-thickness:1.5px;}
+.gr.done .gt span{color:#B7BFCC;}
+.gr.ghost{opacity:.6;}
+.mx.ghost{border:0;background:var(--bg);}
+.sec-hd{display:flex;align-items:center;justify-content:space-between;}
+.calzoom{font-size:11.5px;color:var(--brand);font-weight:700;display:flex;gap:4px;align-items:center;}
+.cc .pdt{display:flex;gap:2px;margin-top:2px;flex-wrap:wrap;justify-content:center;padding:0 2px;}
+.cc .pdt i{width:4px;height:4px;border-radius:50%;}
+.cc .pdt i.sq{border-radius:1px;}
+.cc .mbadge{font-size:8.5px;border-radius:5px;padding:0 3px;line-height:11px;margin-top:1px;font-weight:800;}
+.cc.overdue .mbadge{background:#fff;color:var(--bad);}
+.cc.made{background:var(--ok-bg);color:var(--ok);}
+.cc.made .mbadge{background:var(--warn);color:#fff;}
+/* 计划大表 */
+.pcal{background:#fff;border-radius:22px;box-shadow:var(--shadow-sm);padding:12px 10px;}
+.pmonth{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 10px;}
+.pmonth .par{width:32px;height:32px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--ink2);}
+.pmonth .pm{font-size:15px;font-weight:900;}
+.pstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+.pst{background:var(--bg);border-radius:13px;text-align:center;padding:9px 2px;}
+.pst b{font-size:19px;font-weight:900;display:block;}.pst span{font-size:10px;color:var(--ink3);}
+.pst .bad{color:var(--bad);}
+.pgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.pcc{border-radius:10px;aspect-ratio:1/.95;display:flex;flex-direction:column;align-items:center;padding-top:5px;font-weight:700;}
+.pcc .pn{font-size:11px;}
+.pcc .pdt{display:flex;gap:2px;margin-top:3px;flex-wrap:wrap;justify-content:center;padding:0 3px;}
+.pcc .pdt i{width:5px;height:5px;border-radius:50%;}
+.pcc .pdt i.sq{border-radius:1px;}
+.pcc.past{background:var(--ok-bg);color:var(--ok);}
+.pcc.today{background:var(--brand);color:#fff;}
+.pcc.future{background:#F7F9FC;color:var(--ink2);}
+.pcc.dim{color:#C2CAD6;background:transparent;}
+.pcc.missed{background:var(--bad-bg);color:var(--bad);}
+.pcc.made{background:var(--ok-bg);color:var(--ok);}
+.pcc .pmk{position:absolute;top:2px;right:4px;font-size:8px;border-radius:4px;padding:0 3px;line-height:11px;font-weight:800;}
+.pcc.made .pmk{background:var(--warn);color:#fff;}
+.pcc.missed .pmk{background:#fff;color:var(--bad);}
+.pcc{position:relative;}
+/* 连续打卡果冻日历 */
+.shero{border-radius:22px;background:linear-gradient(140deg,#FFA53D,#F58312);color:#fff;padding:20px 18px 22px;text-align:center;box-shadow:0 14px 30px rgba(245,131,18,.32);}
+.shero .sfl{width:34px;height:34px;margin:0 auto 2px;}
+.shero b{font-size:42px;font-weight:900;display:block;line-height:1.12;}
+.shero .s1{font-size:12px;opacity:.92;margin-top:3px;}
+.sgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.scc{border-radius:10px;aspect-ratio:1/.82;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;animation:jelly .5s var(--ease-out) both;}
+.scc.past{background:var(--ok-bg);color:var(--ok);}.scc.today{background:var(--brand);color:#fff;}.scc.future{background:#F3F5F9;color:var(--ink3);}.scc.dim{color:#C8CFDA;background:transparent;}
+@keyframes jelly{0%{opacity:0;transform:translateY(26px) scale(.6);}60%{opacity:1;transform:translateY(-4px) scale(1.05);}100%{opacity:1;transform:none;}}
+.scard2{background:#fff;border-radius:22px;box-shadow:var(--shadow-sm);padding:11px 10px;}
+/* 补卡详情 */
+.mkgrp{background:#fff;border-radius:16px;box-shadow:var(--shadow-sm);padding:13px 15px;margin-bottom:10px;}
+.mktag{display:inline-block;font-size:10.5px;font-weight:800;color:#fff;border-radius:8px;padding:3px 9px;margin-bottom:7px;}
+.mkgrp b{font-size:14px;display:block;}.mkgrp .wds{font-size:11.5px;color:var(--ink3);margin-top:5px;line-height:1.7;}
+.mk-note{background:var(--brand-w);color:var(--brand-d);border-radius:12px;padding:10px 13px;font-size:11px;line-height:1.7;margin:4px 0 14px;}
+/* 滚轮 */
+.wheel{position:relative;height:238px;overflow:hidden;border-radius:20px;background:#fff;box-shadow:var(--shadow-sm);margin-top:10px;}
+.wheel::before,.wheel::after{content:"";position:absolute;left:0;right:0;height:86px;z-index:2;pointer-events:none;}
+.wheel::before{top:0;background:linear-gradient(180deg,#fff,rgba(255,255,255,.25));}
+.wheel::after{bottom:0;background:linear-gradient(0deg,#fff,rgba(255,255,255,.25));}
+.wband{position:absolute;left:12px;right:12px;top:50%;height:46px;transform:translateY(-50%);background:var(--brand-w);border-radius:13px;z-index:1;}
+.wlist{position:absolute;left:0;right:0;top:0;transform:translateY(-42px);z-index:3;}
+.wit{height:46px;display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--ink3);font-weight:500;}
+.wit.sel{font-size:25px;font-weight:900;color:var(--brand);}
+.wsum{background:#fff;border-radius:16px;box-shadow:var(--shadow-sm);padding:13px 15px;font-size:12px;color:var(--ink2);line-height:1.8;margin-top:14px;}
+.wsum b{color:var(--brand);}
+.wbtns{display:flex;gap:11px;margin-top:14px;}.wbtns>div{flex:1;}
+/* 三方登录 */
+.third-btn{height:50px;border-radius:15px;font-size:15.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:13px;}
+.third-btn.wx{background:#07C160;color:#fff;box-shadow:0 9px 20px rgba(7,193,96,.28);}
+.third-btn.qq{background:#12B7F5;color:#fff;box-shadow:0 9px 20px rgba(18,183,245,.28);}
+.third-btn.reg{background:#fff;color:var(--brand);box-shadow:var(--shadow-sm);border:1.5px solid #C9DCFE;}
+/* 表单 */
+.field-tip{background:var(--brand-w);color:var(--brand-d);border-radius:12px;padding:10px 13px;font-size:11.5px;line-height:1.7;margin-bottom:12px;}
+.field-edit-card{background:#fff;border-radius:16px;box-shadow:var(--shadow-sm);overflow:hidden;}
+.fe-row{display:flex;align-items:center;gap:11px;padding:15px;border-bottom:1px solid var(--line);}
+.fe-row:last-child{border-bottom:0;}
+.fe-row label{width:52px;flex:none;font-size:13.5px;font-weight:600;color:var(--ink2);}
+.fe-row .ph2{flex:1;font-size:13px;color:var(--ink3);}
+.fe-row input{flex:1;border:0;font-size:14px;font-family:inherit;color:var(--ink);background:transparent;outline:none;width:100%;}
+
+/* v1.2 fix: 打卡页紧凑化 */
+.gate.cmp{padding:11px 13px;}
+.gate.cmp h3{margin:0 0 5px;font-size:13px;}
+.gate.cmp .gr{padding:6px 0;}
+.gate.cmp .gt b{font-size:12.5px;}
+.gate.cmp .gt span{font-size:10px;margin-top:1px;line-height:1.45;}
+.gate.cmp .cbtn{margin-top:9px;height:40px;font-size:13.5px;}
+.cal.cmp{padding:10px 11px;}
+.cal.cmp .cal-week{font-size:9px;padding-bottom:4px;}
+.cal.cmp .cal-grid{gap:3px;}
+.cal.cmp .cc{aspect-ratio:1/.72;border-radius:7px;font-size:9.5px;}
+.cal.cmp .cc .pdt i{width:3.5px;height:3.5px;}
+.cal.cmp .cc .mbadge{font-size:8px;line-height:10px;}
+.cal.cmp .legend{margin-top:7px;font-size:9px;gap:4px 9px;}
+.mk-mini{background:var(--warn-bg);border-radius:11px;padding:8px 12px;font-size:10px;line-height:1.55;color:#8a5a12;margin-top:8px;}
+.mk-mini b{color:var(--warn);}
+.scr .ph.cmp2{padding:38px 20px 7px;}
+.scr .ph.cmp2 h1{font-size:21px;margin-bottom:1px;}
+.scr .ph.cmp2 .sub{font-size:11px;}
+</style>
+</head>
+<body>
+<div class="page-head-main">
+  <h1>词慧 · UI 设计预览（HarmonyOS 首发 · v1.2 共 26 屏）</h1>
+  <p>v1.2 新增/改版：① 打卡前置改小米笔记风 checkbox（完成划线变暗），前置 3 改为错词本每 5 天一次（非轮到日灰色不阻断）；② 登录三选项（微信 / QQ / 登录注册）+ 注册表单校验；③ 账号字段二级编辑页；④ 艾宾浩斯计划大表（放大转场、R1/R2/R4/R7/R15 彩点、翻月、补卡闭环）；⑤ 连续打卡果冻日历（chip 左滑 / 点击进入）；⑥ 补卡日详情与补卡词本闭环；⑦ 每日新词量 iOS 时钟式滚轮，计划全局联动；⑧ 修复云词本下载后列表空白；⑨ 首页问候语同步登录昵称；⑩ 单词 TTS 发音（喇叭按钮）。v1.1：全屏微信式拍照、定格识别、云词本库、Via 风搜索、DIY 词本预览/编辑等。设计语言对齐 HarmonyOS：大圆角卡片、底部悬浮 Tab、品牌蓝 #0A59F7；动效「微交互 120ms / 反馈 200ms / 页面转场 320ms」，边缘左滑跟随手指返回。</p>
+  <div class="tokens"><span class="tok">转场 320ms cubic-bezier(.2,0,0,1)</span><span class="tok" style="margin-left:8px">弹层 280ms ease-out</span><span class="tok" style="margin-left:8px">按压 120ms scale(.97)</span><span class="tok" style="margin-left:8px">入场 stagger 50ms</span><span class="tok" style="margin-left:8px">认识 #179C5B · 模糊 #EC8A12 · 不认识 #E14B4B</span></div>
+</div>
+<div class="grid" id="grid">
+<!-- 1 首页 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr"><div class="ph"><div class="hello"><div><h1>早上好，俞蔚</h1><div class="sub">今天也是和遗忘曲线赛跑的一天</div></div><div class="streak"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3-2 4.5-2 7 0 1 .5 2 1.5 2.5C10 11 8.5 9.5 8.5 7.5 6 9.5 5 12 5 14.5A7 7 0 0019 14c0-4-3-7-7-12z"/></svg> 连续 <b>12</b> 天 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div></div></div>
+<div class="pad">
+  <div class="hero"><div class="ht"><div class="ring"><svg width="86" height="86" viewBox="0 0 86 86"><circle cx="43" cy="43" r="37" stroke="rgba(255,255,255,.22)" stroke-width="8" fill="none"/><circle cx="43" cy="43" r="37" stroke="#fff" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="232" stroke-dashoffset="232"/></svg><div class="rt"><b>0%</b><span>今日进度</span></div></div>
+  <div class="hi"><div class="lbl">今日任务</div><div class="big">34 个词待完成</div><div class="eta"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1.5px"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 10V6h-2v8h6v-2h-4z"/></svg> 预计 12 分钟 · 先新词，后复习</div></div></div>
+  <div class="hbtn">开始今日学习</div></div>
+  <div class="bks" style="grid-template-columns:repeat(5,1fr)"><div class="bk new"><div class="n">8</div><div class="t">新词</div></div><div class="bk r1"><div class="n">8</div><div class="t">R1 复习</div></div><div class="bk r2"><div class="n">7</div><div class="t">R2 复习</div></div><div class="bk r4"><div class="n">6</div><div class="t">R4 复习</div></div><div class="bk r7"><div class="n">5</div><div class="t">R7 复习</div></div></div>
+  <div class="backlog" style="display:flex;gap:7px;align-items:flex-start;margin-top:10px"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex:none;margin-top:1px"><path d="M12 2L1 21h22L12 2zm1 15h-2v2h2v-2zm0-7h-2v5h2v-5z"/></svg><span>有 <b>2 天</b>的复习任务已逾期，点我去计划表补卡</span></div>
+  <div class="sec">快捷入口</div>
+  <div class="quick"><div class="qb"><span class="ic" style="background:var(--brand-w);color:var(--brand)"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9 4l-1.2 2H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-3.8L15 4H9zm3 5a4.5 4.5 0 110 9 4.5 4.5 0 010-9z"/></svg></span><span><b>拍照导入</b><span class="s">OCR 识别词表</span></span></div>
+  <div class="qb"><span class="ic" style="background:var(--ok-bg);color:var(--ok)"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4a2 2 0 012-2h13v18H6a2 2 0 00-2 2V4z"/></svg></span><span><b>我的词本</b><span class="s">个人 DIY · 云端备份</span></span></div></div>
+  <div class="wrong"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h13a2 2 0 012 2v14H6a2 2 0 01-2-2V4zm3 4h9v2H7V8zm0 4h9v2H7v-2z"/></svg></span><span><b>错词本</b><div class="d">每 5 天强化一次，不认识的词重学</div></span><span class="cnt">17 个 ›</span></div>
+  <div style="height:96px"></div>
+</div>
+<div class="tabbar"><div class="tab on"><span class="pill"></span><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-2v9h-5v-6h-4v6H5v-9H3l9-8z"/></svg><span>首页</span></div><div class="tab "><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M7 2v2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-2V2h-2v2H9V2H7zm-2 7h14v11H5V9z"/></svg><span>打卡</span></div><div class="tab "><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z"/></svg><span>我的</span></div></div>
+</div></div></div></div>
+<div class="cap"><b>① 首页 Home</b><span><span class="k">交互线：</span>「开始今日学习」→ 首学幻灯片 → 语音快过；复习桶 → 闪卡；右上「连续 N 天」chip 点击或左滑 → 连续打卡日历（㉔）；逾期条 → 计划大表（㉓）；问候语名字与登录昵称同步。</span><span><span class="k">动效：</span>None</span></div></div>
+
+<!-- 2 打卡页 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr"><div class="ph cmp2"><h1>打卡</h1><div class="sub">完成今天的全部任务，打卡按钮才会点亮</div></div>
+<div class="pad">
+ <div class="gate cmp"><h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" style="color:var(--ink2)"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> 今日打卡前置条件</h3>
+  <div class="gr done"><span class="mx on"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><div class="gt"><b>今日新词全部学完</b><span>8/8 个新词完成首学与语音测试</span></div></div>
+  <div class="gr"><span class="mx"></span><div class="gt"><b>到期复习整轮过完</b><span>0/26 个，一轮不留尾（R1×8 · R2×7 · R4×6 · R7×5）</span></div></div>
+  <div class="gr ghost"><span class="mx ghost"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#98A2B2" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><div class="gt"><b>错词本强化复习 · 每 5 天一次</b><span>今天轮空（非阻断项），下次轮到 9月15日（周二）</span></div></div>
+  <div class="cbtn">还差 1 项，去完成</div></div>
+ <div class="sec sec-hd" style="margin-top:14px">艾宾浩斯计划表<span class="calzoom"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>放大</span></div>
+ <div class="cal cmp"><div class="cal-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+ <div class="cal-grid"><div class="cc future"><span class="d">24</span></div><div class="cc future"><span class="d">25</span></div><div class="cc future"><span class="d">26</span></div><div class="cc future"><span class="d">27</span></div><div class="cc future"><span class="d">28</span></div><div class="cc overdue"><span class="d">29</span><span class="pdt"><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i><i style="background:#E14B4B"></i></span><span class="mbadge">补</span></div><div class="cc overdue"><span class="d">30</span><span class="pdt"><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i><i style="background:#E14B4B"></i></span><span class="mbadge">补</span></div><div class="cc past"><span class="d">31</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">1</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">2</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">3</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">4</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">5</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">6</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">7</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">8</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">9</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">10</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc past"><span class="d">11</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="cc today"><span class="d">今天</span><span class="pdt"><i style="background:#fff"></i><i style="background:#fff"></i><i style="background:#BFE3FF"></i><i style="background:#BFE3FF"></i></span></div><div class="cc future"><span class="d">13</span></div><div class="cc future"><span class="d">14</span></div><div class="cc future"><span class="d">15</span></div><div class="cc future"><span class="d">16</span></div><div class="cc future"><span class="d">17</span></div><div class="cc future"><span class="d">18</span></div><div class="cc future"><span class="d">19</span></div><div class="cc future"><span class="d">20</span></div><div class="cc future"><span class="d">21</span></div><div class="cc future"><span class="d">22</span></div><div class="cc future"><span class="d">23</span></div><div class="cc future"><span class="d">24</span></div><div class="cc future"><span class="d">25</span></div><div class="cc future"><span class="d">26</span></div><div class="cc future"><span class="d">27</span></div><div class="cc future"><span class="d">28</span></div><div class="cc future"><span class="d">29</span></div><div class="cc future"><span class="d">30</span></div><div class="cc future"><span class="d">1</span></div><div class="cc future"><span class="d">2</span></div><div class="cc future"><span class="d">3</span></div><div class="cc future"><span class="d">4</span></div></div>
+ <div class="legend"><span><i style="background:var(--ok)"></i>已完成</span><span><i style="background:var(--brand)"></i>今天</span><span><i style="background:var(--bad)"></i>待补卡</span><span><i style="background:var(--warn)"></i>新学</span><span><i style="background:var(--cyan)"></i>R 复习</span></div></div>
+ <div class="mk-mini"><b>补卡规则：</b>红格 = 今天之前的欠任务日，点红格生成补卡词本；补完变绿底橙「补」，不恢复连续天数；未来日不可提前打卡。</div>
+ <div style="height:92px"></div>
+</div>
+<div class="tabbar"><div class="tab "><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-2v9h-5v-6h-4v6H5v-9H3l9-8z"/></svg><span>首页</span></div><div class="tab on"><span class="pill"></span><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M7 2v2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-2V2h-2v2H9V2H7zm-2 7h14v11H5V9z"/></svg><span>打卡</span></div><div class="tab "><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z"/></svg><span>我的</span></div></div>
+</div></div></div></div>
+<div class="cap"><b>② 打卡页 Check-in（v1.2 改版）</b><span><span class="k">交互线：</span>前置 checkbox 参考小米笔记：完成项打勾、文字划线变暗；前置 3 改为「错词本 · 每 5 天一次」，非轮到日灰色 ghost 且不阻断；点「放大」或计划表 → 计划大表（㉓）；红格 → 补卡详情（㉕）。</span><span><span class="k">动效：</span>None</span></div></div>
+
+<!-- 3 个人页（未登录态） -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr"><div class="ph"><h1>我的</h1></div>
+<div class="pad">
+ <div class="ptop off"><div class="av gray"><svg width="27" height="27" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z"/></svg></div><div style="flex:1"><div class="nm">未登录</div><div class="ds">登录后开启云备份，词本与打卡记录不丢失</div></div><span style="color:var(--ink3)">›</span></div>
+ <div class="sg"><div class="st"><b>–</b><span>累计导入</span></div><div class="st"><b>–</b><span>学习中</span></div><div class="st"><b>–</b><span>已掌握</span></div><div class="st"><b>–</b><span>错词</span></div><div class="st"><b>–</b><span>连续打卡</span></div><div class="st"><b>–</b><span>准时完成率</span></div></div>
+ <div class="sec">词本与学习设置</div>
+ <div class="gp"><div class="grow"><span class="gi2" style="background:var(--brand-w);color:var(--brand);font-weight:800;font-size:14px">词</span><span class="gt">词本管理<span class="gs">个人 DIY 独立词本 · 拍照批次 · 云词本</span></span><span style="color:var(--ink3)">›</span></div></div>
+ <div class="gp"><div class="grow"><span class="gi2" style="background:var(--brand-w);color:var(--brand)">本</span><span class="gt">每日新词量<span class="gs">当前 8 个 / 天</span></span><span style="color:var(--ink3)">›</span></div>
+ <div class="grow"><span class="gi2" style="background:var(--ok-bg);color:var(--ok)">时</span><span class="gt">当天短时复习<span class="gs">5 分钟 / 30 分钟 / 12 小时</span></span><span class="sw"></span></div>
+ <div class="grow"><span class="gi2" style="background:var(--warn-bg);color:var(--warn)">严</span><span class="gt">打卡严格度 P3<span class="gs">超期积压清零才允许打卡</span></span><span class="sw"></span></div>
+ <div class="grow"><span class="gi2" style="background:#EEF0F4;color:var(--ink2)">麦</span><span class="gt">语音设置<span class="gs">TTS 语速 · ASR 匹配严格度</span></span><span style="color:var(--ink3)">›</span></div></div>
+ <div class="gp" style="margin-top:14px;padding-top:2px">
+ <div class="grow"><span class="gi2" style="background:var(--brand-w);color:var(--brand)"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l7 3v6c0 5-3 8-7 11-4-3-7-6-7-11V5l7-3z"/></svg></span><span class="gt">账号与云备份<span class="gs">未登录，点击登录 / 注册</span></span><span style="color:var(--ink3)">›</span></div>
+ <div class="grow"><span class="gi2" style="background:#EEF0F4;color:var(--ink2)"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z"/></svg></span><span class="gt">隐私与权限 · 关于</span><span style="color:var(--ink3)">›</span></div></div>
+ <div style="height:92px"></div>
+</div>
+<div class="tabbar"><div class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-2v9h-5v-6h-4v6H5v-9H3l9-8z"/></svg><span>首页</span></div><div class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M7 2v2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-2V2h-2v2H9V2H7zm-2 7h14v11H5V9z"/></svg><span>打卡</span></div><div class="tab on"><span class="pill"></span><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z"/></svg><span>我的</span></div></div>
+</div></div></div></div>
+<div class="cap"><b>③ 我的 · 未登录态（v1.1 改版）</b><span><span class="k">交互线：</span>顶部虚线未登录卡 / 账号与云备份 → 登录注册页（⑦）；未登录统计显「–」；下载云词书也会先要求登录。</span><span><span class="k">动效：</span>登录成功后顶卡内容原位淡入切换为昵称 + 云备份徽标，统计数字滚动填充。</span></div></div>
+
+<!-- 4 全屏相机取景 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb" style="color:#fff"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr"><div class="camf">
+ <div class="cf-view"></div>
+ <div class="cf-tip">将英文词表放入框内，自动识别「英文 - 中文」配对</div>
+ <div class="cf-frame"><i></i><i></i><i></i><i></i><div class="cf-scan"></div></div>
+ <div class="cf-top"><button><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="ct">拍照导入</div><button><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4.5 13.5H11l-1 8.5L19 10h-6.5L13 2z"/></svg></button></div>
+ <div class="cf-bottom"><div class="cf-album"><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M4 5h3l2-2h6l2 2h3a2 2 0 012 2v11a2 2 0 01-2 2H4a2 2 0 01-2-2V7a2 2 0 012-2zm8 3.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"/></svg></div><div class="cf-shutter"><i></i></div><div class="cf-multi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 15l5-4 4 3 3-2 6 4"/></svg>多图</div></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>④ 全屏拍照取景（v1.1 改版 · 微信相机式）</b><span><span class="k">交互线：</span>全屏取景 → 快门/相册（⑤定格）；左上关闭回词本，右上闪光灯，底部左相册 / 中快门 / 右多图；边缘左滑等价关闭。</span><span><span class="k">动效：</span>扫描线全屏往返；快门按压内缩 + 白屏闪烁 340ms；深色页状态栏图标自动转白。</span></div></div>
+<!-- 5 定格 + 识别加载 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb" style="color:#fff"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr"><div class="camf">
+ <div class="fz-img"><div class="fz-paper">abandon&nbsp;&nbsp;抛弃；放弃<br>benefit&nbsp;&nbsp;利益；好处<br>capable&nbsp;&nbsp;有能力的<br>declare&nbsp;&nbsp;宣布；声明<br>eager&nbsp;&nbsp;渴望的<br>fabric&nbsp;&nbsp;织物；布料<br>gentle&nbsp;&nbsp;温和的<br>horizon&nbsp;&nbsp;地平线；眼界</div></div>
+ <div class="cf-top"><button style="background:transparent;width:auto;height:auto;min-width:0;border-radius:99px;padding:5px 10px;font-size:13px;font-weight:700">重拍</button><div class="ct">已拍下</div><div style="width:40px"></div></div>
+ <div class="cmask"><div class="lcard"><div class="spin"></div><b>正在识别文字…</b><div class="lp">已识别 7 行，继续…</div><div class="lbar"><i style="width:62%"></i></div></div></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>⑤ 拍照定格 + 识别加载（新增）</b><span><span class="k">交互线：</span>按下快门照片先定格在画面（可重拍/相册重选）→ 中心加载卡显示 OCR 进度 → 识别完成才右滑进入校对页（⑥），不提前跳页。</span><span><span class="k">动效：</span>定格淡入 250ms；加载卡 scale .9→1 弹入 280ms；进度条线性推进；识别完成对勾后再转场。</span></div></div>
+
+<!-- 6 OCR 校对 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">识别结果校对</div></div>
+<div class="body2" style="padding-bottom:110px"><div class="ocr-tip">共识别 10 行，点中文可直接修改；缺释义词可手动补录，归入个人 DIY 词本</div>
+<div class="ocr">
+<div class="orr"><span class="en">abandon</span><span class="cn">抛弃；放弃</span><span style="display:flex;color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg></span></div>
+<div class="orr"><span class="en">benefit</span><span class="cn">利益；好处</span><span style="display:flex;color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg></span></div>
+<div class="orr"><span class="en">capable</span><span class="cn">有能力的</span><span style="display:flex;color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg></span></div>
+<div class="orr"><span class="en">declare</span><span class="cn">宣布；声明</span><span style="display:flex;color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg></span></div>
+<div class="orr"><span class="en">eager</span><span class="cn">渴望的</span><span style="display:flex;color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg></span></div>
+<div class="orr"><span class="en">fabric</span><span class="cn">织物；布料</span><span style="display:flex;color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg></span></div>
+<div class="orr"><span class="en">gentle</span><span class="cn">温和的</span><span style="display:flex;color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg></span></div>
+<div class="orr"><span class="en">horizon</span><span class="cn">地平线；眼界</span><span style="display:flex;color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg></span></div>
+<div class="orr"><span class="en">inquire</span><span class="cn">询问；调查</span><span style="display:flex;color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg></span></div>
+<div class="orr"><span class="en">zebra</span><span class="miss">补录中文</span><span style="display:flex;color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg></span></div>
+</div>
+<div class="ocrfoot"><div class="btn btn-p">确认导入 9 个词</div></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>⑥ OCR 校对页</b><span><span class="k">交互线：</span>行内改释义 / 删行；「补录中文」变输入框；有缺释义行时确认按钮拦截；确认后写入个人 DIY 词本（⑬）并上云。</span><span><span class="k">动效：</span>删行左滑收起；底部确认栏 sticky；成功 Toast 200ms 滑入并返回词本。</span></div></div>
+
+<!-- 7 登录三选项 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">登录</div></div>
+<div class="body2">
+ <div class="lg-hero"><div class="lg-logo">词</div><h2>欢迎使用词慧</h2><p>登录后词本、学习进度与打卡记录自动上云<br>换设备也不丢</p></div>
+ <div style="margin-top:14px"></div>
+ <div class="third-btn wx"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor"><path d="M9.5 4C5.9 4 3 6.5 3 9.6c0 1.8 1 3.3 2.5 4.4l-.6 1.9 2.2-1.1c.8.2 1.6.4 2.4.4h.5a5 5 0 01-.2-1.4c0-3 2.9-5.3 6.4-5.3h.5C16.1 5.8 13.1 4 9.5 4zm-2.3 4.4a.9.9 0 110-1.8.9.9 0 010 1.8zm4.6 0a.9.9 0 110-1.8.9.9 0 010 1.8z"/><path d="M21 13.8c0-2.6-2.6-4.7-5.7-4.7s-5.7 2.1-5.7 4.7 2.6 4.7 5.7 4.7c.7 0 1.3-.1 1.9-.3l1.8.9-.5-1.5c1.5-.9 2.5-2.3 2.5-3.8zm-7.6-.7a.75.75 0 110-1.5.75.75 0 010 1.5zm3.8 0a.75.75 0 110-1.5.75.75 0 010 1.5z"/></svg>微信登录</div>
+ <div class="third-btn qq"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-2.6 0-4.7 2.2-4.7 4.9 0 .5.1 1 .2 1.5-1.9 1.2-3.3 3-3.7 5.2-.3 1.7.2 3 .9 3 .4 0 .8-.4 1-.9.2.9.7 1.7 1.4 2.3-.8.4-1.3 1-1.3 1.7 0 1.2 1.7 1.8 3.3 1.3.8.5 1.8.8 2.9.8s2.1-.3 2.9-.8c1.6.5 3.3-.1 3.3-1.3 0-.7-.5-1.3-1.3-1.7.7-.6 1.2-1.4 1.4-2.3.2.5.6.9 1 .9.7 0 1.2-1.3.9-3-.4-2.2-1.8-4-3.7-5.2.1-.5.2-1 .2-1.5C16.7 4.2 14.6 2 12 2zm-2.4 6.4a1 1 0 110 2 1 1 0 010-2zm4.8 0a1 1 0 110 2 1 1 0 010-2z"/></svg>QQ 登录</div>
+ <div class="third-btn reg">登录 / 注册（手机号 / 邮箱）</div>
+ <div class="lg-agree">登录即代表同意<a>《用户协议》</a>与<a>《隐私政策》</a><br>学习数据仅用于词本备份，不会公开</div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>⑦ 登录（v1.2 三选项）</b><span><span class="k">交互线：</span>微信 / QQ 一键授权登录直接进入并开启云备份；「登录 / 注册」→ 注册表单（㉑）；未登录时从「我的」顶卡进入。</span><span><span class="k">动效：</span>None</span></div></div>
+
+<!-- 8 我的词本（新版） -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">我的词本</div><div class="nact"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M19 18H6a4 4 0 01-.6-7.96A5.5 5.5 0 0116 8.6 4.3 4.3 0 0119 18z"/></svg>导入云词本</div></div>
+<div class="body2" style="padding-bottom:120px">
+ <div class="cloudline blue"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="flex:none;margin-top:1px"><path d="M19 18H6a4 4 0 01-.6-7.96A5.5 5.5 0 0116 8.6 4.3 4.3 0 0119 18z"/></svg><span>已下载词书与 DIY 词本保存在本机，登录后自动上云</span></div>
+ <div class="wbli"><span class="wic" style="background:var(--brand-w);color:var(--brand)"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4a2 2 0 012-2h13v18H6a2 2 0 00-2 2V4z"/></svg></span><div style="flex:1"><b>个人 DIY 词本</b><span class="wd">96 个词 · 手动补录 · 云端备份中</span></div><svg width="17" height="17" viewBox="0 0 24 24" fill="var(--ok)"><path d="M19 18H6a4 4 0 01-.6-7.96A5.5 5.5 0 0116 8.6 4.3 4.3 0 0119 18z"/></svg></div>
+ <div class="wbli"><span class="bcover" style="background:linear-gradient(150deg,#0A59F7,#0A59F7CC)">四级词汇</span><div style="flex:1"><b>四级词汇</b><span class="wd">4,123 个词 · 已下载，可离线使用</span></div><span class="tagnew">刚导入</span></div>
+ <div class="wbli"><span class="wic" style="background:var(--warn-bg);color:var(--warn)"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor"><path d="M9 4l-1.2 2H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-3.8L15 4H9zm3 5a4.5 4.5 0 110 9 4.5 4.5 0 010-9z"/></svg></span><div style="flex:1"><b>拍照导入 09-11</b><span class="wd">10 个词 · 待校对 1 个</span></div><span style="color:var(--ink3)">›</span></div>
+ <div class="fab"><svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13.5" r="3.6"/></svg></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>⑧ 我的词本（v1.1 改版）</b><span><span class="k">交互线：</span>右上「导入云词本」→ 云词本库（⑨）；右下角偏上圆形拍照钮 → 全屏相机（④）；DIY 词本 → 预览/编辑（⑬⑭）；下载完成自动回本页并标「刚导入」，可继续导入。</span><span><span class="k">动效：</span>FAB 弹入 scale .5→1；新书行插入高亮 1.2s；云图标常驻表示已上云。</span></div></div>
+<!-- 9 云词本库 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">导入云词本</div></div>
+<div class="body2">
+ <div class="sfake"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>搜索词书 / 单词，如 四级、abandon</div>
+ <div class="ctt">大学词书</div>
+ <div class="cbook"><span class="bcover" style="background:linear-gradient(150deg,#0A59F7,#0A59F7CC)">四级词汇</span><div style="flex:1"><b>四级词汇</b><span class="cm">CET-4 最新大纲版 · 4,123 词</span></div><span style="color:var(--ink3)">›</span></div>
+ <div class="cbook"><span class="bcover" style="background:linear-gradient(150deg,#1FA9C9,#1FA9C9CC)">六级词汇</span><div style="flex:1"><b>六级词汇</b><span class="cm">CET-6 最新大纲版 · 5,562 词</span></div><span style="color:var(--ink3)">›</span></div>
+ <div class="cbook"><span class="bcover" style="background:linear-gradient(150deg,#6E5CF6,#6E5CF6CC)">考研词汇</span><div style="flex:1"><b>考研词汇</b><span class="cm">英语一/二通用 · 5,500 词</span></div><span style="color:var(--ink3)">›</span></div>
+ <div class="ctt">高中词书</div>
+ <div class="cbook"><span class="bcover" style="background:linear-gradient(150deg,#179C5B,#179C5BCC)">高考词汇</span><div style="flex:1"><b>高考词汇</b><span class="cm">新课标 3500 词 · 3,500 词</span></div><span style="color:var(--ink3)">›</span></div>
+ <div class="ggrid" style="margin-bottom:9px"><div class="gchip">高一词汇<span>人教版必修一</span></div><div class="gchip">高二词汇<span>人教版必修三</span></div><div class="gchip">高三词汇<span>冲刺合订</span></div></div>
+ <div class="ctt">初中 / 小学</div>
+ <div class="ggrid"><div class="gchip">中考词汇<span>1,600 词</span></div><div class="gchip">七年级<span>人教版</span></div><div class="gchip">八年级<span>人教版</span></div><div class="gchip">九年级<span>中考衔接</span></div><div class="gchip">小学三-六年级<span>人教 PEP</span></div></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>⑨ 云词本库（新增）</b><span><span class="k">交互线：</span>顶部搜索栏 → 搜索页（⑩）；学段分组：大学 / 高中 / 初中 / 小学，含各年级版本；点词书 → 详情页（⑪）。</span><span><span class="k">动效：</span>分组标题 + 书行 stagger 淡入；封面轻投影；按压缩放，右滑进入详情。</span></div></div>
+
+<!-- 10 云词本搜索 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)">
+ <div class="stop"><div class="sinput"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink3)" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>四级<span style="margin-left:1px;width:1.5px;height:16px;background:var(--brand);animation:blink 1s steps(1) infinite"></span></div><div class="scancel">取消</div></div>
+ <div class="body2" style="padding-top:2px">
+  <div class="ctt">热门搜索</div>
+  <div class="hottags"><div><b>1</b>四级</div><div><b>2</b>高考3500</div><div><b>3</b>abandon</div><div>中考</div><div>人教PEP</div><div>七年级</div><div>考研</div><div>小学三年级</div></div>
+  <div class="ctt">搜索历史</div>
+  <div class="hist"><div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ink3)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>六级词汇</div><div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ink3)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>高一必修一</div></div>
+ </div>
+</div></div>
+</div></div>
+<div class="cap"><b>⑩ 云词本搜索（新增 · Via 风简洁）</b><span><span class="k">交互线：</span>点库内搜索栏进入并自动聚焦；热门标签 / 历史一键搜索；结果分「词书结果 + 单词预览」；取消或边缘左滑返回云词本库。</span><span><span class="k">动效：</span>输入框与顶栏一起上推就位；光标闪烁；标签 stagger 弹入；结果区淡入。</span></div></div>
+<!-- 11 词书详情 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">四级词汇</div><div class="nact p"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10m0 0l-4-4m4 4l4-4M5 19h14v2H5z"/></svg>下载导入</div></div>
+<div class="body2">
+ <div class="dhero"><span class="bcover" style="background:linear-gradient(150deg,#0A59F7,#0A59F7CC)">四级词汇</span><div style="flex:1;min-width:0"><h2>四级词汇</h2><div class="vp"><span>CET-4 最新大纲版</span><span>大学词书</span></div><div class="cnt">共 4,123 词<br>按艾宾浩斯 1/2/4/7/15 天自动排复习</div></div></div>
+ <div class="ctt">单词预览<span style="float:right;font-size:10.5px;color:var(--ink3);font-weight:400;margin-top:3px">仅展示前 12 个</span></div>
+ <div class="pvw"><span class="en">abandon</span><span class="cn">抛弃；放弃</span></div>
+ <div class="pvw"><span class="en">benefit</span><span class="cn">利益；好处</span></div>
+ <div class="pvw"><span class="en">capable</span><span class="cn">有能力的</span></div>
+ <div class="pvw"><span class="en">declare</span><span class="cn">宣布；声明</span></div>
+ <div class="pvw"><span class="en">eager</span><span class="cn">渴望的</span></div>
+ <div class="pvw"><span class="en">fabric</span><span class="cn">织物；布料</span></div>
+ <div class="pvw"><span class="en">gentle</span><span class="cn">温和的</span></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>⑪ 词书详情（新增）</b><span><span class="k">交互线：</span>顶部书封 / 版本 / 词数，下方单词预览；右上「下载导入」→ 未登录先去登录（⑦），已登录弹下载卡（⑫）；已下载显示「已下载」。</span><span><span class="k">动效：</span>书封 3D 轻翻入；预览行 stagger；下载按钮按压反馈。</span></div></div>
+
+<!-- 12 下载加载卡 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb" style="color:#fff"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb" style="filter:brightness(.97)"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">四级词汇</div></div>
+ <div class="body2" style="filter:brightness(.97)">
+ <div class="dhero"><span class="bcover" style="background:linear-gradient(150deg,#0A59F7,#0A59F7CC)">四级词汇</span><div style="flex:1;min-width:0"><h2>四级词汇</h2><div class="vp"><span>CET-4 最新大纲版</span></div><div class="cnt">共 4,123 词</div></div></div>
+ <div class="ctt">单词预览</div>
+ <div class="pvw"><span class="en">abandon</span><span class="cn">抛弃；放弃</span></div>
+ <div class="pvw"><span class="en">benefit</span><span class="cn">利益；好处</span></div>
+ <div class="pvw"><span class="en">capable</span><span class="cn">有能力的</span></div>
+ </div>
+ <div class="cmask" style="background:rgba(20,28,50,.45)"><div class="lcard"><div class="spin"></div><b>正在下载词书…</b><div class="lp">68%</div><div class="lbar"><i style="width:68%"></i></div></div></div>
+</div></div>
+</div></div>
+<div class="cap"><b>⑫ 下载导入加载（新增）</b><span><span class="k">交互线：</span>居中加载卡转圈 + 百分比；完成变「导入成功」→ 自动返回我的词本（⑧），新书带「刚导入」标，并可继续去云库导入下一本。</span><span class="k" style="display:block;margin-top:4px;color:var(--brand);font-weight:700"></span><span><span class="k">动效：</span>遮罩淡入 + 卡片弹入；进度条线性；失败可重试，不产生半截词书。</span></div></div>
+<!-- 13 DIY 词本预览 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">个人 DIY 词本</div><div class="nact"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M4 17.2V20h2.8L17.9 8.9l-2.8-2.8L4 17.2zM20.7 6.1a1 1 0 000-1.4l-1.4-1.4a1 1 0 00-1.4 0l-1.2 1.2 2.8 2.8 1.2-1.2z"/></svg>编辑</div></div>
+<div class="body2">
+ <div class="cloudline"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="flex:none;margin-top:1px"><path d="M19 18H6a4 4 0 01-.5-8 5.5 5.5 0 0110.6-1.3A4.5 4.5 0 0119 18z"/></svg><span>自用词本无需审核；保存后自动上云，共享给他人才需审核</span></div>
+ <div class="drow"><div class="pv"><div class="en">abandon</div><div class="cn">抛弃；放弃</div></div></div>
+ <div class="drow"><div class="pv"><div class="en">benefit</div><div class="cn">利益；好处</div></div></div>
+ <div class="drow"><div class="pv"><div class="en">capable</div><div class="cn">有能力的</div></div></div>
+ <div class="drow"><div class="pv"><div class="en">declare</div><div class="cn">宣布；声明</div></div></div>
+ <div class="drow"><div class="pv"><div class="en">eager</div><div class="cn">渴望的</div></div></div>
+ <div class="drow"><div class="pv"><div class="en">fabric</div><div class="cn">织物；布料</div></div></div>
+ <div class="drow"><div class="pv"><div class="en">gentle</div><div class="cn">温和的</div></div></div>
+ <div class="drow"><div class="pv"><div class="en">horizon</div><div class="cn">地平线；眼界</div></div></div>
+ <div class="drow"><div class="pv"><div class="en">inquire</div><div class="cn">询问；调查</div></div></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>⑬ 个人 DIY 词本 · 预览态（新增）</b><span><span class="k">交互线：</span>默认只读预览，防误触；右上角「编辑」切换到编辑态（⑭）；OCR 确认导入的词自动追加到本词本。</span><span><span class="k">动效：</span>行按压缩放；切编辑时各行原位展开为输入框（⑭）。</span></div></div>
+
+<!-- 14 DIY 词本编辑 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">个人 DIY 词本</div><div class="nact p">预览</div></div>
+<div class="body2" style="padding-bottom:120px">
+ <div class="drow"><input class="dinp en" value="abandon"><input class="dinp cn" value="抛弃；放弃"><span class="ddel"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 7h12l-1 13H7L6 7zm3-3h6l1 2H8l1-2z"/></svg></span></div>
+ <div class="drow"><input class="dinp en" value="benefit"><input class="dinp cn" value="利益；好处"><span class="ddel"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 7h12l-1 13H7L6 7zm3-3h6l1 2H8l1-2z"/></svg></span></div>
+ <div class="drow"><input class="dinp en" value="capable"><input class="dinp cn" value="有能力的"><span class="ddel"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 7h12l-1 13H7L6 7zm3-3h6l1 2H8l1-2z"/></svg></span></div>
+ <div class="drow"><input class="dinp en" value="declare"><input class="dinp cn" value="宣布；声明"><span class="ddel"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 7h12l-1 13H7L6 7zm3-3h6l1 2H8l1-2z"/></svg></span></div>
+ <div class="drow"><input class="dinp en" value="eager"><input class="dinp cn" value="渴望的"><span class="ddel"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 7h12l-1 13H7L6 7zm3-3h6l1 2H8l1-2z"/></svg></span></div>
+ <div class="drow"><input class="dinp en" value="new word"><input class="dinp cn" value="输入中文释义"><span class="ddel"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 7h12l-1 13H7L6 7zm3-3h6l1 2H8l1-2z"/></svg></span></div>
+ <div class="btn btn-g" style="border:1.5px dashed var(--line);box-shadow:none;color:var(--brand)">＋ 添加单词</div>
+</div>
+ <div class="dfoot"><div class="btn btn-p">完成并保存（自动上云）</div></div>
+</div></div>
+</div></div>
+<div class="cap"><b>⑭ DIY 词本 · 编辑态（新增）</b><span><span class="k">交互线：</span>英文 / 中文均可直接打字修改，行尾删除；底部「添加单词」追加并聚焦；「完成并保存」校验无空行后上云，右上回预览态。</span><span><span class="k">动效：</span>删行左滑收起；新增行底部弹入；保存按钮 loading + 成功 Toast。</span></div></div>
+<!-- 15 账号与云备份 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">账号与云备份</div></div>
+<div class="body2">
+ <div class="ptop" style="margin-bottom:14px"><div class="av">俞</div><div style="flex:1;min-width:0"><div class="nm">张俞蔚 <span class="cb">云备份已开启</span></div><div class="ds">上次同步：刚刚 · 词本与打卡记录已上云</div></div></div>
+ <div class="acard">
+  <div class="arow"><span class="k">昵称</span><span class="v">张俞蔚</span><span style="color:var(--ink3)">›</span></div>
+  <div class="arow"><span class="k">手机号</span><span class="v">138****8000</span><span style="color:var(--ink3)">›</span></div>
+  <div class="arow"><span class="k">邮箱</span><span class="v">zhang**@qq.com</span><span style="color:var(--ink3)">›</span></div>
+  <div class="arow"><span class="k">微信</span><span class="v">zywwx</span><span style="color:var(--ink3)">›</span></div>
+  <div class="arow"><span class="k">云端数据</span><span class="v">86 个 DIY 词 · 12 天打卡</span></div>
+ </div>
+ <div class="btn btn-g" style="margin-top:14px">立即同步</div>
+ <div class="btn btn-g" style="margin-top:10px">本地备份 / 导出</div>
+ <div class="btn-r">退出登录</div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>⑮ 账号与云备份（v1.2 改版）</b><span><span class="k">交互线：</span>昵称 / 手机号 / 邮箱 / 微信每行可点 → 字段二级编辑页（㉒）；QQ 行仅在 QQ 绑定后出现；立即同步、本地导出、退出登录。</span><span><span class="k">动效：</span>None</span></div></div>
+
+<!-- 16 首学幻灯片 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr vc" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">今日新词 · 批量首学</div></div>
+<div class="body2" style="margin:auto 0;width:100%"><div class="dots"><i class="pass"></i><i class="pass"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><span style="margin-left:auto;font-size:12px;color:var(--ink3);font-weight:600">3 / 8</span></div>
+<div class="slide"><span class="tag">方案B · 先看一遍</span><div class="word">capable</div><div class="pho">/ˈkeɪpəbl/</div><div class="speak"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg></div><div class="mean">有能力的</div><div class="tip">像幻灯片一样快速浏览整批新词<br>看过一遍后，统一进入语音测试</div></div>
+<div class="sctrl"><div class="btn btn-g">上一个</div><div class="btn btn-p">下一个</div></div></div>
+</div></div></div></div>
+<div class="cap"><b>⑯ 新词首学（方案B）</b><span><span class="k">交互线：</span>整批新词幻灯片快速浏览（英文+中文+发音）→ 末页一键进入语音测试；未浏览完的词不进测试队列。</span><span><span class="k">动效：</span>卡片切换 280ms 横向滑动 + pop 弹性；发音按钮呼吸光圈；进度点联动变色。</span></div></div>
+<!-- 17 语音快过 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr vc" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">语音快过 · 新词测试</div></div>
+<div class="body2" style="margin:auto 0;width:100%"><div class="vstage"><div class="vw">abandon</div><div class="vph">/əˈbændən/</div>
+<div class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<div class="vcap"><div class="l" style="display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a4 4 0 014 4v5a4 4 0 11-8 0V7a4 4 0 014-4zm7 9h-2a5 5 0 01-10 0H5a7 7 0 006 6.9V22h2v-3.1A7 7 0 0019 12z"/></svg>听到的中文（字幕）</div><div class="t">抛弃；放弃</div></div>
+<div class="mic"><svg width="27" height="27" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a4 4 0 014 4v5a4 4 0 11-8 0V7a4 4 0 014-4zm7 9h-2a5 5 0 01-10 0H5a7 7 0 006 6.9V22h2v-3.1A7 7 0 0019 12z"/></svg></div>
+<div class="va3"><div class="k">认识</div><div class="f">模糊</div><div class="n">不认识</div></div>
+<div class="vprog">3 / 8 · 看英文，说中文</div></div></div>
+</div></div></div></div>
+<div class="cap"><b>⑰ 语音快过（字幕式）</b><span><span class="k">交互线：</span>TTS 读英文 → 用户口述中文 → ASR 字幕上屏，核心义项命中即自动过词；可暂停、一键降级手动三档，每词可改判。</span><span><span class="k">动效：</span>波形随声起伏；字幕逐字打出 + 光标闪烁；命中绿色对勾闪现后自动滑入下一词。</span></div></div>
+
+<!-- 18 复习闪卡 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr vc" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">到期复习 · 闪卡</div></div>
+<div class="body2" style="margin:auto 0;width:100%"><div class="fr"><span>本轮 14/24</span><span class="must">一轮必须全部过完</span></div>
+<div class="fwrap"><div class="fcard" style="transform:rotateY(0deg)">
+<div class="face"><span class="rtag" style="background:var(--brand-w);color:var(--brand)">看英文回忆中文</span><div style="font-size:40px;font-weight:900">deliberate</div><div style="font-size:14px;color:var(--ink3);margin-top:9px;font-family:Georgia,serif">/dɪˈlɪbərət/</div><div class="fhint">轻点卡片翻面看释义</div></div>
+<div class="face back2"><span class="rtag">释义</span><div class="fmean">故意的；深思熟虑的</div><div class="fex">a deliberate lie<br>故意的谎言</div><div class="fhint">右滑/绿=认识 · 上滑/橙=模糊 · 左滑/红=不认识</div></div>
+</div></div>
+<div class="judge"><div class="j-no">不认识<span>明天当新词重学</span></div><div class="j-fz">模糊<span>本轮循环 · 明天再考</span></div><div class="j-ok">认识<span>进入下一节点</span></div></div></div>
+</div></div></div></div>
+<div class="cap"><b>⑱ 复习闪卡三档</b><span><span class="k">交互线：</span>翻面后三档判定；<b>模糊</b>本轮循环重考到认识并强制次日复习；<b>不认识</b>转明天新词 + 错词本；一轮必须过完。</span><span><span class="k">动效：</span>3D 翻转 550ms；卡片跟随手指拖动并按方向染色，阈值触发后飞出。</span></div></div>
+
+<!-- 19 错词本 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr vc" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">错词本</div></div>
+<div class="body2" style="margin:auto 0;width:100%"><div style="background:var(--bad-bg);color:#B23636;border-radius:14px;padding:10px 13px;font-size:11.5px;line-height:1.6;margin-bottom:14px;display:flex;gap:7px;align-items:flex-start"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex:none;margin-top:1px"><path d="M12 2L1 21h22L12 2zm1 15h-2v2h2v-2zm0-7h-2v5h2v-5z"/></svg><span>复习中判「不认识」的词自动进入，按新词重新首学</span></div>
+<div class="wli"><div><div class="en">deliberate</div><div class="cn">故意的；深思熟虑的</div></div><span class="tag2 red">不认识 · 转明天新词</span></div>
+<div class="wli"><div><div class="en">endure</div><div class="cn">忍受；容忍</div></div><span class="tag2 amber">模糊 · 次日强制复习</span></div>
+<div class="wli"><div><div class="en">bargain</div><div class="cn">便宜货；讨价还价</div></div><span class="tag2 red">不认识 · 转明天新词</span></div>
+<div class="wli"><div><div class="en">cautious</div><div class="cn">谨慎的；小心的</div></div><span class="tag2 amber">模糊 · 次日强制复习</span></div>
+<div class="btn btn-p" style="margin-top:14px">开始错词强化复习</div></div>
+</div></div></div></div>
+<div class="cap"><b>⑲ 错词本（首页独立入口）</b><span><span class="k">交互线：</span>按原因分组（不认识转新词 / 模糊次日重考）；「强化复习」进入同一套闪卡调度。</span><span><span class="k">动效：</span>新词入本时红色徽标跳动；列表左滑删除 / 移出；行按压反馈。</span></div></div>
+
+<!-- 20 打卡成功 -->
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb" style="color:#fff"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"></div>
+<div class="dim"><div class="scard"><div class="scheck"><svg width="52" height="52" viewBox="0 0 52 52" fill="none"><path d="M14 27l9 9 16-18" stroke="#179C5B" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+<h2>打卡成功</h2><p>今日新词与到期复习已全部完成<br>连续打卡 <b style="color:var(--warn)">13</b> 天，继续保持</p>
+<div class="sbtn btn-p">生成分享图</div><div class="sbtn" style="background:transparent;box-shadow:none;color:var(--ink2);margin-top:8px">返回</div></div></div>
+</div></div></div>
+<div class="cap"><b>⑳ 打卡成功弹层</b><span><span class="k">交互线：</span>仅前置全达标可触发；可生成本地分享图；当日重复点击幂等。</span><span><span class="k">动效：</span>遮罩淡入 280ms + 卡片 scale .8→1 弹入；对勾按路径描边；克制不放礼花。</span></div></div>
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">登录 / 注册</div></div>
+<div class="body2">
+ <div class="field-tip">填写基础信息即可注册，<b>手机号和邮箱至少填一个</b>，用于登录与找回账号</div>
+ <div class="field-edit-card"><div class="fe-row"><label>名称</label><input placeholder="昵称 / 姓名" maxlength="12"></div><div class="fe-row"><label>手机号</label><input type="tel" placeholder="用于登录与找回" maxlength="11"></div><div class="fe-row"><label>邮箱</label><input type="email" placeholder="选填，与手机号二选一"></div><div class="fe-row"><label>微信</label><input placeholder="选填，绑定微信号"></div></div>
+ <div class="btn btn-p" style="margin-top:14px">注册 / 登录</div>
+ <div class="lg-agree">注册即代表同意<a>《用户协议》</a>与<a>《隐私政策》</a></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>㉑ 注册表单（新增）</b><span><span class="k">交互线：</span>名称必填；手机号 / 邮箱至少一项；手机号校验 11 位、邮箱校验格式；微信选填；校验不过对应行轻摇并 toast 原因；成功即登录并开启云备份。</span><span><span class="k">动效：</span>None</span></div></div>
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">编辑手机号</div></div>
+<div class="body2">
+ <div class="field-edit-card"><div class="fe-row"><label>手机号</label><input value="13800138000" type="tel" maxlength="11"></div></div>
+ <div class="field-tip" style="background:var(--bg);color:var(--ink3);margin-top:10px">换绑手机号正式版需要短信验证码，演示版可直接保存</div>
+ <div class="btn btn-p" style="margin-top:10px">保存</div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>㉒ 账号字段二级编辑（新增）</b><span><span class="k">交互线：</span>从账号页（⑮）点任意字段进入；保存后账号页、首页问候语、云端资料同步更新；名称为空、手机 / 邮箱格式错误时拦截。</span><span><span class="k">动效：</span>None</span></div></div>
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">艾宾浩斯计划表</div></div>
+<div class="body2">
+ <div class="pcal"><div class="pmonth"><div class="par"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="pm">2026 年 9 月</div><div class="par"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></div></div>
+ <div class="pstats"><div class="pst"><b>12</b><span>连续打卡（天）</span></div><div class="pst"><b>11</b><span>本月已完成</span></div><div class="pst"><b class="bad">2</b><span>待补卡（天）</span></div></div>
+ <div class="cal-week" style="padding:0 2px 6px"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+ <div class="pgrid"><div class="pcc dim past"><span class="pn">31</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">1</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">2</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">3</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">4</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">5</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">6</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">7</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">8</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">9</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">10</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc past"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:3px;right:5px"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="pn">11</span><span class="pdt" style="opacity:.55"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i></span></div><div class="pcc today"><span class="pn">今天</span><span class="pdt"><i style="background:#fff"></i><i style="background:#fff"></i><i style="background:#BFE3FF"></i><i style="background:#BFE3FF"></i><i style="background:#8FCDFF"></i></span></div><div class="pcc future"><span class="pn">13</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i></span></div><div class="pcc future"><span class="pn">14</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i></span></div><div class="pcc future"><span class="pn">15</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">16</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">17</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">18</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">19</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">20</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">21</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">22</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">23</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">24</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">25</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">26</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">27</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">28</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">29</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc future"><span class="pn">30</span><span class="pdt"><i class="sq" style="background:#EC8A12"></i><i style="background:#179C5B"></i><i style="background:#1FA9C9"></i><i style="background:#6E5CF6"></i><i style="background:#FF7A45"></i><i style="background:#E14B4B"></i></span></div><div class="pcc dim future"><span class="pn">1</span></div><div class="pcc dim future"><span class="pn">2</span></div><div class="pcc dim future"><span class="pn">3</span></div><div class="pcc dim future"><span class="pn">4</span></div></div>
+ <div class="legend"><span><i style="background:var(--ok)"></i>已完成</span><span><i style="background:var(--brand)"></i>今天</span><span><i style="background:var(--bad)"></i>待补卡</span><span><i style="background:var(--ok);opacity:.5"></i>已补卡</span></div>
+ <div class="legend" style="margin-top:6px"><span><i style="background:#EC8A12" class="sq"></i>新学</span><span><i style="background:#179C5B"></i>R1</span><span><i style="background:#1FA9C9"></i>R2</span><span><i style="background:#6E5CF6"></i>R4</span><span><i style="background:#FF7A45"></i>R7</span><span><i style="background:#E14B4B"></i>R15</span></div>
+ <div class="makeup" style="margin-top:10px">橙方块 = 当天新学；彩点 = 该词按 1 / 2 / 4 / 7 / 15 天回到当天复习。<b>红格 = 今天之前的欠任务日</b>，点红格补卡，补完变绿底橙「补」；‹ / › 翻月，数据与打卡页小日历同源。</div>
+ </div>
+ <div style="height:20px"></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>㉓ 艾宾浩斯计划大表（新增）</b><span><span class="k">交互线：</span>打卡页计划表点「放大」zoomIn 进入；每天格子标新学橙块与 R1/R2/R4/R7/R15 彩点；红格 → 补卡详情（㉕）；可翻上月 / 下月；统计连续、本月完成、待补卡。</span><span><span class="k">动效：</span>None</span></div></div>
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">连续打卡</div></div>
+<div class="body2">
+ <div class="shero"><svg class="sfl" width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3-2 4.5-2 7 0 1 .5 2 1.5 2.5C10 11 8.5 9.5 8.5 7.5 6 9.5 5 12 5 14.5A7 7 0 0019 14c0-4-3-7-7-12z"/></svg><b>12 天</b><div class="s1">再坚持 3 天，追平你的最高纪录 15 天</div></div>
+ <div class="pstats" style="margin:11px 0"><div class="pst"><b>12</b><span>当前连续</span></div><div class="pst"><b>38</b><span>累计打卡</span></div><div class="pst"><b>0 / 2</b><span>已补 / 待补</span></div></div>
+ <div class="sec">9 月打卡日历<span style="font-size:11px;color:var(--bad);font-weight:700">红格点按补卡</span></div>
+ <div class="scard2"><div class="cal-week" style="padding:0 2px 6px"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+ <div class="sgrid"><div class="scc dim">31</div><div class="scc past" style="animation-delay:0ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc past" style="animation-delay:38ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc past" style="animation-delay:76ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc past" style="animation-delay:114ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc past" style="animation-delay:152ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc past" style="animation-delay:190ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc past" style="animation-delay:228ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc past" style="animation-delay:110ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc past" style="animation-delay:148ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc past" style="animation-delay:186ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc past" style="animation-delay:224ms"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div><div class="scc today" style="animation-delay:262ms">12</div><div class="scc future" style="animation-delay:300ms">13</div><div class="scc future" style="animation-delay:338ms">14</div><div class="scc future" style="animation-delay:220ms">15</div><div class="scc future" style="animation-delay:258ms">16</div><div class="scc future" style="animation-delay:296ms">17</div><div class="scc future" style="animation-delay:334ms">18</div><div class="scc future" style="animation-delay:372ms">19</div><div class="scc future" style="animation-delay:410ms">20</div><div class="scc future" style="animation-delay:448ms">21</div><div class="scc future" style="animation-delay:330ms">22</div><div class="scc future" style="animation-delay:368ms">23</div><div class="scc future" style="animation-delay:406ms">24</div><div class="scc future" style="animation-delay:444ms">25</div><div class="scc future" style="animation-delay:482ms">26</div><div class="scc future" style="animation-delay:520ms">27</div><div class="scc future" style="animation-delay:558ms">28</div><div class="scc future" style="animation-delay:440ms">29</div><div class="scc future" style="animation-delay:478ms">30</div><div class="scc dim future" style="animation-delay:516ms">1</div><div class="scc dim future" style="animation-delay:554ms">2</div><div class="scc dim future" style="animation-delay:592ms">3</div><div class="scc dim future" style="animation-delay:630ms">4</div></div></div>
+ <div style="height:20px"></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>㉔ 连续打卡果冻日历（新增）</b><span><span class="k">交互线：</span>首页「连续 N 天」chip 点击或左滑进入；绿色对勾为已完成、蓝色为今天；红格点按跳计划大表补卡；补卡不增加连续天数。</span><span><span class="k">动效：</span>None</span></div></div>
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">8月29日 · 补卡</div></div>
+<div class="body2" style="padding-top:14px">
+ <div class="mkgrp"><span class="mktag" style="background:#FF7A45">R7</span><b>R7 到期复习 · 6 个词</b><div class="wds">ancient、bargain、cautious、deliberate、endure、faint</div></div>
+ <div class="mkgrp"><span class="mktag" style="background:#E14B4B">R15</span><b>R15 到期复习 · 5 个词</b><div class="wds">ancient、bargain、cautious、deliberate、endure</div></div>
+ <div class="mk-note">这些任务会生成「8月29日 补卡」词本，背完当天计划自动标记为<b>已补卡</b>；补卡不恢复连续天数。</div>
+ <div class="btn btn-p">生成「8月29日 补卡」词本，开始补卡</div>
+ <div style="height:20px"></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>㉕ 补卡日详情与补卡闭环（新增）</b><span><span class="k">交互线：</span>计划大表 / 小日历点红格进入：列出当天欠的 R1–R15 任务词；按钮生成「M月D日 补卡」词本并跳闪卡；过完点「完成，同步计划表」，红格变绿底橙「补」，待补数与首页逾期条同步清零。</span><span><span class="k">动效：</span>None</span></div></div>
+<div class="board"><div class="phone"><div class="scale"><div class="inner">
+<div class="sb"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg><svg width="25" height="13" viewBox="0 0 25 13"><rect x=".5" y=".5" width="21" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="5" rx="1" fill="currentColor" opacity=".5"/></svg></span></div>
+<div class="scr" style="background:var(--bg)"><div class="nb"><div class="bkbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div><div class="ttl">每日新词量</div></div>
+<div class="body2">
+ <div style="text-align:center;font-size:12.5px;color:var(--ink3);margin-top:6px">每天新学多少个词，上下滑动选择</div>
+ <div class="wheel"><div class="wband"></div><div class="wlist"><div class="wit">5 个/天</div><div class="wit">8 个/天</div><div class="wit">10 个/天</div><div class="wit sel">12 个/天</div><div class="wit">15 个/天</div><div class="wit">20 个/天</div><div class="wit">25 个/天</div><div class="wit">30 个/天</div><div class="wit">40 个/天</div></div></div>
+ <div class="wsum">按 <b>12 个 / 天</b> 排期：今天 <b>新学 12 + 复习 45</b>，共 <b>57</b> 个词，预计约 <b>29 分钟</b>。<br>未来 15 天的 R1 / R2 / R4 / R7 / R15 节点已在计划表格标好；已掌握的词会自动减少复习量。</div>
+ <div class="wbtns"><div class="btn btn-g">取消</div><div class="btn btn-p">确定</div></div>
+</div></div>
+</div></div></div>
+<div class="cap"><b>㉖ 每日新词量滚轮（新增）</b><span><span class="k">交互线：</span>参考 iOS 时钟滚轮：scroll-snap 吸附；确定后词本按此量拆分每日任务，艾宾浩斯复习自动重排，首页分桶、打卡前置分母、计划大表 / 小日历同步刷新；入口在「我的-每日新词量」。</span><span><span class="k">动效：</span>None</span></div></div>
+<!--BOARD_APPEND-->
+</div>
+</body>
+</html>

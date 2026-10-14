@@ -1,0 +1,9 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "词慧主模块" },
+    { "name": "EntryAbility_desc", "value": "词慧" },
+    { "name": "EntryAbility_label", "value": "词慧" },
+    { "name": "perm_camera_reason", "value": "用于拍照识别词表，导入你要背的单词" },
+    { "name": "perm_mic_reason", "value": "用于语音快过环节听你口述中文意思，自动判定是否认识" }
+  ]
+}

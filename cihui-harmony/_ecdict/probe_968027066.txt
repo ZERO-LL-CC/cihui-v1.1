@@ -1,0 +1,9 @@
+﻿{
+	"type": "gh",
+	"name": "mahavivo/english-wordlists",
+	"tags": {},
+	"versions": [],
+	"links": {
+		"stats": "https://data.jsdelivr.com/v1/stats/packages/gh/mahavivo/english-wordlists"
+	}
+}

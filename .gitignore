@@ -1,0 +1,56 @@
+# ===== 日志文件 =====
+*.log
+
+# ===== 临时/一次性脚本（下划线开头） =====
+_*.ps1
+_*.py
+_*.js
+_*.xml
+_*.txt
+_*.json
+_*.cs
+
+# ===== 设备截图与测试图片 =====
+device_*.jpeg
+device_*.jpg
+device_*.png
+_wizard.png
+_screen_now.png
+_*.png
+_qa_shots/
+cloud_shots/
+cloud_test_photos/
+_shots/
+
+# ===== 草稿目录 =====
+draft_*/
+
+# ===== 备份文件 =====
+*.bak
+_backup/
+
+# ===== 构建产物与 IDE 配置 =====
+.idea/
+.hvigor/
+build/
+node_modules/
+oh_modules/
+.cxx/
+.test/
+local.properties
+oh-package-lock.json5
+
+# ===== 签名与敏感文件 =====
+signing/
+*.p12
+*.jks
+*.keystore
+
+# ===== 大文件数据（超过50MB，不纳入Git） =====
+cihui-harmony/_ecdict/ecdict.csv
+*.csv
+
+# ===== 系统文件 =====
+Thumbs.db
+.DS_Store
+desktop.ini
