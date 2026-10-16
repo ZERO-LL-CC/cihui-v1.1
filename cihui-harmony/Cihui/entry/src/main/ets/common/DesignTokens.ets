@@ -94,3 +94,18 @@ export class Motion {
 export class TouchTarget {
   static readonly MIN: number = 44;
 }
+
+/**
+ * 悬浮胶囊 Tab（Index.FloatingBar）：栏体布局与页面内容避让同源，禁止再写魔数。
+ * CLEARANCE = 内容需避让的高度，初值由「栏体高 + 外距 + 安全间距」估算，
+ * 真机 dumpLayout 实测「屏高 − 栏体顶边」后校正（详见设计说明第 12 章）。
+ */
+export class FloatingTab {
+  static readonly HEIGHT: number = 64;
+  /** 胶囊内层内容高度 */
+  static readonly CONTENT_HEIGHT: number = 56;
+  static readonly MARGIN: number = 10;
+  static readonly SAFE_GAP: number = 8;
+  /** 内容底部需预留的避让高度（实测反推，非理论值） */
+  static readonly CLEARANCE: number = 82;
+}

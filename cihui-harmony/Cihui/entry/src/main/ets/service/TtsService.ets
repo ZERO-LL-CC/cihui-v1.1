@@ -19,7 +19,9 @@
  *   错误码统一走 hilog(TAG=CihuiTts)，查看：hdc shell hilog -x | grep CihuiTts
  *
  * TODO(待真机继续核验)：
- * 1. SpeakParams.extraParams 语速字段名（speed / speakSpeed，当前以 'speed' 透传）；
+ * 1. [已核验 2026-10-17] extraParams 在 SDK 声明中为 Record<string, Object>，不枚举键名，
+ *    'speed' 为官方文档口径（域 0.5~2.0）；设置页仅提供 0.8/1.0/1.2（ProfilePage.ets:233），
+ *    不会静默失效 —— 无需改代码，仅需真机听辨确认。
  * 2. 与 F8 speechRecognizer 同时使用时的音频焦点与引擎实例上限（同设备最多 3 实例）。
  */
 import { textToSpeech } from '@kit.CoreSpeechKit';
@@ -244,7 +246,7 @@ class TtsServiceImpl {
     }
   }
 
-  /** 页面销毁时释放引擎资源（会重置 state，下次进入页面需重新 init）。 */
+  /** 释放引擎资源（会重置 state，下次使用需重新 init）。由 EntryAbility.onDestroy 调用，做进程退出收口。 */
   shutdown(): void {
     const engine: textToSpeech.TextToSpeechEngine | null = this.engine;
     if (engine === null) {

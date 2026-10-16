@@ -8,7 +8,7 @@
 import { NavStore } from '../viewmodel/NavStore';
 import { RouteName } from '../common/RouteNames';
 import { REFRESH_BUS, RefreshListener } from '../common/RefreshBus';
-import { Colors, TypeScale, Motion } from '../common/DesignTokens';
+import { Colors, TypeScale, Motion, FloatingTab } from '../common/DesignTokens';
 import { HomePage } from './tab/HomePage';
 import { CheckInPage } from './tab/CheckInPage';
 import { ProfilePage } from './tab/ProfilePage';
@@ -221,16 +221,16 @@ struct Index {
         .height('100%')
       }
       .width('100%')
-      .height(56)
+      .height(FloatingTab.CONTENT_HEIGHT)
       .padding({ left: 4, right: 4 })
     }
     .width('90%')
-    .height(64)
+    .height(FloatingTab.HEIGHT)
     .backgroundColor(Colors.WHITE)
     .borderRadius(32)
     .shadow({ radius: 18, color: '#1F17202E', offsetX: 0, offsetY: 6 })
-    .margin({ bottom: 10 })
-    .safeAreaPadding({ bottom: 8 })
+    .margin({ bottom: FloatingTab.MARGIN })
+    .safeAreaPadding({ bottom: FloatingTab.SAFE_GAP })
   }
 
   build() {

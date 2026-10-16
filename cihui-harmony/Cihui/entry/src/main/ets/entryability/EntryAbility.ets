@@ -6,6 +6,7 @@ import { DataStore } from '../viewmodel/DataStore';
 import { AuthStore } from '../viewmodel/AuthStore';
 import { LAUNCH_TARGET_KEY, TARGET_CHECKIN } from '../service/ReminderService';
 import { CloudBookLoader } from '../service/CloudBookLoader';
+import { TtsService } from '../service/TtsService';
 
 const DOMAIN: number = 0x0000;
 
@@ -50,6 +51,13 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
+    // TTS 引擎随 Ability 释放（单例只持 1 个引擎，页面级 stop() 已足够；
+    // 此处收口避免进程退出后引擎句柄悬留）。
+    try {
+      TtsService.shutdown();
+    } catch (err) {
+      hilog.warn(DOMAIN, 'Cihui', 'tts shutdown failed: %{public}s', JSON.stringify(err));
+    }
     hilog.info(DOMAIN, 'Cihui', 'Ability onDestroy');
   }
 

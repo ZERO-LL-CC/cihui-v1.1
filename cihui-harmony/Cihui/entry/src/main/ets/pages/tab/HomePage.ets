@@ -6,7 +6,7 @@
  */
 import { promptAction } from '@kit.ArkUI';
 import { vibrator } from '@kit.SensorServiceKit';
-import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
+import { Colors, TypeScale, Radius, Motion, FloatingTab } from '../../common/DesignTokens';
 import { RouteName } from '../../common/RouteNames';
 import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
@@ -429,7 +429,7 @@ export struct HomePage {
       }
       .width('100%').height(96)
     }
-    .width('92%').margin({ top: 12, bottom: 110 }).padding(16)
+    .width('92%').margin({ top: 12 }).padding(16)
     .borderRadius(Radius.CARD).backgroundColor(Colors.WHITE)
     .opacity(this.funShown ? 1 : 0)
     .translate({ y: this.funShown ? 0 : 14 })
@@ -624,6 +624,10 @@ export struct HomePage {
           this.FunSection()
         }
         .width('100%').alignItems(HorizontalAlign.Center)
+        // 底部避让悬浮胶囊 Tab：由最后一屏内容的容器统一预留（语义正确，
+        // 以后在末尾追加区块也不会被吃掉留白）。数值见 FloatingTab.CLEARANCE（真机实测反推）。
+        .padding({ bottom: FloatingTab.CLEARANCE })
+        .safeAreaPadding({ bottom: FloatingTab.SAFE_GAP })
       }
       .width('100%').height('100%')
       .scrollBar(BarState.Off)

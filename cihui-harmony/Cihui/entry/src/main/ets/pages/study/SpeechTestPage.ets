@@ -334,7 +334,7 @@ export struct SpeechTestPage {
   private useManual(): void {
     this.permDenied = false;
     this.mode = 'manual';
-    this.toast('已进入手动模式，本轮进度不会丢');
+    this.toast('已进入手动模式，用下方三档判定');
   }
 
   private setReviewVerdict(item: RoundItem, verdict: Verdict): void {
@@ -358,7 +358,8 @@ export struct SpeechTestPage {
     this.service.release();
     TtsService.stop();
     // F-C 统一入口：新学完成后若当天还有到期复习词，提示并直接切换复习模式（通知式，不强制额外操作）。
-    // 判定已逐词落盘，中途退出进度不丢，退出后从首页「去复习」继续剩余词。
+    // 注意：本轮判定在点「确认」前只存页面内存（见 DataStore.applyFirstRound 注释），
+    // 中途退出不会落盘，需重新走一遍才生效；返回时由 confirmExit() 二次确认，避免误退丢进度。
     const remain: Word[] = DataStore.INSTANCE.todayReviewWordList();
     if (remain.length > 0) {
       this.toast(`新学完成，进入复习模式（${remain.length} 个待复习）`);
@@ -370,6 +371,45 @@ export struct SpeechTestPage {
       this.toast('本轮完成，调度已更新');
       NavStore.INSTANCE.finishToHome();
     }
+  }
+
+  /** 本轮是否存在未提交的判定：round 已过至少一题，或已进入复核清单 */
+  private hasUncommitted(): boolean {
+    return (this.phase === 'round' && this.index > 0) || this.phase === 'review';
+  }
+
+  /** 顶栏返回 / 系统返回统一入口：有未提交进度先弹二次确认，避免误退丢本轮 */
+  private confirmExit(): void {
+    if (!this.hasUncommitted()) {
+      NavStore.INSTANCE.back();
+      return;
+    }
+    try {
+      promptAction.showDialog({
+        title: '退出本轮？',
+        message: '本轮判定尚未确认，退出后不会保存，需要重新走一遍。',
+        buttons: [
+          { text: '继续本轮', color: Colors.BRAND },
+          { text: '退出', color: Colors.UNKNOWN_RED },
+        ],
+      }, (err: Error, result: promptAction.ShowDialogSuccessResponse) => {
+        if (!err && result.index === 1) {
+          NavStore.INSTANCE.back();
+        }
+      });
+    } catch (e) {
+      console.warn(`[SpeechTest] confirmExit dialog failed: ${(e as Error)?.message ?? e}`);
+      NavStore.INSTANCE.back();
+    }
+  }
+
+  /** 系统返回键：有未提交进度则拦下并二次确认（返回 true 消费事件） */
+  private handleBackPressed(): boolean {
+    if (!this.hasUncommitted()) {
+      return false;
+    }
+    this.confirmExit();
+    return true;
   }
 
   private animateCovered(covered: boolean): void {
@@ -389,7 +429,7 @@ export struct SpeechTestPage {
         Image($r('app.media.ic_back')).width(26).height(26)
       }
       .type(ButtonType.Normal).width(44).height(44).backgroundColor(Color.Transparent)
-      .onClick(() => NavStore.INSTANCE.back())
+      .onClick(() => this.confirmExit())
 
       Text('语音快过')
         .fontSize(TypeScale.CARD_TITLE).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
@@ -529,7 +569,10 @@ export struct SpeechTestPage {
       .width('100%').padding({ left: 16, right: 16, top: 8, bottom: 12 })
       .safeAreaPadding({ bottom: 14 })
     }
-    .width('100%').height('100%')
+    // 必须用 layoutWeight 而非 height('100%')：build() 根 Column 已含 TopBar，
+    // height('100%') 会按 NavDestination 全高解析而溢出父容器 84px，把底部三档按钮
+    // 顶进系统导航区（真机实测按钮下半段落在 2322–2406 被系统吞掉）。
+    .width('100%').layoutWeight(1)
   }
 
   @Builder
@@ -586,13 +629,22 @@ export struct SpeechTestPage {
       }
       .layoutWeight(1).width('100%').margin({ top: 8 })
 
-      Button(this.allJudged() ? '确认并返回首页' : '还有单词未判定')
-        .fontSize(16).fontColor(Colors.WHITE)
-        .backgroundColor(this.allJudged() ? Colors.BRAND : Colors.TEXT_WEAK)
-        .borderRadius(Radius.BUTTON).height(50).width('92%').margin({ bottom: 20 })
-        .onClick(() => this.confirmRound())
+      // 确认按钮：包一层 Row 承载安全区（safeAreaPadding 是内边距语义，
+      // 直接加在固定高 50 的 Button 上只会压缩其内容、不会上抬按钮），
+      // 口径与 RoundBody 底部三档按钮一致。
+      Row() {
+        Button(this.allJudged() ? '确认并返回首页' : '还有单词未判定')
+          .fontSize(16).fontColor(Colors.WHITE)
+          .backgroundColor(this.allJudged() ? Colors.BRAND : Colors.TEXT_WEAK)
+          .borderRadius(Radius.BUTTON).height(50).width('92%')
+          .onClick(() => this.confirmRound())
+      }
+      .width('100%').justifyContent(FlexAlign.Center)
+      .padding({ top: 8, bottom: 12 })
+      .safeAreaPadding({ bottom: 14 })
     }
-    .width('100%').height('100%')
+    // 同 RoundBody：layoutWeight 而非 height('100%')，否则溢出父容器、按钮落入系统导航区。
+    .width('100%').layoutWeight(1)
   }
 
   @Builder
@@ -623,6 +675,7 @@ export struct SpeechTestPage {
       .width('100%').height('100%').backgroundColor(Colors.PAGE_BG)
     }
     .hideTitleBar(true)
+    .onBackPressed((): boolean => this.handleBackPressed())
     .translate({ x: this.sheetX })
     .opacity(this.sheetOpacity + this.showTick * 0)
     .onShown(() => {
