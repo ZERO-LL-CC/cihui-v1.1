@@ -173,12 +173,27 @@ export struct ReviewCardsPage {
     }, delay);
   }
 
+  /** 语音状态对应的用户提示（空串表示无需提示） */
+  private ttsHintText(): string {
+    if (this.ttsState === 'downloading') {
+      return '正在下载英文发音音色，请稍候…';
+    }
+    if (this.ttsState === 'needDownload') {
+      return '首次朗读需联网下载英文发音音色，下载后即可离线朗读';
+    }
+    if (this.ttsState === 'unavailable') {
+      return '当前设备语音引擎不可用，可直接看英文翻面复习';
+    }
+    return '';
+  }
+
   private replay(): void {
     if (this.queue.length === 0) {
       return;
     }
-    if (this.ttsState === 'unavailable' || this.ttsState === 'initializing') {
-      this.toast('语音引擎未就绪，可直接看英文继续复习');
+    if (this.ttsState !== 'ready') {
+      const hint: string = this.ttsHintText();
+      this.toast(hint.length > 0 ? hint : '语音引擎未就绪，可直接看英文继续复习');
       return;
     }
     if (!TtsService.speak(this.queue[0].english)) {
@@ -523,8 +538,8 @@ export struct ReviewCardsPage {
         .fontSize(12).fontColor(Colors.TEXT_WEAK)
         .width('100%').textAlign(TextAlign.Center).margin({ top: 4, bottom: 4 })
 
-      if (this.ttsState === 'unavailable') {
-        Text('当前设备语音引擎不可用，可直接看英文翻面复习')
+      if (this.ttsHintText().length > 0) {
+        Text(this.ttsHintText())
           .fontSize(12).fontColor(Colors.FUZZY_ORANGE)
           .width('100%').textAlign(TextAlign.Center)
       }

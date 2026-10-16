@@ -68,9 +68,15 @@ export struct SentenceFavoritesPage {
   }
 
   private speak(text: string): void {
-    const ok: boolean = TtsService.speak(text);
-    if (!ok) {
-      this.toast('当前设备不支持朗读');
+    if (TtsService.speak(text)) {
+      return;
+    }
+    if (TtsService.state === 'needDownload') {
+      this.toast('需联网下载英文发音音色后才能朗读');
+    } else if (TtsService.state === 'downloading') {
+      this.toast('正在下载英文发音音色，请稍候…');
+    } else {
+      this.toast('当前设备暂不支持朗读');
     }
   }
 
