@@ -54,3 +54,7 @@ cihui-harmony/_ecdict/ecdict.csv
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# ===== 智能体工作目录（设备截图 / 临时脚本 / 计划，非源码） =====
+.workbuddy/
+.mattpocock-skills-tmp/
