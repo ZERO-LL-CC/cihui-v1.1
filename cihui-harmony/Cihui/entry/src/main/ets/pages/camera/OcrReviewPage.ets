@@ -14,8 +14,9 @@ import { Colors, TypeScale, Radius } from '../../common/DesignTokens';
 import type { OcrReviewRouteParam } from '../../common/RouteNames';
 import { OcrImageResult } from '../../service/OcrService';
 import { parseOcrLines, OcrDraft } from '../../service/OcrParser';
+import { PHOTO_BOOK_NAME } from '../../model/RepoCore';
 import type { WordDraft } from '../../model/RepoCore';
-import type { WordBook } from '../../model/Types';
+import type { IntakeMode, WordBook } from '../../model/Types';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 
 let rowSeq: number = 1;
@@ -50,6 +51,8 @@ export struct OcrReviewPage {
   @Local rows: ReviewRow[] = [];
   @Local showMissingDialog: boolean = false;
   @Local importing: boolean = false;
+  /** F-A 缺释义弹窗拦截时记住用户选择的入列方式，补录后按原选择导入 */
+  private pendingIntake: IntakeMode = 'QUEUE';
   /** 动态QA：页面每次重新显示时自增，强制重算仓库派生数据 */
   @Local showTick: number = 0;
   /** 动态QA：导航/数据事件总线，本页成为栈顶时强制重算（@Trace 覆盖期投递不可靠） */
@@ -113,7 +116,7 @@ export struct OcrReviewPage {
     return this.rows.filter((r: ReviewRow): boolean => r.missing()).length;
   }
 
-  /** 找到/创建本次导入目标 DIY 词本 */
+  /** 找到/创建本次导入目标 DIY 词本（F-D：拍照导入固定独立词本「拍照词本」，算法一起计算） */
   private resolveBook(now: Date): string {
     if (this.param.bookId && this.param.bookId.length > 0) {
       return this.param.bookId;
@@ -127,19 +130,18 @@ export struct OcrReviewPage {
       }
       store.addBook('手动生词本', 'DIY_MANUAL');
     } else {
-      const name: string = `拍照导入 ${now.getMonth() + 1}月${now.getDate()}日`;
       const exist: WordBook | undefined =
-        store.books.find((b: WordBook): boolean => b.name === name);
+        store.books.find((b: WordBook): boolean => b.name === PHOTO_BOOK_NAME);
       if (exist) {
         return exist.id;
       }
-      store.addBook(name, 'DIY_PHOTO');
+      store.addBook(PHOTO_BOOK_NAME, 'DIY_PHOTO');
     }
     const created: WordBook | undefined = [...store.books].pop();
     return created ? created.id : '';
   }
 
-  private async doImport(allowMissing: boolean): Promise<void> {
+  private async doImport(allowMissing: boolean, intake: IntakeMode = 'QUEUE'): Promise<void> {
     if (this.importing) {
       return;
     }
@@ -152,6 +154,7 @@ export struct OcrReviewPage {
     }
     const missing: number = this.missingCount();
     if (missing > 0 && !allowMissing) {
+      this.pendingIntake = intake;
       this.showMissingDialog = true;
       return;
     }
@@ -179,8 +182,13 @@ export struct OcrReviewPage {
         };
       });
       // 单次事务：失败抛异常，不产生半截数据；成功立即排期
-      DataStore.INSTANCE.importWords(drafts);
-      promptAction.showToast({ message: `已导入 ${drafts.length} 个词`, duration: 2200 });
+      DataStore.INSTANCE.importWords(drafts, intake);
+      promptAction.showToast({
+        message: intake === 'TODAY'
+          ? `已导入 ${drafts.length} 个词，已加入今日计划`
+          : `已导入 ${drafts.length} 个词，将按每日新词量排队`,
+        duration: 2200
+      });
       // 关闭全部二级页回来源页：本页返回后由相机页 onShown 再退一层
       NavStore.INSTANCE.importDone = true;
       NavStore.INSTANCE.back();
@@ -276,7 +284,7 @@ export struct OcrReviewPage {
         .type(ButtonType.Normal).backgroundColor(Color.Transparent)
         .onClick(() => {
           this.showMissingDialog = false;
-          this.doImport(true);
+          this.doImport(true, this.pendingIntake);
         })
       Button('取消')
         .width('100%').height(40).fontSize(13).fontColor(Colors.TEXT_WEAK)
@@ -348,13 +356,22 @@ export struct OcrReviewPage {
           .margin({ left: 16, right: 16 })
           .onClick(() => this.addRow())
 
-          // sticky 底栏
-          Button(this.rows.length === 0 ? '确认导入' : `确认导入 ${this.rows.length} 个词`)
-            .width('92%').height(50).borderRadius(25)
-            .backgroundColor(this.rows.length === 0 ? '#9EABF9' : Colors.BRAND)
-            .fontColor(Color.White).fontSize(16).margin({ top: 12, bottom: 8 })
-            .enabled(this.rows.length > 0 && !this.importing)
-            .onClick(() => this.doImport(false))
+          // sticky 底栏：F-A 两种入列方式（加入当天计划=今天立即首学不占配额；加入词本=按每日新词量排队）
+          Row() {
+            Button('加入当天计划')
+              .layoutWeight(1).height(50).borderRadius(25)
+              .backgroundColor(this.rows.length === 0 ? '#9EABF9' : Colors.KNOW_GREEN)
+              .fontColor(Color.White).fontSize(15)
+              .enabled(this.rows.length > 0 && !this.importing)
+              .onClick(() => this.doImport(false, 'TODAY'))
+            Button('加入词本')
+              .layoutWeight(1).height(50).borderRadius(25)
+              .backgroundColor(this.rows.length === 0 ? '#9EABF9' : Colors.BRAND)
+              .fontColor(Color.White).fontSize(15)
+              .enabled(this.rows.length > 0 && !this.importing)
+              .onClick(() => this.doImport(false, 'QUEUE'))
+          }
+          .width('92%').margin({ top: 12, bottom: 8 })
         }
         .width('100%').height('100%').backgroundColor(Colors.PAGE_BG)
         .safeAreaPadding({ bottom: 8 })

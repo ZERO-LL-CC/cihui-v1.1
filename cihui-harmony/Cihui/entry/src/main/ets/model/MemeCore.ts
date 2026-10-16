@@ -14,6 +14,7 @@ import type {
   MemeCard,
   MemeSentence,
   ReviewSchedule,
+  StudyRecord,
   StudySession,
   SessionItem,
   Verdict,
@@ -22,6 +23,7 @@ import type {
 } from './Types';
 import type { AppData } from './RepoCore';
 import {
+  activeScopeWordIds,
   applyJudgeToData,
   genId,
 } from './RepoCore';
@@ -253,38 +255,49 @@ export function createMemeImport(data: AppData, input: MemeImportInput, now: num
   };
   next = { ...next, books: [...next.books, book] };
 
-  // 2) 逐词：新词入库，旧词复用
+  // 2) 逐词：新词入库，旧词复用（P20 性能口径：先收集再一次性追加，
+  //    避免循环内每个新词都全量复制 words/records/schedules 数组）
   const sessionWordIds: string[] = [];
   const allTokenIds: string[] = [];
+  const newWords: Word[] = [];
+  const newRecords: StudyRecord[] = [];
+  const newSchedules: ReviewSchedule[] = [];
   for (const c of input.candidates) {
     let wordId: string = c.existingWordId;
     if (wordId === '') {
       wordId = genId('memeword');
-      next = {
-        ...next,
-        words: [...next.words, {
-          id: wordId,
-          bookId,
-          english: c.token,
-          phonetic: '',
-          meanings: [],
-          source: 'MEME',
-          missingMeaning: true,
-          diySupplement: false,
-          createdAt: now,
-        }],
-        records: [...next.records, newStudyRecord(wordId)],
-        schedules: [...next.schedules, newImportedSchedule(wordId)],
-      };
+      newWords.push({
+        id: wordId,
+        bookId,
+        english: c.token,
+        phonetic: '',
+        meanings: [],
+        source: 'MEME',
+        missingMeaning: true,
+        diySupplement: false,
+        createdAt: now,
+      });
+      newRecords.push(newStudyRecord(wordId));
+      newSchedules.push(newImportedSchedule(wordId));
     }
     allTokenIds.push(wordId);
     if (c.selected) {
       sessionWordIds.push(wordId);
     }
   }
+  next = {
+    ...next,
+    words: [...next.words, ...newWords],
+    records: [...next.records, ...newRecords],
+    schedules: [...next.schedules, ...newSchedules],
+  };
 
   // 3) 新词按每日新词量统一排期（与 F4/F5 同口径）
-  next = { ...next, schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount) };
+  next = {
+    ...next,
+    // F-D：梗句词本属例外词本，但重排口径须与全局一致（scope 外暂停词不排期）
+    schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next)),
+  };
 
   // 4) 梗句记录
   const memeId: string = genId('meme');

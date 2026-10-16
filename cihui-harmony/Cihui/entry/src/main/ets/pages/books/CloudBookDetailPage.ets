@@ -2,7 +2,10 @@
  * F5 词书详情页：书封 / 书名 / 版本标签 / 总词数 / 单词预览；右上角「下载导入」。
  * 下载：F14 起强制登录，未登录弹引导跳登录页 → 压暗 + 中心卡片转圈百分比
  * → 从随包词库（rawfile，开源 ECDICT）读取整本词书，单次事务落库
- * （失败不产生半截词书，可重试）→ 自动返回我的词本，新书置顶带「刚导入」，可连续导入。
+ * （失败不产生半截词书，可重试）→ 导入成功弹「设置每日新词量」小框
+ * （F-D：自定义 10–1000，一次性设置直到学完；下方红字感叹号提示复习负担）
+ * → 确认后回我的词本，新书置顶带「刚导入」。
+ * F-D 一次只能背一本：已有背诵中词本且未学完时，下载前先弹切书确认。
  * 分年级词书内容未接入（coming），详情页显示「筹备中」，不提供下载。
  */
 import { NavStore } from '../../viewmodel/NavStore';
@@ -15,10 +18,14 @@ import { findCloudBook, getSampleWords } from '../../service/CloudCatalog';
 import { CloudBookLoader } from '../../service/CloudBookLoader';
 import type { CloudBookMeta, CloudSampleWord } from '../../service/CloudCatalog';
 import type { WordBook } from '../../model/Types';
+import { MIN_DAILY_NEW, MAX_DAILY_NEW } from '../../model/SchedulerCore';
 import { promptAction } from '@kit.ArkUI';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 
-type Phase = 'idle' | 'gate' | 'downloading' | 'error';
+type Phase = 'idle' | 'gate' | 'downloading' | 'error' | 'quota' | 'switchConfirm';
+
+/** 每日新词量快捷档位（也可在输入框自定义 10–1000） */
+const QUOTA_PRESETS: number[] = [10, 20, 30, 50, 80, 100, 200, 500, 1000];
 
 @ComponentV2
 export struct CloudBookDetailPage {
@@ -42,6 +49,9 @@ export struct CloudBookDetailPage {
   @Local phase: Phase = 'idle';
   @Local percent: number = 0;
   @Local confirmRemove: boolean = false;
+  /** F-D 导入后设置每日新词量：快捷档选中值 + 输入框文本 */
+  @Local quotaSelected: number = 20;
+  @Local quotaInput: string = '20';
   private meta: CloudBookMeta | null = findCloudBook(this.param.cloudBookId);
   private samples: CloudSampleWord[] = getSampleWords(this.param.cloudBookId);
   private timerId: number = -1;
@@ -91,6 +101,12 @@ export struct CloudBookDetailPage {
       this.phase = 'gate';
       return;
     }
+    // F-D 一次只能背一本：已有背诵中词本且还有没学完的新词 → 先确认切换
+    const activeId: string = DataStore.INSTANCE.activeBookId();
+    if (activeId.length > 0 && DataStore.INSTANCE.unlearnedCountOfBook(activeId) > 0) {
+      this.phase = 'switchConfirm';
+      return;
+    }
     this.startDownload();
   }
 
@@ -122,14 +138,53 @@ export struct CloudBookDetailPage {
       this.percent = 88;
       DataStore.INSTANCE.importCloudBook(this.meta.name, this.meta.id, words);
       this.percent = 100;
-      this.toast(`已导入《${this.meta.name}》`);
+      // F-D：导入成功后停留在本页，弹「设置每日新词量」小框（书籍已可背诵）
       setTimeout((): void => {
-        // P11：导入完成直接落在「我的词本」且新书立即可见（键控重挂载）。
-        NavStore.INSTANCE.backToTabThenPush(2, RouteName.MY_BOOKS);
+        this.phase = 'quota';
       }, 500);
     } catch (e) {
       this.phase = 'error';
     }
+  }
+
+  /** F-D 当前背诵中词本名（切书确认框用；无则空串） */
+  private activeBookName(): string {
+    const id: string = DataStore.INSTANCE.activeBookId();
+    if (id.length === 0) {
+      return '';
+    }
+    const b: WordBook | undefined =
+      DataStore.INSTANCE.books.find((x: WordBook): boolean => x.id === id);
+    return b ? b.name : '';
+  }
+
+  /** F-D 当前背诵中词本剩余未学新词数 */
+  private activeUnlearned(): number {
+    const id: string = DataStore.INSTANCE.activeBookId();
+    return id.length > 0 ? DataStore.INSTANCE.unlearnedCountOfBook(id) : 0;
+  }
+
+  /** F-D 设置弹框确认：校验 10–1000 → 设置并重排未学新词 → 回我的词本 */
+  private confirmQuota(): void {
+    const n: number = parseInt(this.quotaInput, 10);
+    if (isNaN(n) || n < MIN_DAILY_NEW || n > MAX_DAILY_NEW) {
+      this.toast(`每日新词量需在 ${MIN_DAILY_NEW}–${MAX_DAILY_NEW} 之间`);
+      return;
+    }
+    DataStore.INSTANCE.setDailyNew(n);
+    this.toast(`已按每日 ${n} 个新词排期，学到学完`);
+    this.finishImport();
+  }
+
+  /** F-D 设置弹框跳过：保持当前设置直接返回 */
+  private skipQuota(): void {
+    this.toast('已保持当前每日新词量，可在「计划」里调整');
+    this.finishImport();
+  }
+
+  private finishImport(): void {
+    this.phase = 'idle';
+    NavStore.INSTANCE.backToTabThenPush(2, RouteName.MY_BOOKS);
   }
 
   private doRemove(): void {
@@ -364,6 +419,113 @@ export struct CloudBookDetailPage {
     .width('100%').height('100%')
   }
 
+  /** F-D 切书确认：一次只能背一本，导入新书后旧书暂停（复习义务照常） */
+  @Builder
+  SwitchConfirmModal() {
+    Stack({ alignContent: Alignment.Center }) {
+      Column().width('100%').height('100%').backgroundColor('#66000000')
+        .onClick(() => {
+          this.phase = 'idle';
+        })
+      Column() {
+        Text('一次只能背一本词本').fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
+        Text(`当前正在背《${this.activeBookName()}》，还有 ${this.activeUnlearned()} 个新词没学。\n导入《${this.meta ? this.meta.name : ''}》后《${this.activeBookName()}》将暂停排期，已学的复习照常进行；学完新书可回来继续。`)
+          .fontSize(13).fontColor(Colors.TEXT_SUB).lineHeight(20).margin({ top: 12 })
+        Row() {
+          Button('取消')
+            .layoutWeight(1).height(42).borderRadius(Radius.BUTTON).fontSize(14)
+            .fontColor(Colors.TEXT_SUB).backgroundColor(Colors.PAGE_BG)
+            .onClick(() => {
+              this.phase = 'idle';
+            })
+          Button('确认导入并切换')
+            .layoutWeight(1).height(42).borderRadius(Radius.BUTTON).fontSize(14)
+            .fontColor(Colors.WHITE).backgroundColor(Colors.BRAND).margin({ left: 12 })
+            .onClick(() => this.startDownload())
+        }
+        .width('100%').margin({ top: 20 })
+      }
+      .width('82%').padding(22).backgroundColor(Colors.WHITE).borderRadius(Radius.SHEET)
+    }
+    .width('100%').height('100%')
+  }
+
+  /** F-D 导入成功后设置每日新词量：快捷档 + 自定义输入，红字感叹号提示负担 */
+  @Builder
+  QuotaModal() {
+    Stack({ alignContent: Alignment.Center }) {
+      Column().width('100%').height('100%').backgroundColor('#66000000')
+      Column() {
+        Text('设置每日新词量').fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
+        Text(`《${this.meta ? this.meta.name : ''}》一次设置，一直用到学完`)
+          .fontSize(13).fontColor(Colors.TEXT_SUB).margin({ top: 8 })
+
+        // 快捷档位
+        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Center }) {
+          ForEach(QUOTA_PRESETS, (p: number) => {
+            Text(`${p}`)
+              .fontSize(14)
+              .fontColor(this.quotaSelected === p ? Colors.WHITE : Colors.TEXT_SUB)
+              .backgroundColor(this.quotaSelected === p ? Colors.BRAND : Colors.PAGE_BG)
+              .borderRadius(16)
+              .padding({ left: 14, right: 14, top: 6, bottom: 6 })
+              .margin(4)
+              .onClick(() => {
+                this.quotaSelected = p;
+                this.quotaInput = `${p}`;
+              })
+          }, (p: number): string => `preset-${p}`)
+        }
+        .width('100%').margin({ top: 14 })
+
+        // 自定义输入（10–1000）
+        Row() {
+          Text('自定义').fontSize(13).fontColor(Colors.TEXT_SUB)
+          TextInput({ text: this.quotaInput, placeholder: `${MIN_DAILY_NEW}–${MAX_DAILY_NEW}` })
+            .type(InputType.Number)
+            .fontSize(16).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
+            .textAlign(TextAlign.Center)
+            .width(110).height(40)
+            .backgroundColor(Colors.PAGE_BG).borderRadius(10)
+            .margin({ left: 12 })
+            .onChange((v: string): void => {
+              this.quotaInput = v;
+              const n: number = parseInt(v, 10);
+              if (!isNaN(n)) {
+                this.quotaSelected = n;
+              }
+            })
+          Text('个 / 天').fontSize(13).fontColor(Colors.TEXT_SUB).margin({ left: 8 })
+        }
+        .width('100%').justifyContent(FlexAlign.Center).margin({ top: 14 })
+
+        // 红字感叹号提示：复习负担警告
+        Row() {
+          Text('！').fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.UNKNOWN_RED)
+          Text(`新词量越大，之后每天要复习的词会成倍累积：每天背 ${this.quotaSelected} 个，一周后每天要复习 ${this.quotaSelected * 2} 个以上。量力而行，建议 ${MIN_DAILY_NEW}–50。`)
+            .fontSize(12).fontColor(Colors.UNKNOWN_RED).lineHeight(18).layoutWeight(1)
+            .margin({ left: 6 })
+        }
+        .width('100%').alignItems(VerticalAlign.Top).margin({ top: 14 })
+          .padding(10).backgroundColor('#14F44336').borderRadius(10)
+
+        Row() {
+          Button('稍后再说')
+            .layoutWeight(1).height(44).borderRadius(Radius.BUTTON).fontSize(14)
+            .fontColor(Colors.TEXT_SUB).backgroundColor(Colors.PAGE_BG)
+            .onClick(() => this.skipQuota())
+          Button('开始背诵')
+            .layoutWeight(1).height(44).borderRadius(Radius.BUTTON).fontSize(14)
+            .fontColor(Colors.WHITE).backgroundColor(Colors.BRAND).margin({ left: 12 })
+            .onClick(() => this.confirmQuota())
+        }
+        .width('100%').margin({ top: 20 })
+      }
+      .width('84%').padding(22).backgroundColor(Colors.WHITE).borderRadius(Radius.SHEET)
+    }
+    .width('100%').height('100%')
+  }
+
   build() {
     NavDestination() {
       Stack({ alignContent: Alignment.Top }) {
@@ -399,6 +561,10 @@ export struct CloudBookDetailPage {
           this.DownloadingModal()
         } else if (this.phase === 'error') {
           this.ErrorModal()
+        } else if (this.phase === 'switchConfirm') {
+          this.SwitchConfirmModal()
+        } else if (this.phase === 'quota') {
+          this.QuotaModal()
         }
         if (this.confirmRemove) {
           this.RemoveModal()

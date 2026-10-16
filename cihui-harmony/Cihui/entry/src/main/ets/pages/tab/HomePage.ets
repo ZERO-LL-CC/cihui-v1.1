@@ -439,14 +439,36 @@ export struct HomePage {
     })
   }
 
+  /**
+   * 快捷入口（渐变玻璃风格）
+   * grad: 两段式渐变色 [亮, 深]；glow: 带透明度的同色系投影（ARGB）
+   * 字形统一染白，顶部叠加白色高光层模拟玻璃质感
+   */
   @Builder
-  QuickEntry(icon: Resource, tint: string, bg: string, label: string, badge: number, kind: string) {
+  QuickEntry(icon: Resource, grad: string[], glow: string, label: string, badge: number, kind: string) {
     Column() {
       Stack({ alignContent: Alignment.TopEnd }) {
-        Column() {
-          Image(icon).width(24).height(24).fillColor(tint)
+        Stack({ alignContent: Alignment.Center }) {
+          // 渐变底层
+          Column() {
+          }
+          .width('100%').height('100%')
+          .borderRadius(16)
+          .linearGradient({ angle: 150, colors: [[grad[0], 0], [grad[1], 1]] })
+          .shadow({ radius: 14, color: glow, offsetX: 0, offsetY: 6 })
+          // 顶部白色高光层（玻璃质感）
+          Column() {
+          }
+          .width('100%').height('100%')
+          .borderRadius(16)
+          .linearGradient({
+            angle: 180,
+            colors: [['#3DFFFFFF', 0], ['#00FFFFFF', 0.5], ['#00FFFFFF', 1]]
+          })
+          // 白色字形
+          Image(icon).width(24).height(24).fillColor(Colors.WHITE)
         }
-        .width(48).height(48).borderRadius(16).backgroundColor(bg).justifyContent(FlexAlign.Center)
+        .width(48).height(48)
 
         if (badge > 0) {
           Text(badge > 99 ? '99+' : badge.toString())
@@ -454,6 +476,7 @@ export struct HomePage {
             .constraintSize({ minWidth: 18 }).height(18).borderRadius(9)
             .padding({ left: 4, right: 4 })
             .backgroundColor(Colors.UNKNOWN_RED)
+            .border({ width: 1.5, color: Colors.WHITE })
             .position({ x: 10, y: -8 });
         }
       }
@@ -585,11 +608,11 @@ export struct HomePage {
             Text('快捷入口').fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
               .width('100%').margin({ bottom: 14 })
             Row() {
-              this.QuickEntry($r('app.media.ic_camera'), Colors.FUZZY_ORANGE, Colors.FUZZY_ORANGE_SOFT,
+              this.QuickEntry($r('app.media.ic_camera'), ['#FFB84D', '#EC6A0F'], '#59EC6A0F',
                 '拍照导入', 0, 'camera')
-              this.QuickEntry($r('app.media.ic_book'), Colors.BRAND, Colors.BRAND_SOFT,
+              this.QuickEntry($r('app.media.ic_book'), ['#4C8DFF', '#0A59F7'], '#590A59F7',
                 '我的词本', 0, 'books')
-              this.QuickEntry($r('app.media.ic_wrong'), Colors.UNKNOWN_RED, Colors.UNKNOWN_RED_SOFT,
+              this.QuickEntry($r('app.media.ic_wrong'), ['#FF7A7A', '#E14B4B'], '#59E14B4B',
                 '错词本', this.stats().wrongCount, 'wrong')
             }
             .width('100%')

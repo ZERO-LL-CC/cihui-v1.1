@@ -14,6 +14,7 @@
 import type {
   BookSource,
   CheckInRecord,
+  IntakeMode,
   LearnPhase,
   MemeCard,
   MemeSentence,
@@ -42,8 +43,10 @@ import {
   emptyData,
   importCloudBook,
   importTransaction,
+  activeScopeWordIds,
   removeWrongFromData,
   renameBook,
+  setDailyNewCount,
   todayGateStatus,
   updateWord,
   upsertCheckin,
@@ -65,6 +68,7 @@ import {
   buildMonthGrid,
   buildProfileStats,
   buildWrongEntries,
+  clampDailyNew,
   computeStreak,
   dayKeyFromTs,
   markFirstStudy,
@@ -101,6 +105,7 @@ import type { MemeCandidate } from '../model/MemeCore';
 import { collectTodayWordIds, joinWordsByIds } from '../model/SentenceCore';
 import { REFRESH_BUS } from '../common/RefreshBus';
 import { common } from '@kit.AbilityKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LocalStateFiles } from '../service/LocalStateFiles';
 
 /** 持久化接口（F15 落地；当前为内存实现） */
@@ -150,7 +155,15 @@ class FilePersistence implements Persistence {
 
   save(data: AppData): void {
     this.memory.save(data);
-    LocalStateFiles.write(FilePersistence.FILE, JSON.stringify(data));
+    // 性能埋点：真机定位「每次判定全量落盘」的实际耗时（stringify 与 write 分开计时）
+    const t0: number = Date.now();
+    const json: string = JSON.stringify(data);
+    const t1: number = Date.now();
+    LocalStateFiles.write(FilePersistence.FILE, json);
+    const t2: number = Date.now();
+    hilog.info(0x0000, 'CihuiIO',
+      'save bytes=%{public}d stringify=%{public}dms write=%{public}dms',
+      json.length, t1 - t0, t2 - t1);
   }
 
   load(): AppData | null {
@@ -200,6 +213,15 @@ export class DataStore {
     }
     if (out.savedSentences === undefined) {
       out.savedSentences = [];
+    }
+    // F-D：旧数据 settings 缺 activeBookId 补空；指向已删除词本时清空
+    if (out.settings !== undefined && out.settings.activeBookId === undefined) {
+      out.settings.activeBookId = '';
+    }
+    if (out.settings !== undefined && out.settings.activeBookId !== ''
+      && out.settings.activeBookId.length > 0
+      && !out.books.some((b: WordBook): boolean => b.id === out.settings.activeBookId)) {
+      out.settings.activeBookId = '';
     }
     return out;
   }
@@ -278,9 +300,10 @@ export class DataStore {
     this.commit(batchDeleteWords(this.data, wordIds));
   }
 
-  /** OCR 确认导入 / 云词书下载：单次事务，失败不产生半截数据 */
-  importWords(drafts: WordDraft[]): void {
-    this.commit(importTransaction(this.data, drafts, Date.now()));
+  /** OCR 确认导入 / 云词书下载：单次事务，失败不产生半截数据。
+   *  F-A intake：'QUEUE'=加入词本按每日新词量排队（默认）；'TODAY'=加入当天计划立即首学不占配额。 */
+  importWords(drafts: WordDraft[], intake: IntakeMode = 'QUEUE'): void {
+    this.commit(importTransaction(this.data, drafts, Date.now(), intake));
   }
 
   /** F5 云词书下载导入：建 CLOUD 词本 + 整批导入单次事务，重复下载抛错 */
@@ -301,6 +324,35 @@ export class DataStore {
   /** F5 某词本下的单词数（词本卡片实时统计，与首页/打卡同源） */
   wordCountOfBook(bookId: string): number {
     return this.data.words.filter((w: Word): boolean => w.bookId === bookId).length;
+  }
+
+  /* ---------- F-D 单词本限制（一次只能背一本） ---------- */
+
+  /** 当前背诵中的词本 id（''=未设置，全部词本可排期） */
+  activeBookId(): string {
+    return this.data.settings.activeBookId ?? '';
+  }
+
+  /** 某词本剩余未首学的新词数（切书确认框用） */
+  unlearnedCountOfBook(bookId: string): number {
+    const ids: Set<string> = new Set();
+    for (const w of this.data.words) {
+      if (w.bookId === bookId) {
+        ids.add(w.id);
+      }
+    }
+    return this.data.schedules.filter((s: ReviewSchedule): boolean =>
+      ids.has(s.wordId) && s.stage === 'NEW' && s.firstLearnDay === '').length;
+  }
+
+  /** 某词本是否为当前背诵中的词本（我的词本页「背诵中」徽章） */
+  isBookLearning(bookId: string): boolean {
+    return this.activeBookId() === bookId;
+  }
+
+  /** 导入词本后的弹框口径：设置每日新词量并重排未学新词（不动今日已学与打卡） */
+  setDailyNew(n: number): void {
+    this.commit(setDailyNewCount(this.data, n, Date.now()));
   }
 
   /* ---------- 学习判定（语音自动与手动闪卡共用） ---------- */
@@ -352,7 +404,7 @@ export class DataStore {
     // ArkTS 限制标准库与对象展开：克隆后逐字段合并设置
     const next: AppData = cloneData(this.data);
     if (patch.dailyNewCount !== undefined) {
-      next.settings.dailyNewCount = patch.dailyNewCount;
+      next.settings.dailyNewCount = clampDailyNew(patch.dailyNewCount);
     }
     if (patch.shortReviewEnabled !== undefined) {
       next.settings.shortReviewEnabled = patch.shortReviewEnabled;
@@ -526,7 +578,7 @@ export class DataStore {
       records: this.data.records,
       settings: this.data.settings,
     };
-    return previewDailyNew(state, n, Date.now());
+    return previewDailyNew(state, n, Date.now(), activeScopeWordIds(this.data));
   }
 
   /** F12 确定每日新词量：重置当日完成态、重排未来新词，历史不篡改 */

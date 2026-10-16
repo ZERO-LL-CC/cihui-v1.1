@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>词慧 · UI 重设计方案稿（艾宾浩斯计划表 ×3 / 功能图标 ×5）</title>
+<style>
+/* ============================================================
+   词慧 UI 重设计 · 方案稿
+   Part A : 艾宾浩斯计划表 3 版（V1 云白精修 / V2 墨金编辑 / V3 活力橙游戏化）
+   Part B : 功能图标 5 版（柔光填充 / 极简线描 / 渐变玻璃 / 贴纸撞色 / 3D 黏土）
+   数字防出框统一策略：
+   1) 数字容器 min-width:0 + 左右 padding ≥12px
+   2) font-variant-numeric: tabular-nums（等宽数字不抖动）
+   3) clamp() 弹性字号，数字越长字号越小
+   4) 日历格数字居中，角标预留独立槽位，不再与数字抢同一行
+   ============================================================ */
+:root{
+  --brand:#0A59F7; --brand-d:#0846C0; --brand-soft:#E9F0FE;
+  --ink:#17202E; --ink2:#5A6575; --ink3:#98A2B2;
+  --ok:#179C5B; --ok-bg:#E5F5EC;
+  --warn:#EC8A12; --warn-bg:#FDF1DE;
+  --bad:#E14B4B; --bad-bg:#FCEAEA;
+  --violet:#6E5CF6;
+  --page:#EEF1F6;
+  --gold:#D9A441;
+  --cream:#FFF6EA;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{-webkit-font-smoothing:antialiased;}
+body{
+  font-family:"MiSans","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  background:
+    radial-gradient(1200px 500px at 85% -5%, rgba(10,89,247,.06), transparent 60%),
+    radial-gradient(900px 420px at 5% 30%, rgba(217,164,65,.07), transparent 60%),
+    var(--page);
+  color:var(--ink);
+  padding:48px 20px 80px;
+}
+.wrap{max-width:1280px;margin:0 auto;}
+
+/* ---------- 页面标题区 ---------- */
+.hero{margin-bottom:44px;}
+.hero .kicker{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--brand);
+  background:var(--brand-soft);padding:6px 14px;border-radius:999px;margin-bottom:14px;
+}
+.hero h1{
+  font-size:clamp(26px,4vw,40px);font-weight:900;letter-spacing:-.02em;line-height:1.15;
+}
+.hero h1 em{font-style:normal;color:var(--brand);}
+.hero p{margin-top:10px;font-size:14px;color:var(--ink2);max-width:64ch;line-height:1.7;}
+
+/* ---------- 区块标题 ---------- */
+.sec-head{display:flex;align-items:baseline;gap:14px;margin:56px 0 22px;}
+.sec-head .no{
+  font-size:13px;font-weight:800;color:var(--brand);
+  border:1.5px solid var(--brand);border-radius:8px;padding:2px 9px;letter-spacing:.08em;
+}
+.sec-head h2{font-size:22px;font-weight:900;letter-spacing:-.01em;}
+.sec-head span{font-size:13px;color:var(--ink3);}
+
+/* ---------- 手机壳 ---------- */
+.shelf{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:26px;}
+.phone-col{display:flex;flex-direction:column;gap:14px;}
+.phone{
+  width:100%;max-width:375px;margin:0 auto;
+  background:#101318;border-radius:44px;padding:10px;
+  box-shadow:0 30px 60px -18px rgba(23,32,46,.35),0 4px 14px rgba(23,32,46,.18);
+  position:relative;
+}
+.screen{
+  background:#F4F6FA;border-radius:36px;overflow:hidden;
+  height:730px;position:relative;display:flex;flex-direction:column;
+}
+/* 灵动岛 */
+.island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:96px;height:24px;background:#101318;border-radius:999px;z-index:50;}
+.ver-tag{
+  align-self:center;display:inline-flex;gap:8px;align-items:center;
+  font-size:13px;font-weight:800;color:var(--ink);
+}
+.ver-tag i{font-style:normal;font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px;letter-spacing:.06em;}
+.note{
+  background:#fff;border:1px solid #E4E8F0;border-radius:14px;padding:12px 14px;
+  font-size:12px;color:var(--ink2);line-height:1.65;max-width:375px;margin:0 auto;width:100%;
+}
+.note b{color:var(--ink);}
+.note .fix{color:var(--ok);font-weight:700;}
+
+/* ============================================================
+   V1 云白精修 —— 沿用品牌蓝，秩序感升级
+   ============================================================ */
+.v1 .screen{background:#F4F6FA;}
+.app-head{padding:52px 18px 0;}
+.app-topbar{display:flex;align-items:center;justify-content:space-between;}
+.app-title{font-size:19px;font-weight:900;letter-spacing:.01em;}
+.month-nav{display:flex;align-items:center;gap:8px;}
+.month-label{font-size:13px;font-weight:700;color:var(--ink2);min-width:64px;text-align:center;}
+.mbtn{
+  width:32px;height:32px;border-radius:10px;background:#fff;border:1px solid #E4E8F0;
+  display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--ink2);
+  box-shadow:0 1px 3px rgba(23,32,46,.06);
+}
+.v1 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:16px 18px 0;}
+.v1 .st{
+  background:#fff;border-radius:16px;padding:14px 8px 12px;text-align:center;position:relative;overflow:hidden;
+  box-shadow:0 2px 10px rgba(23,32,46,.05);
+}
+.v1 .st::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--ac,#0A59F7);}
+.v1 .st b{
+  display:block;font-size:22px;font-weight:900;line-height:1.1;letter-spacing:-.01em;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.v1 .st span{display:block;font-size:10.5px;color:var(--ink3);margin-top:4px;white-space:nowrap;}
+.v1 .st.danger b{color:var(--bad);}
+/* 迷你连续条 */
+.v1 .streak{margin:12px 18px 0;background:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 2px 10px rgba(23,32,46,.05);}
+.v1 .streak-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.v1 .streak-row b{font-size:12.5px;font-weight:800;}
+.v1 .streak-row em{font-style:normal;font-size:11px;color:var(--warn);font-weight:700;}
+.v1 .track{height:6px;border-radius:99px;background:#EEF1F6;overflow:hidden;}
+.v1 .fill{height:100%;width:80%;border-radius:99px;background:linear-gradient(90deg,#FF9D2E,var(--warn));}
+/* 日历 */
+.cal-card{margin:12px 18px 0;background:#fff;border-radius:20px;padding:14px 12px;box-shadow:0 2px 10px rgba(23,32,46,.05);}
+.cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:8px;}
+.cal-week i{font-style:normal;text-align:center;font-size:10.5px;font-weight:700;color:var(--ink3);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+.cell{
+  aspect-ratio:1/1.06;border-radius:12px;position:relative;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+}
+.cell .d{font-size:12.5px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;}
+.cell .dot{width:4px;height:4px;border-radius:99px;background:var(--brand);opacity:.85;}
+.cell .dot.multi{background:linear-gradient(90deg,var(--ok) 33%,var(--violet) 33% 66%,var(--bad) 66%);}
+.cell.done{background:var(--ok-bg);}
+.cell.done .d{color:var(--ok);}
+.cell.future{background:#fff;border:1px dashed #DDE3EC;}
+.cell.future .d{color:var(--ink3);font-weight:600;}
+.cell.miss{background:var(--bad-bg);}
+.cell.miss .d{color:var(--bad);}
+.cell.today{background:linear-gradient(160deg,#2E7BFF,var(--brand));box-shadow:0 6px 14px rgba(10,89,247,.32);}
+.cell.today .d{color:#fff;}
+.cell.today .dot{background:rgba(255,255,255,.9);}
+.cell .bud{
+  position:absolute;top:3px;right:4px;font-size:8px;font-weight:800;color:#fff;
+  background:var(--bad);border-radius:99px;padding:1px 4px;line-height:1.3;
+}
+.cell.today .bud{background:#fff;color:var(--brand);}
+/* 图例 */
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;padding:12px 18px 0;}
+.legend span{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink2);}
+.legend i{width:9px;height:9px;border-radius:99px;}
+/* 底部按钮 */
+.cta{
+  margin:auto 18px 18px;padding:13px;border-radius:16px;text-align:center;
+  background:var(--brand);color:#fff;font-size:14.5px;font-weight:800;letter-spacing:.02em;
+  box-shadow:0 8px 20px rgba(10,89,247,.3);
+}
+
+/* ============================================================
+   V2 墨金编辑风 —— 深色主编卡片 + 细规则线 + 金色强调
+   ============================================================ */
+.v2 .screen{background:#F1F0EC;}
+.v2 .ink-head{
+  margin:52px 14px 0;background:#181B22;border-radius:22px;padding:18px 16px 16px;color:#F4F1E8;
+  position:relative;overflow:hidden;
+}
+.v2 .ink-head::after{
+  content:"";position:absolute;right:-38px;top:-38px;width:130px;height:130px;border-radius:50%;
+  background:radial-gradient(circle,rgba(217,164,65,.22),transparent 68%);
+}
+.v2 .ink-title{display:flex;justify-content:space-between;align-items:center;}
+.v2 .ink-title b{font-size:17px;font-weight:900;letter-spacing:.06em;}
+.v2 .ink-title span{font-size:11px;color:#B9AE93;letter-spacing:.14em;font-weight:700;}
+.v2 .bigrow{display:flex;align-items:flex-end;gap:18px;margin-top:12px;}
+.v2 .bignum{font-size:46px;font-weight:900;line-height:.95;letter-spacing:-.03em;color:#F0D9A6;font-variant-numeric:tabular-nums;}
+.v2 .bigcap{font-size:11px;color:#8E8878;line-height:1.5;padding-bottom:5px;}
+.v2 .ink-stats{display:flex;margin-top:14px;border-top:1px solid rgba(244,241,232,.14);padding-top:10px;}
+.v2 .is{flex:1;min-width:0;text-align:center;}
+.v2 .is+.is{border-left:1px solid rgba(244,241,232,.12);}
+.v2 .is b{display:block;font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.v2 .is span{font-size:10px;color:#8E8878;letter-spacing:.05em;white-space:nowrap;}
+.v2 .is.hot b{color:#F0D9A6;}
+/* 细线日历 */
+.v2 .cal2{margin:12px 14px 0;background:#fff;border-radius:18px;padding:14px 12px;box-shadow:0 2px 12px rgba(23,32,46,.06);}
+.v2 .cal-week i{color:var(--ink3);}
+.v2 .cal-grid{gap:4px;}
+.v2 .cell{border-radius:9px;background:transparent;aspect-ratio:1/1;gap:3px;}
+.v2 .cell .d{font-size:12px;font-weight:600;color:var(--ink);}
+.v2 .cell.done .d{color:var(--ok);font-weight:800;}
+.v2 .cell.done{background:transparent;}
+.v2 .cell.done::after{content:"";width:14px;height:3px;border-radius:99px;background:var(--ok);display:block;}
+.v2 .cell.future .d{color:#C4CAD4;}
+.v2 .cell.miss .d{color:var(--bad);text-decoration:line-through;text-decoration-thickness:1.5px;}
+.v2 .cell.today{
+  background:#181B22;box-shadow:none;
+}
+.v2 .cell.today .d{color:#F0D9A6;font-weight:900;}
+.v2 .cell.today::after{content:"";width:14px;height:3px;border-radius:99px;background:#F0D9A6;display:block;}
+.v2 .cell .dot{width:3.5px;height:3.5px;}
+.v2 .plan-line{
+  margin:12px 14px 0;background:#fff;border-radius:18px;padding:13px 15px;box-shadow:0 2px 12px rgba(23,32,46,.06);
+  display:flex;align-items:center;gap:11px;
+}
+.v2 .pl-ic{width:34px;height:34px;border-radius:10px;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;flex:none;}
+.v2 .pl-tx{flex:1;min-width:0;}
+.v2 .pl-tx b{display:block;font-size:12.5px;font-weight:800;}
+.v2 .pl-tx span{font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
+.v2 .pl-go{font-size:11px;font-weight:800;color:var(--brand);flex:none;}
+.v2 .cta2{
+  margin:auto 14px 18px;padding:13px;border-radius:16px;text-align:center;
+  background:#181B22;color:#F0D9A6;font-size:14.5px;font-weight:800;letter-spacing:.1em;
+}
+
+/* ============================================================
+   V3 活力橙 · 游戏化 —— 奶油底 + 进度环 + 方糖日历
+   ============================================================ */
+.v3 .screen{background:#FFF6EA;}
+.v3 .game-head{padding:52px 18px 0;}
+.v3 .hero-card{
+  margin-top:14px;background:linear-gradient(145deg,#FF8A3D,#F4691E);border-radius:22px;
+  padding:16px;color:#fff;position:relative;overflow:hidden;
+  box-shadow:0 14px 30px -10px rgba(244,105,30,.5);
+}
+.v3 .hero-card::before{
+  content:"";position:absolute;left:-30px;bottom:-46px;width:150px;height:150px;border-radius:50%;
+  background:rgba(255,255,255,.12);
+}
+.v3 .hero-top{display:flex;align-items:center;gap:14px;}
+.v3 .ring{
+  width:74px;height:74px;flex:none;border-radius:50%;
+  background:conic-gradient(#fff 0 78%,rgba(255,255,255,.25) 78% 100%);
+  display:flex;align-items:center;justify-content:center;
+}
+.v3 .ring>div{width:58px;height:58px;border-radius:50%;background:#F4691E;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.v3 .ring b{font-size:17px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;}
+.v3 .ring span{font-size:8px;opacity:.85;margin-top:1px;}
+.v3 .hero-tx{min-width:0;flex:1;}
+.v3 .hero-tx h3{font-size:16px;font-weight:900;letter-spacing:.02em;}
+.v3 .hero-tx p{font-size:11px;opacity:.92;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.v3 .flame{
+  display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.2);
+  border-radius:99px;padding:3px 9px;font-size:11px;font-weight:800;margin-top:7px;font-variant-numeric:tabular-nums;
+}
+.v3 .mini-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:10px;}
+.v3 .ms{background:rgba(255,255,255,.16);border-radius:13px;padding:9px 4px;text-align:center;backdrop-filter:blur(4px);}
+.v3 .ms b{display:block;font-size:16px;font-weight:900;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.v3 .ms span{font-size:9.5px;opacity:.88;white-space:nowrap;}
+/* 方糖日历 */
+.v3 .cal3{margin:12px 18px 0;background:#fff;border-radius:20px;padding:14px 12px;box-shadow:0 4px 16px rgba(244,105,30,.1);}
+.v3 .cell{border-radius:11px;aspect-ratio:1/1.02;}
+.v3 .cell.done{background:#FFE3C4;}
+.v3 .cell.done .d{color:#C25E12;}
+.v3 .cell.done .dot{background:#F4691E;}
+.v3 .cell.future{background:#FFF4E4;border:1.5px dashed #F3CFA0;}
+.v3 .cell.future .d{color:#D9B183;}
+.v3 .cell.miss{background:#FFE1DC;}
+.v3 .cell.miss .d{color:#D8402F;}
+.v3 .cell.today{
+  background:linear-gradient(160deg,#FFB25E,#F4691E);
+  box-shadow:0 6px 14px rgba(244,105,30,.4);transform:scale(1.06);
+}
+.v3 .cell.today .d{color:#fff;}
+.v3 .cell.today .dot{background:rgba(255,255,255,.95);}
+.v3 .legend{padding-top:10px;}
+.v3 .cta3{
+  margin:auto 18px 18px;padding:13px;border-radius:16px;text-align:center;
+  background:linear-gradient(135deg,#FF8A3D,#F4691E);color:#fff;font-size:14.5px;font-weight:900;
+  box-shadow:0 8px 20px rgba(244,105,30,.35);letter-spacing:.02em;
+}
+
+/* ============================================================
+   Part B : 图标方案 ×5
+   ============================================================ */
+.icon-shelf{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:22px;}
+.icon-card{
+  background:#fff;border-radius:22px;padding:20px 20px 18px;border:1px solid #E7EAF1;
+  box-shadow:0 4px 18px rgba(23,32,46,.05);
+}
+.icon-card .ic-head{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+.icon-card .idx{
+  width:24px;height:24px;border-radius:8px;background:var(--ink);color:#fff;
+  font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex:none;
+}
+.icon-card h3{font-size:15.5px;font-weight:900;}
+.icon-card .desc{font-size:12px;color:var(--ink2);line-height:1.6;margin:2px 0 16px;}
+.icon-card .desc b{color:var(--brand);}
+.icon-row{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+  background:#F4F6FA;border-radius:16px;padding:16px 10px;
+}
+.icon-item{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.icon-slot{position:relative;}
+.icon-item .lb{font-size:11px;font-weight:600;color:var(--ink2);white-space:nowrap;}
+.badge{
+  position:absolute;top:-4px;right:-6px;min-width:18px;height:18px;border-radius:99px;
+  background:var(--bad);color:#fff;font-size:10px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;padding:0 4px;
+  box-shadow:0 2px 6px rgba(225,75,75,.4);
+}
+/* —— 1 柔光填充 —— */
+.s1 .tile{width:56px;height:56px;border-radius:18px;display:flex;align-items:center;justify-content:center;}
+.s1 .t1{background:#FDF1DE;box-shadow:inset 0 -2px 0 rgba(236,138,18,.15);}
+.s1 .t2{background:#E9F0FE;box-shadow:inset 0 -2px 0 rgba(10,89,247,.14);}
+.s1 .t3{background:#FCEAEA;box-shadow:inset 0 -2px 0 rgba(225,75,75,.14);}
+/* —— 2 极简线描 —— */
+.s2 .tile{
+  width:56px;height:56px;border-radius:18px;background:#fff;border:1.5px solid #E4E8F0;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(23,32,46,.05);
+}
+/* —— 3 渐变玻璃 —— */
+.s3 .tile{width:56px;height:56px;border-radius:18px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.s3 .t1{background:linear-gradient(150deg,#FFB84D,#EC6A0F);box-shadow:0 8px 16px -4px rgba(236,106,15,.45);}
+.s3 .t2{background:linear-gradient(150deg,#4C8DFF,#0A59F7);box-shadow:0 8px 16px -4px rgba(10,89,247,.45);}
+.s3 .t3{background:linear-gradient(150deg,#FF7A7A,#E14B4B);box-shadow:0 8px 16px -4px rgba(225,75,75,.45);}
+.s3 .tile::before{
+  content:"";position:absolute;top:0;left:8%;right:8%;height:45%;
+  background:linear-gradient(rgba(255,255,255,.35),rgba(255,255,255,0));border-radius:18px 18px 60% 60%;
+}
+/* —— 4 贴纸撞色 —— */
+.s4 .tile{
+  width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+  border:2.5px solid var(--ink);position:relative;
+}
+.s4 .t1{background:#FFD84D;box-shadow:4px 4px 0 var(--ink);}
+.s4 .t2{background:#7EB3FF;box-shadow:4px 4px 0 var(--ink);}
+.s4 .t3{background:#FF9C9C;box-shadow:4px 4px 0 var(--ink);}
+/* —— 5 3D 黏土 —— */
+.s5 .tile{
+  width:58px;height:58px;border-radius:20px;display:flex;align-items:center;justify-content:center;position:relative;
+}
+.s5 .t1{background:radial-gradient(120% 120% at 30% 25%,#FFD08A,#F59E2D 60%,#D97C0C);box-shadow:0 10px 18px -6px rgba(217,124,12,.5),inset 0 2px 3px rgba(255,255,255,.55);}
+.s5 .t2{background:radial-gradient(120% 120% at 30% 25%,#9EC1FF,#3D7EF0 60%,#1E56C4);box-shadow:0 10px 18px -6px rgba(30,86,196,.5),inset 0 2px 3px rgba(255,255,255,.55);}
+.s5 .t3{background:radial-gradient(120% 120% at 30% 25%,#FFA3A3,#EA5B5B 60%,#C43A3A);box-shadow:0 10px 18px -6px rgba(196,58,58,.5),inset 0 2px 3px rgba(255,255,255,.55);}
+
+/* 深色底试用区 */
+.dark-strip{
+  margin-top:26px;background:#181B22;border-radius:18px;padding:18px 16px;
+  display:flex;align-items:center;justify-content:space-around;gap:8px;flex-wrap:wrap;
+}
+.dark-strip .icon-item .lb{color:#B9AE93;}
+.dark-strip .tile.dark{background:#232733 !important;border-color:#2E3442 !important;box-shadow:none !important;}
+
+/* 页脚 */
+.foot{margin-top:64px;text-align:center;font-size:12px;color:var(--ink3);line-height:1.8;}
+.foot b{color:var(--ink2);}
+@media (max-width:760px){
+  .shelf,.icon-shelf{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <span class="kicker">CIHUI · UI REDESIGN PROPOSAL</span>
+    <h1>词慧重设计方案稿：<em>艾宾浩斯计划表 ×3</em> ＋ <em>首页图标 ×5</em></h1>
+    <p>三版计划表均已内置「数字防出框」处理：数字容器预留左右内边距、等宽数字（tabular-nums）防抖动、
+       日历格角标改为独立槽位不再与数字叠行。每版下方标注落地要点，选定后可直接映射到
+       <b>PlanTablePage.ets</b> 与 <b>ic_camera / ic_book / ic_wrong.svg</b>。</p>
+  </header>
+
+  <!-- ==================== Part A ==================== -->
+  <div class="sec-head"><span class="no">A</span><h2>艾宾浩斯计划表 · 3 版方向</h2><span>数据：2026年10月 · 今天10月16日</span></div>
+
+  <div class="shelf">
+
+    <!-- ============ V1 ============ -->
+    <div class="phone-col v1">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="app-head">
+          <div class="app-topbar">
+            <div class="app-title">艾宾浩斯计划表</div>
+            <div class="month-nav">
+              <div class="mbtn">‹</div><div class="month-label">2026年10月</div><div class="mbtn">›</div>
+            </div>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="st" style="--ac:#0A59F7"><b>12</b><span>连续打卡（天）</span></div>
+          <div class="st" style="--ac:#179C5B"><b>138</b><span>本月已完成</span></div>
+          <div class="st danger" style="--ac:#E14B4B"><b>2</b><span>待补卡（天）</span></div>
+        </div>
+        <div class="streak">
+          <div class="streak-row"><b>🔥 本月学习热度</b><em>完成率 80%</em></div>
+          <div class="track"><div class="fill"></div></div>
+        </div>
+        <div class="cal-card">
+          <div class="cal-week"><i>一</i><i>二</i><i>三</i><i>四</i><i>五</i><i>六</i><i>日</i></div>
+          <div class="cal-grid" data-cal="v1"></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:#179C5B"></i>已完成</span>
+          <span><i style="background:#0A59F7"></i>今天</span>
+          <span><i style="background:#C4CAD4"></i>待复习</span>
+          <span><i style="background:#E14B4B"></i>漏卡待补</span>
+        </div>
+        <div class="cta">开始今日复习 →</div>
+      </div></div>
+      <div class="ver-tag">V1 <i style="background:var(--brand-soft);color:var(--brand)">云白精修</i></div>
+      <div class="note">
+        <b>思路：</b>在现有品牌蓝基础上做秩序升级，风险最低、可直接替换。<br>
+        <b>防出框：</b><span class="fix">统计卡加 3px 左侧色条 + 左右 padding、22fp 等宽数字；新增「本月热度」进度条分担信息</span>，数字不再顶边。<br>
+        <b>记忆点：</b>色条统计卡 + 渐变进度条，延续 App 现有设计令牌，改造成本 ★☆☆。
+      </div>
+    </div>
+
+    <!-- ============ V2 ============ -->
+    <div class="phone-col v2">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="app-head">
+          <div class="app-topbar">
+            <div class="app-title">艾宾浩斯计划表</div>
+            <div class="month-nav">
+              <div class="mbtn">‹</div><div class="month-label">2026年10月</div><div class="mbtn">›</div>
+            </div>
+          </div>
+        </div>
+        <div class="ink-head">
+          <div class="ink-title"><b>十月复习档案</b><span>OCT · 2026</span></div>
+          <div class="bigrow">
+            <div>
+              <div class="bignum">12<small style="font-size:14px;font-weight:700;color:#8E8878"> 天</small></div>
+              <div class="bigcap">连续打卡纪录</div>
+            </div>
+          </div>
+          <div class="ink-stats">
+            <div class="is"><b>138</b><span>本月已完成</span></div>
+            <div class="is hot"><b>2</b><span>待补卡（天）</span></div>
+            <div class="is"><b>80<small style="font-size:10px">%</small></b><span>月度完成率</span></div>
+          </div>
+        </div>
+        <div class="cal2">
+          <div class="cal-week"><i>一</i><i>二</i><i>三</i><i>四</i><i>五</i><i>六</i><i>日</i></div>
+          <div class="cal-grid" data-cal="v2"></div>
+        </div>
+        <div class="plan-line">
+          <div class="pl-ic">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#0A59F7" stroke-width="2"/><path d="M12 7.5v5l3 2" stroke="#0A59F7" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="pl-tx"><b>今天有 42 个词到复习期</b><span>其中 R1 节点 18 个 · R4 节点 24 个</span></div>
+          <div class="pl-go">去复习</div>
+        </div>
+        <div class="cta2">开 始 今 日 复 习</div>
+      </div></div>
+      <div class="ver-tag">V2 <i style="background:#F0EAD8;color:#8A6D1F">墨金编辑</i></div>
+      <div class="note">
+        <b>思路：</b>杂志编辑部风格——深墨卡片当主角，金色大数字（46fp）做视觉锚点，日历退为细线辅助。<br>
+        <b>防出框：</b><span class="fix">三统计改为「细分隔线横排」替代三张小卡，每格 flex:1 + min-width:0，数字永远不会挤破</span>；待补卡用删除线表达，角标全部取消。<br>
+        <b>记忆点：</b>金色衬线感大数字 + 墨色头卡，与主流背词 App 拉开辨识度，改造成本 ★★☆。
+      </div>
+    </div>
+
+    <!-- ============ V3 ============ -->
+    <div class="phone-col v3">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="game-head">
+          <div class="app-topbar">
+            <div class="app-title">艾宾浩斯计划表</div>
+            <div class="month-nav">
+              <div class="mbtn">‹</div><div class="month-label">2026年10月</div><div class="mbtn">›</div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:0 18px">
+          <div class="hero-card">
+            <div class="hero-top">
+              <div class="ring"><div><b>80</b><span>完成率%</span></div></div>
+              <div class="hero-tx">
+                <h3>十月冲刺进行中</h3>
+                <p>再坚持 7 天解锁「全勤勋章」</p>
+                <span class="flame">
+                  <svg width="11" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M12 2c1 4-3 5.5-3 9a5 5 0 0 0 10 0c0-2-1-3.5-2-5-.3 1.4-1 2.2-2 3-.4-2.4-1.4-4.8-3-7z"/></svg>
+                  连续 12 天
+                </span>
+              </div>
+            </div>
+            <div class="mini-stats">
+              <div class="ms"><b>138</b><span>本月已完成</span></div>
+              <div class="ms"><b>2</b><span>待补卡（天）</span></div>
+              <div class="ms"><b>42</b><span>今日待复习</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="cal3">
+          <div class="cal-week"><i>一</i><i>二</i><i>三</i><i>四</i><i>五</i><i>六</i><i>日</i></div>
+          <div class="cal-grid" data-cal="v3"></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:#F4691E"></i>已完成</span>
+          <span><i style="background:#F4691E;box-shadow:0 0 0 3px rgba(244,105,30,.25)"></i>今天</span>
+          <span><i style="background:#D9B183"></i>待复习</span>
+          <span><i style="background:#D8402F"></i>漏卡待补</span>
+        </div>
+        <div class="cta3">今日任务 · 42 词待复习</div>
+      </div></div>
+      <div class="ver-tag">V3 <i style="background:#FFE3C4;color:#C25E12">活力橙</i></div>
+      <div class="note">
+        <b>思路：</b>游戏化方向——奶油底 + 活力橙渐变头卡，进度环、连续火焰、全勤勋章暗示，把「打卡」变成养成。<br>
+        <b>防出框：</b><span class="fix">统计合并进头卡半透明白块内，数字 16fp；今日格子 scale(1.06) 突出而不是靠加字</span>，格子内元素只有「数字 + 状态点」两个槽位。<br>
+        <b>记忆点：</b>进度环 + 火焰连击，契合你喜欢的游戏化隐喻，改造成本 ★★☆。
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== Part B ==================== -->
+  <div class="sec-head"><span class="no">B</span><h2>首页快捷入口图标 · 5 版风格</h2><span>拍照导入 / 我的词本 / 错题本（含角标效果）</span></div>
+
+  <div class="icon-shelf">
+
+    <!-- —— Set 1 柔光填充 —— -->
+    <div class="icon-card s1">
+      <div class="ic-head"><span class="idx">1</span><h3>柔光填充 · Soft Fill</h3></div>
+      <p class="desc">现有方案的精修版：<b>浅色底 + 下沉内阴影</b>，图标换为更饱满的粗圆线条，与现设计令牌 1:1 对应，落地最快。</p>
+      <div class="icon-row">
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t1">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#EC8A12" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.2a2 2 0 0 0 1.7-.95l.5-.8A1.6 1.6 0 0 1 11.24 3.5h1.52a1.6 1.6 0 0 1 1.34.75l.5.8A2 2 0 0 0 16.3 6h1.2A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.3" r="3.4"/></svg>
+          </span><span class="badge">3</span></span>
+          <span class="lb">拍照导入</span>
+        </div>
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t2">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0A59F7" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5c-1.6-1.4-3.8-2-6-2-1 0-2 .13-3 .4v13.2c1-.27 2-.4 3-.4 2.2 0 4.4.6 6 2 1.6-1.4 3.8-2 6-2 1 0 2 .13 3 .4V4.9c-1-.27-2-.4-3-.4-2.2 0-4.4.6-6 2z"/><path d="M12 6.5v13.2"/></svg>
+          </span></span>
+          <span class="lb">我的词本</span>
+        </div>
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t3">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E14B4B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15 3.5V7.5h4"/><path d="M9.3 12.2l5.4 5.4M14.7 12.2l-5.4 5.4"/></svg>
+          </span><span class="badge">12</span></span>
+          <span class="lb">错题本</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- —— Set 2 极简线描 —— -->
+    <div class="icon-card s2">
+      <div class="ic-head"><span class="idx">2</span><h3>极简线描 · Line Mono</h3></div>
+      <p class="desc">白卡细线风格：<b>单色描边 2px</b>，靠彩色细标签区分功能，整体克制安静，适合追求工具感、高级感的方向。</p>
+      <div class="icon-row">
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#17202E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6.5" width="17" height="13" rx="2.5"/><path d="M9 6.5l1.2-2h3.6L15 6.5"/><circle cx="12" cy="13" r="3.2"/></svg>
+          </span></span>
+          <span class="lb" style="color:#EC8A12">拍照导入</span>
+        </div>
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#17202E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h7a2.5 2.5 0 0 1 2.5 2.5v11a2 2 0 0 0-2-2H4z"/><path d="M20 5.5h-4.4a2.5 2.5 0 0 0-2.1 1.1"/><path d="M20 5.5V17h-6.5"/><path d="M7 9.5h3M7 12.5h3"/></svg>
+          </span></span>
+          <span class="lb" style="color:#0A59F7">我的词本</span>
+        </div>
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#17202E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="3.5" width="15" height="17" rx="2.5"/><path d="M8.5 3.5v17"/><path d="M12.5 9l5 5M17.5 9l-5 5"/></svg>
+          </span></span>
+          <span class="lb" style="color:#E14B4B">错题本</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- —— Set 3 渐变玻璃 —— -->
+    <div class="icon-card s3">
+      <div class="ic-head"><span class="idx">3</span><h3>渐变玻璃 · Glossy</h3></div>
+      <p class="desc"><b>饱和渐变底 + 白色玻璃高光</b>，白色单色字形，视觉重量最强，远看也清晰，适合当首页视觉主角。</p>
+      <div class="icon-row">
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t1">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.2a2 2 0 0 0 1.7-.95l.5-.8A1.6 1.6 0 0 1 11.24 3.5h1.52a1.6 1.6 0 0 1 1.34.75l.5.8A2 2 0 0 0 16.3 6h1.2A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.3" r="3.4"/></svg>
+          </span><span class="badge">3</span></span>
+          <span class="lb">拍照导入</span>
+        </div>
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t2">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5c-1.6-1.4-3.8-2-6-2-1 0-2 .13-3 .4v13.2c1-.27 2-.4 3-.4 2.2 0 4.4.6 6 2 1.6-1.4 3.8-2 6-2 1 0 2 .13 3 .4V4.9c-1-.27-2-.4-3-.4-2.2 0-4.4.6-6 2z"/><path d="M12 6.5v13.2"/></svg>
+          </span></span>
+          <span class="lb">我的词本</span>
+        </div>
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t3">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15 3.5V7.5h4"/><path d="M9.3 12.2l5.4 5.4M14.7 12.2l-5.4 5.4"/></svg>
+          </span><span class="badge">12</span></span>
+          <span class="lb">错题本</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- —— Set 4 贴纸撞色 —— -->
+    <div class="icon-card s4">
+      <div class="ic-head"><span class="idx">4</span><h3>贴纸撞色 · Sticker Pop</h3></div>
+      <p class="desc"><b>黑描边 + 硬投影</b>的潮玩贴纸风，年轻、有梗、辨识度拉满——和「探途」地牢风格一个气质家族。</p>
+      <div class="icon-row">
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t1">
+            <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#17202E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8.5A2 2 0 0 1 6.5 6.5h1l1.5-2h6l1.5 2h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3" fill="#fff"/><circle cx="12" cy="12.5" r="1.2" fill="#17202E"/></svg>
+          </span><span class="badge">3</span></span>
+          <span class="lb">拍照导入</span>
+        </div>
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t2">
+            <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#17202E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5c-1.6-1.4-3.8-2-6-2v14c2.2 0 4.4.6 6 2 1.6-1.4 3.8-2 6-2v-14c-2.2 0-4.4.6-6 2z" fill="#fff"/><path d="M12 6.5v14"/></svg>
+          </span></span>
+          <span class="lb">我的词本</span>
+        </div>
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t3">
+            <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#17202E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z" fill="#fff"/><path d="M15 3.5V7.5h4"/><path d="M9.3 12.2l5.4 5.4M14.7 12.2l-5.4 5.4"/></svg>
+          </span><span class="badge">12</span></span>
+          <span class="lb">错题本</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- —— Set 5 3D 黏土 —— -->
+    <div class="icon-card s5">
+      <div class="ic-head"><span class="idx">5</span><h3>3D 黏土 · Claymorphism</h3></div>
+      <p class="desc"><b>立体渐变 + 内高光 + 柔和投影</b>，果冻质感，最「可爱高级」的一版；ArkTS 可用双层圆形 + 径向渐变近似还原。</p>
+      <div class="icon-row">
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t1">
+            <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8.5A2 2 0 0 1 6.5 6.5h1l1.5-2h6l1.5 2h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3" fill="rgba(255,255,255,.28)" stroke="#fff"/></svg>
+          </span><span class="badge">3</span></span>
+          <span class="lb">拍照导入</span>
+        </div>
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t2">
+            <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5c-1.6-1.4-3.8-2-6-2v14c2.2 0 4.4.6 6 2 1.6-1.4 3.8-2 6-2v-14c-2.2 0-4.4.6-6 2z" fill="rgba(255,255,255,.22)"/><path d="M12 6.5v14"/></svg>
+          </span></span>
+          <span class="lb">我的词本</span>
+        </div>
+        <div class="icon-item">
+          <span class="icon-slot"><span class="tile t3">
+            <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z" fill="rgba(255,255,255,.22)"/><path d="M15 3.5V7.5h4"/><path d="M9.3 12.2l5.4 5.4M14.7 12.2l-5.4 5.4"/></svg>
+          </span><span class="badge">12</span></span>
+          <span class="lb">错题本</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 深色底试用 -->
+  <div class="dark-strip">
+    <span style="font-size:12px;color:#8E8878;font-weight:700;letter-spacing:.1em">深色模式适配 →</span>
+    <div class="icon-item">
+      <span class="icon-slot"><span class="tile dark" style="width:48px;height:48px;border-radius:15px;display:flex;align-items:center;justify-content:center;border:1.5px solid #2E3442">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#F0B95A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.2a2 2 0 0 0 1.7-.95l.5-.8A1.6 1.6 0 0 1 11.24 3.5h1.52a1.6 1.6 0 0 1 1.34.75l.5.8A2 2 0 0 0 16.3 6h1.2A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.3" r="3.4"/></svg>
+      </span></span>
+      <span class="lb">拍照导入</span>
+    </div>
+    <div class="icon-item">
+      <span class="icon-slot"><span class="tile dark" style="width:48px;height:48px;border-radius:15px;display:flex;align-items:center;justify-content:center;border:1.5px solid #2E3442">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#7EB3FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5c-1.6-1.4-3.8-2-6-2-1 0-2 .13-3 .4v13.2c1-.27 2-.4 3-.4 2.2 0 4.4.6 6 2 1.6-1.4 3.8-2 6-2 1 0 2 .13 3 .4V4.9c-1-.27-2-.4-3-.4-2.2 0-4.4.6-6 2z"/><path d="M12 6.5v13.2"/></svg>
+      </span></span>
+      <span class="lb">我的词本</span>
+    </div>
+    <div class="icon-item">
+      <span class="icon-slot"><span class="tile dark" style="width:48px;height:48px;border-radius:15px;display:flex;align-items:center;justify-content:center;border:1.5px solid #2E3442">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#FF8A8A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15 3.5V7.5h4"/><path d="M9.3 12.2l5.4 5.4M14.7 12.2l-5.4 5.4"/></svg>
+      </span></span>
+      <span class="lb">错题本</span>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <b>选择建议：</b>计划表求稳选 V1、要辨识度选 V2、要游戏化氛围选 V3；<br>
+    图标与计划表可自由组合（例如 V1 + 图标2，或 V3 + 图标4）。确定后我直接改 PlanTablePage.ets 与三个 SVG 资源文件。
+  </footer>
+</div>
+
+<script>
+/* 日历数据：2026年10月，1日周四 → 周一起始偏移3 */
+const OFFSET = 3, DAYS = 31, TODAY = 16;
+const MISS = new Set([9, 20]);          // 漏卡待补
+const DOT = { 2:'ok', 4:'multi', 7:'violet', 11:'ok', 14:'bad', 18:'ok', 23:'violet', 26:'ok', 29:'multi' };
+const DOTC = { ok:'#179C5B', violet:'#6E5CF6', bad:'#E14B4B' };
+
+function build(id, variant){
+  const g = document.querySelector(`[data-cal="${id}"]`);
+  let html = '';
+  for(let i=0;i<OFFSET;i++) html += '<div class="cell" style="visibility:hidden"></div>';
+  for(let d=1; d<=DAYS; d++){
+    const cls = ['cell'];
+    let bud = '';
+    if(d === TODAY) cls.push('today');
+    else if(d < TODAY) cls.push(MISS.has(d) ? 'miss' : 'done');
+    else cls.push('future');
+    if(MISS.has(d)) bud = '<span class="bud">补</span>';
+    let dot = '';
+    if(variant === 'v2'){
+      // V2：已完成用底部短横线，未来日不加点
+      if(d !== TODAY && DOT[d] && DOT[d] !== 'ok') dot = `<span class="dot" style="background:${DOTC[DOT[d]]}"></span>`;
+    }else{
+      if(d !== TODAY && d < TODAY) dot = `<span class="dot${DOT[d]==='multi'?' multi':''}"></span>`;
+      else if(d > TODAY && DOT[d]) dot = `<span class="dot" style="background:${DOTC[DOT[d]]}"></span>`;
+    }
+    html += `<div class="${cls.join(' ')}"><span class="d">${d}</span>${dot}${bud}</div>`;
+  }
+  g.innerHTML = html;
+}
+build('v1','v1'); build('v2','v2'); build('v3','v3');
+</script>
+</body>
+</html>

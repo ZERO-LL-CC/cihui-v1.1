@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>词慧 · 玻璃底图标字形 50 版</title>
+<style>
+:root{--brand:#0A59F7;--ink:#17202E;--ink2:#5A6575;--ink3:#98A2B2;--page:#F0F2F7;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:"MiSans","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--page);color:var(--ink);padding:36px 18px 80px;
+}
+.wrap{max-width:1180px;margin:0 auto;}
+.hero h1{font-size:clamp(22px,3.4vw,34px);font-weight:900;letter-spacing:-.02em;}
+.hero h1 em{font-style:normal;color:#EC6A0F;}
+.hero p{margin-top:8px;font-size:13.5px;color:var(--ink2);line-height:1.7;max-width:70ch;}
+/* 吸顶预览 */
+.preview{
+  position:sticky;top:12px;z-index:99;margin:18px 0;
+  background:#fff;border:1px solid #E7EAF1;border-radius:18px;padding:12px 18px;
+  display:flex;align-items:center;gap:18px;box-shadow:0 10px 30px rgba(23,32,46,.1);
+}
+.preview .tiles{display:flex;gap:14px;}
+.preview .tile{width:64px;height:64px;border-radius:20px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.preview .meta b{font-size:15px;font-weight:900;display:block;}
+.preview .meta span{font-size:12px;color:var(--ink3);}
+.preview .hint{margin-left:auto;font-size:12px;color:var(--ink3);}
+/* 网格 */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px;margin-top:16px;}
+.card{
+  background:#fff;border:1.5px solid #E7EAF1;border-radius:16px;padding:12px 10px 10px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;
+  transition:transform .18s cubic-bezier(.16,1,.3,1),border-color .18s,box-shadow .18s;
+}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 22px rgba(23,32,46,.1);}
+.card.sel{border-color:var(--brand);box-shadow:0 0 0 3px rgba(10,89,247,.15);}
+.tiles{display:flex;gap:9px;}
+.tile{width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.tile::before{content:"";position:absolute;top:0;left:8%;right:8%;height:45%;background:linear-gradient(rgba(255,255,255,.35),rgba(255,255,255,0));border-radius:13px 13px 60% 60%;}
+.tile svg{position:relative;z-index:1;}
+.t1{background:linear-gradient(150deg,#FFB84D,#EC6A0F);}
+.t2{background:linear-gradient(150deg,#4C8DFF,#0A59F7);}
+.t3{background:linear-gradient(150deg,#FF7A7A,#E14B4B);}
+.card .no{font-size:12px;font-weight:900;color:var(--ink);}
+.card .enc{font-size:10px;color:var(--ink3);}
+.foot{margin-top:40px;text-align:center;font-size:12px;color:var(--ink3);line-height:1.8;}
+.foot b{color:var(--ink2);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>玻璃底不变 · 白色字形 <em>50 版</em>（42 个字形 DNA × 7 种外框组合）</h1>
+    <p>12 款相机 × 12 款词本 × 12 款错题本 × 7 种外框（无框/圆环/圆角框/菱形/盾牌/六边形/细环），
+       程序化组合成 50 套。<b>点击任意一套</b>会在顶部放大预览；选中后告诉我编号，我手写成正式 SVG 落地真机。</p>
+  </header>
+  <div class="preview" id="preview">
+    <div class="tiles" id="pvTiles"></div>
+    <div class="meta"><b id="pvNo">点击下方任意一套</b><span id="pvEnc">在顶部放大对比 64px 实机观感</span></div>
+    <div class="hint">渐变玻璃底与真机一致 · 字形均为白色 fill 型</div>
+  </div>
+  <div class="grid" id="grid"></div>
+  <footer class="foot">
+    <b>选法建议：</b>先在缩略图里扫眼缘，点开 2-3 套到顶部看 64px 大图——这才是手机上的真实尺寸观感。<br>
+    编号即选项（如「No.23」），外框样式也可以单独换（比如喜欢 No.08 的字形 + No.03 的圆环框）。
+  </footer>
+</div>
+
+<script>
+/* ================= X 形多边形生成器（错题本叉镂空用） ================= */
+function xPoly(cx, cy, arm, hw){
+  const a = arm, h = hw, f = n => +n.toFixed(2);
+  const p = [
+    [cx-a,cy-a+h],[cx-a+h,cy-a],[cx,cy-h],[cx+a-h,cy-a],[cx+a,cy-a+h],
+    [cx+h,cy],[cx+a,cy+a-h],[cx+a-h,cy+a],[cx,cy+h],[cx-a+h,cy+a],[cx-a,cy+a-h],[cx-h,cy]
+  ];
+  return 'M' + p.map(pt => f(pt[0]) + ' ' + f(pt[1])).join('L') + 'z';
+}
+
+/* ================= 相机字形 ×12 ================= */
+const CAMS = [
+  [ {d:'M8.2 4.6c.3-.66.96-1.1 1.69-1.1h4.22c.73 0 1.39.44 1.69 1.1l.5 1.15h1.95A2.75 2.75 0 0 1 21 8.5v8.75A2.75 2.75 0 0 1 18.25 20H5.75A2.75 2.75 0 0 1 3 17.25V8.5a2.75 2.75 0 0 1 2.75-2.75H7.7l.5-1.15zM12 8.6a4.15 4.15 0 1 0 0 8.3 4.15 4.15 0 0 0 0-8.3zm0 1.9a2.25 2.25 0 1 1 0 4.5 2.25 2.25 0 0 1 0-4.5z', eo:1} ],
+  [ {d:'M3 8.5V5.5A2.5 2.5 0 0 1 5.5 3H8.5V5H5.5A.5.5 0 0 0 5 5.5V8.5H3zM15.5 3H18.5A2.5 2.5 0 0 1 21 5.5V8.5H19V5.5A.5.5 0 0 0 18.5 5H15.5V3zM3 15.5V18.5A2.5 2.5 0 0 0 5.5 21H8.5V19H5.5A.5.5 0 0 1 5 18.5V15.5H3zM15.5 21H18.5A2.5 2.5 0 0 0 21 18.5V15.5H19V18.5A.5.5 0 0 1 18.5 19H15.5V21z'},
+    {d:'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm0 1.9a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z', eo:1} ],
+  [ {d:'M5 3h14a2 2 0 0 1 2 2v9.4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a2 2 0 0 1 2-2zm7 3.2a3.7 3.7 0 1 0 0 7.4 3.7 3.7 0 0 0 0-7.4zm0 1.8a1.9 1.9 0 1 1 0 3.8 1.9 1.9 0 0 1 0-3.8z', eo:1},
+    {d:'M4.8 17.2h14.4a.8.8 0 0 1 .8.8v.6a1.8 1.8 0 0 1-1.8 1.8H5.8a1.8 1.8 0 0 1-1.8-1.8V18a.8.8 0 0 1 .8-.8z'} ],
+  [ {d:'M12 2.8a9.2 9.2 0 1 0 0 18.4 9.2 9.2 0 0 0 0-18.4zm0 2.1a7.1 7.1 0 1 1 0 14.2 7.1 7.1 0 0 1 0-14.2zm0 3.3a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6zm0 1.8a2 2 0 1 1 0 4 2 2 0 0 1 0-4z', eo:1} ],
+  [ {d:'M5 6h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm7.6 2.2-4 4.6h2.5l-.9 4 4.3-5h-2.6l.7-3.6z', eo:1} ],
+  [ {d:'M8.6 5.2c.3-.66.96-1.1 1.69-1.1h3.42c.73 0 1.39.44 1.69 1.1l.44 1h1.41A2.75 2.75 0 0 1 20 8.95v7.8a2.75 2.75 0 0 1-2.75 2.75H6.75A2.75 2.75 0 0 1 4 16.75v-7.8a2.75 2.75 0 0 1 2.75-2.75h1.41l.44-1zM12 9a3.9 3.9 0 1 0 0 7.8A3.9 3.9 0 0 0 12 9zm0 1.85a2.05 2.05 0 1 1 0 4.1 2.05 2.05 0 0 1 0-4.1z', eo:1},
+    {d:'M18.6 2.6l.62 1.68 1.68.62-1.68.62-.62 1.68-.62-1.68-1.68-.62 1.68-.62z'} ],
+  [ {d:'M5.5 5.5h13A2.5 2.5 0 0 1 21 8v8.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5V8a2.5 2.5 0 0 1 2.5-2.5zM9 9.2a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4zm0 1.7a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm7.6-2.5a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2z', eo:1} ],
+  [ {d:'M7.4 6.8c0-1.8 2-3.3 4.6-3.3s4.6 1.5 4.6 3.3v.7h1.5A2.9 2.9 0 0 1 21 10.4v7a2.9 2.9 0 0 1-2.9 2.9H5.9A2.9 2.9 0 0 1 3 17.4v-7a2.9 2.9 0 0 1 2.9-2.9h1.5v-.7z', op:.45},
+    {d:'M9.3 8.9c-.72 0-1.3.58-1.3 1.3v6.8c0 .72.58 1.3 1.3 1.3h5.4c.72 0 1.3-.58 1.3-1.3v-6.8c0-.72-.58-1.3-1.3-1.3H9.3zm2.7 1.9a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z', eo:1} ],
+  [ {d:'M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-11zM6.6 7.4v2.4h2.6V7.4H6.6zM12 9.4a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8zm0 1.7a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4z', eo:1} ],
+  [ {d:'M5.5 5.5h13A2.5 2.5 0 0 1 21 8v8.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5V8a2.5 2.5 0 0 1 2.5-2.5zM12 8.4a4.3 4.3 0 1 0 0 8.6 4.3 4.3 0 0 0 0-8.6zm0 1.7a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2zm0 1.6a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', eo:1} ],
+  [ {d:'M9.5 2.5h8A1.5 1.5 0 0 1 19 4v6a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 8 10V4a1.5 1.5 0 0 1 1.5-1.5zm1.2 2.2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z', eo:1},
+    {d:'M4 9h16a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 20 19H4a1.5 1.5 0 0 1-1.5-1.5v-7A1.5 1.5 0 0 1 4 9zm8 2.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6zm0 1.5a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6z', eo:1} ],
+  [ {d:'M4.4 5h15.2A1.4 1.4 0 0 1 21 6.4v11.2a1.4 1.4 0 0 1-1.4 1.4H4.4A1.4 1.4 0 0 1 3 17.6V6.4A1.4 1.4 0 0 1 4.4 5zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.8a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4zM6 7.2h2.6v1.6H6z', eo:1} ]
+];
+
+/* ================= 词本字形 ×12 ================= */
+const BOOKS = [
+  [ {d:'M10.9 6.3C9.5 5.3 7.6 4.8 5.6 4.8c-.8 0-1.6.09-2.4.27-.34.08-.58.38-.58.73v11.6c0 .48.45.83.92.73a10 10 0 0 1 2.06-.21c1.83 0 3.5.47 4.8 1.35.16.11.33.18.5.22V6.8a1.7 1.7 0 0 0-.08-.5z'},
+    {d:'M13.1 6.3c1.4-1 3.3-1.5 5.3-1.5.8 0 1.6.09 2.4.27.34.08.58.38.58.73v11.6c0 .48-.45.83-.92.73a10 10 0 0 0-2.06-.21c-1.83 0-3.5.47-4.8 1.35-.16.11-.33.18-.5.22V6.8c0-.17.03-.34.08-.5z'} ],
+  [ {d:'M6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3zm7.5 0v7l-2-1.4L10 10V3h4z', eo:1} ],
+  [ {d:'M6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3zm.5 4.2h9v1.5H7V7.2zm0 3.4h6.5v1.5H7v-1.5z', eo:1} ],
+  [ {d:'M8 3h8a1.5 1.5 0 0 1 1.5 1.5V6A1.5 1.5 0 0 1 16 7.5H8A1.5 1.5 0 0 1 6.5 6V4.5A1.5 1.5 0 0 1 8 3z'},
+    {d:'M6.5 8.5h11A1.5 1.5 0 0 1 19 10v2a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 12v-2a1.5 1.5 0 0 1 1.5-1.5z'},
+    {d:'M4.5 14h15A1.5 1.5 0 0 1 21 15.5v2a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-2A1.5 1.5 0 0 1 4.5 14z'} ],
+  [ {d:'M6 3.5h12A1.5 1.5 0 0 1 19.5 5v14a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V5A1.5 1.5 0 0 1 6 3.5zm.8 1.7a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 3.8a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 3.8a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 3.8a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', eo:1} ],
+  [ {d:'M10.9 5.1C9.5 4.1 7.6 3.6 5.6 3.6c-.8 0-1.6.09-2.4.27-.34.08-.58.38-.58.73v10.4c0 .48.45.83.92.73a10 10 0 0 1 2.06-.21c1.83 0 3.5.47 4.8 1.35.16.11.33.18.5.22V6.8a1.7 1.7 0 0 0-.08-.5z'},
+    {d:'M13.1 5.1c1.4-1 3.3-1.5 5.3-1.5.8 0 1.6.09 2.4.27.34.08.58.38.58.73v10.4c0 .48-.45.83-.92.73a10 10 0 0 0-2.06-.21c-1.83 0-3.5.47-4.8 1.35-.16.11-.33.18-.5.22V6.8c0-.17.03-.34.08-.5z'},
+    {d:'M4.5 18.6h15a.9.9 0 0 1 0 1.8h-15a.9.9 0 0 1 0-1.8z'} ],
+  [ {d:'M7 3.5h10A2 2 0 0 1 19 5.5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2zm6.5 0v9L11 10.2 8.5 12.5v-9h5z', eo:1} ],
+  [ {d:'M5 4h14a1.5 1.5 0 0 1 1.5 1.5v13A1.5 1.5 0 0 1 19 20H5a1.5 1.5 0 0 1-1.5-1.5v-13A1.5 1.5 0 0 1 5 4zm9.8.2v3.6h3.6l-3.6-3.6zM7 11.6h7.5v1.5H7v-1.5zm0 3h5v1.5H7v-1.5z', eo:1} ],
+  [ {d:'M3.4 4.6c2.9 0 5.8.75 8.6 2.25 2.8-1.5 5.7-2.25 8.6-2.25v12.9c-2.9 0-5.8.75-8.6 2.25-2.8-1.5-5.7-2.25-8.6-2.25V4.6zm7.8 2.6h1.6v11.9h-1.6V7.2z', eo:1} ],
+  [ {d:'M6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3zm5.5 5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z', eo:1},
+    {d:'M12 9.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z'} ],
+  [ {d:'M11.2 5.4C9.8 4.5 8 4 6 4c-.9 0-1.8.09-2.7.27-.18.04-.3.2-.3.38v12.7c0 .24.22.42.45.37A11 11 0 0 1 6 17.6c2 0 3.8.5 5.2 1.4V5.4z', op:.45},
+    {d:'M12.8 5.4c1.4-.9 3.2-1.4 5.2-1.4.9 0 1.8.09 2.7.27.18.04.3.2.3.38v12.7c0 .24-.22.42-.45.37a11 11 0 0 0-2.55-.32c-2 0-3.8.5-5.2 1.4V5.4zm1.6 1.7v9.5c1.1-.55 2.4-.85 3.8-.85.4 0 .8.02 1.2.07V6.85c-.4-.05-.8-.07-1.2-.07-1.4 0-2.7.1-3.8.32z', eo:1},
+    {d:'M12 5.4v13.6c-.14-.08-.27-.18-.4-.28-1.1-.8-2.7-1.25-4.4-1.25-.6 0-1.2.04-1.8.13V5.75c.6-.09 1.2-.13 1.8-.13 1.7 0 3.3.45 4.4 1.25.13.1.26.2.4.28z'} ],
+  [ {d:'M6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3zm8.7 0v18h-2.2V3h2.2z', eo:1} ]
+];
+
+/* ================= 错题本字形 ×12 ================= */
+const WRONGS = [
+  [ {d:'M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z' + xPoly(12,12,4.3,1.25), eo:1} ],
+  [ {d:'M12 2.8a9.2 9.2 0 1 0 0 18.4 9.2 9.2 0 0 0 0-18.4zm0 4a1.15 1.15 0 0 0-1.15 1.15v4.7A1.15 1.15 0 0 0 12 13.8a1.15 1.15 0 0 0 1.15-1.15v-4.7A1.15 1.15 0 0 0 12 6.8zm0 8.5a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6z', eo:1} ],
+  [ {d:'M12 2.4l8 3v6.1c0 4.6-3.3 8.7-8 10.1-4.7-1.4-8-5.5-8-10.1V5.4l8-3zm0 4.4c-.6 0-1.05.45-1.05 1v4c0 .55.45 1 1.05 1s1.05-.45 1.05-1v-4c0-.55-.45-1-1.05-1zm0 7.3a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5z', eo:1} ],
+  [ {d:'M6.5 2.8h7.7L19 7.6V19.2a2 2 0 0 1-2 2H6.5a2 2 0 0 1-2-2V4.8a2 2 0 0 1 2-2zm5.1 8.3' + '' , eo:1} ],
+  [ {d:'M12 2.8a9.2 9.2 0 1 0 0 18.4 9.2 9.2 0 0 0 0-18.4zm0 2.2a7 7 0 1 1 0 14 7 7 0 0 1 0-14z' + xPoly(12,12,3.4,1.05), eo:1} ],
+  [ {d:'M5.2 2.8h1.9v18.4H5.2z'},
+    {d:'M7.6 4h10.9l-2.7 3.7 2.7 3.7H7.6V4z' + xPoly(12.3,7.7,1.8,0.7), eo:1} ],
+  [ {d:'M6.5 2.8h7.7L19 7.6v11.6a2 2 0 0 1-2 2H6.5a2 2 0 0 1-2-2V4.8a2 2 0 0 1 2-2zm5.5 4c-.6 0-1.05.45-1.05 1v3.6c0 .55.45 1 1.05 1s1.05-.45 1.05-1V7.8c0-.55-.45-1-1.05-1zm0 6.9a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z', eo:1},
+    {d:'M14.2 2.8 19 7.6h-4.8V2.8z'} ],
+  [ {d:'M12 3.2 21.4 19.6a1.2 1.2 0 0 1-1.05 1.8H3.65a1.2 1.2 0 0 1-1.05-1.8L12 3.2zm0 5.6c-.62 0-1.1.48-1.1 1.06v3.48c0 .58.48 1.06 1.1 1.06s1.1-.48 1.1-1.06V9.86c0-.58-.48-1.06-1.1-1.06zm0 7.2a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6z', eo:1} ],
+  [ {d:'M7 4.6h10a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.6a2 2 0 0 1 2-2zm2.5 0a1 1 0 0 0-1 1v.6a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-.6a1 1 0 0 0-1-1h-5z' + xPoly(12,14,2.9,0.95), eo:1} ],
+  [ {d:'M12 3c5 0 9 3.1 9 7s-4 7-9 7c-.8 0-1.6-.08-2.3-.24L5 19.5l1.1-3.3C4.2 15 3 12.9 3 10c0-3.9 4-7 9-7z' + xPoly(12,9.8,2.5,0.85), eo:1} ],
+  [ {d:'M10.5 3.4a7.1 7.1 0 1 0 0 14.2 7.1 7.1 0 0 0 0-14.2zm0 2.1a5 5 0 1 1 0 10 5 5 0 0 1 0-10z' + xPoly(10.5,10.5,2.5,0.85), eo:1},
+    {d:'M14.9 14.9a1.1 1.1 0 0 1 1.56 0l3.9 3.9a1.1 1.1 0 0 1-1.56 1.56l-3.9-3.9a1.1 1.1 0 0 1 0-1.56z'} ],
+  [ {d:'M6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3z' + xPoly(12,12,4.6,1.35), eo:1} ]
+];
+/* 修正 w4：文档 + 折角 + 小叉 */
+WRONGS[3] = [
+  {d:'M6.5 2.8h7.7L19 7.6V19.2a2 2 0 0 1-2 2H6.5a2 2 0 0 1-2-2V4.8a2 2 0 0 1 2-2z' + xPoly(11.6,14.2,3,0.95) + 'M14.2 4.4v3.2h3.2z', eo:1}
+];
+
+/* ================= 外框 ×7 ================= */
+const ENCS = [
+  {name:'无框',   s:1,    p:[]},
+  {name:'圆环',   s:.58,  p:[{d:'M12 2.6a9.4 9.4 0 1 0 0 18.8 9.4 9.4 0 0 0 0-18.8zm0 2.1a7.3 7.3 0 1 1 0 14.6 7.3 7.3 0 0 1 0-14.6z', eo:1}]},
+  {name:'圆角框', s:.6,   p:[{d:'M7 2.6h10A4.4 4.4 0 0 1 21.4 7v10A4.4 4.4 0 0 1 17 21.4H7A4.4 4.4 0 0 1 2.6 17V7A4.4 4.4 0 0 1 7 2.6zm0 2A2.4 2.4 0 0 0 4.6 7v10A2.4 2.4 0 0 0 7 19.4h10a2.4 2.4 0 0 0 2.4-2.4V7A2.4 2.4 0 0 0 17 4.6H7z', eo:1}]},
+  {name:'菱形',   s:.52,  p:[{d:'M12 2.2 21.8 12 12 21.8 2.2 12 12 2.2zm0 3.1L5.3 12l6.7 6.7L18.7 12 12 5.3z', eo:1}]},
+  {name:'盾牌',   s:.58,  p:[{d:'M12 2.2l8.2 3.1v6c0 4.8-3.4 9-8.2 10.5-4.8-1.5-8.2-5.7-8.2-10.5v-6L12 2.2zm0 2.3L5.9 6.6v4.7c0 3.8 2.6 7.2 6.1 8.5 3.5-1.3 6.1-4.7 6.1-8.5V6.6L12 4.5z', eo:1}]},
+  {name:'六边形', s:.55,  p:[{d:'M12 2.4l8.3 4.8v9.6L12 21.6l-8.3-4.8V7.2L12 2.4zm0 2.4L5.9 8.2v7.6l6.1 3.5 6.1-3.5V8.2L12 4.8z', eo:1}]},
+  {name:'细环',   s:.64,  p:[{d:'M12 2.4a9.6 9.6 0 1 0 0 19.2 9.6 9.6 0 0 0 0-19.2zm0 1.5a8.1 8.1 0 1 1 0 16.2 8.1 8.1 0 0 1 0-16.2z', eo:1}]}
+];
+
+function pathsHTML(paths){
+  return paths.map(p =>
+    `<path d="${p.d}" fill-rule="${p.eo ? 'evenodd' : 'nonzero'}"${p.op ? ` fill-opacity="${p.op}"` : ''}/> `
+  ).join('');
+}
+function glyphSVG(lib, idx, encIdx, size){
+  const enc = ENCS[encIdx];
+  const inner = `<g transform="translate(12 12) scale(${enc.s}) translate(-12 -12)">${pathsHTML(lib[idx])}</g>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="#fff">${pathsHTML(enc.p)}${inner}</svg>`;
+}
+
+/* ================= 渲染 50 套 ================= */
+const grid = document.getElementById('grid');
+const pvTiles = document.getElementById('pvTiles');
+const pvNo = document.getElementById('pvNo');
+const pvEnc = document.getElementById('pvEnc');
+let selected = null;
+
+for (let i = 0; i < 50; i++){
+  const ci = i % 12;
+  const bi = (i * 5 + Math.floor(i / 12)) % 12;
+  const wi = (i * 7 + 3) % 12;
+  const ei = (i * 3 + Math.floor(i / 5)) % 7;
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML =
+    `<div class="tiles">
+       <span class="tile t1">${glyphSVG(CAMS, ci, ei, 20)}</span>
+       <span class="tile t2">${glyphSVG(BOOKS, bi, ei, 20)}</span>
+       <span class="tile t3">${glyphSVG(WRONGS, wi, ei, 20)}</span>
+     </div>
+     <span class="no">No.${String(i + 1).padStart(2, '0')}</span>
+     <span class="enc">${ENCS[ei].name} · 相机${ci + 1}/词本${bi + 1}/错题${wi + 1}</span>`;
+
+  card.onclick = () => {
+    if (selected) selected.classList.remove('sel');
+    selected = card; card.classList.add('sel');
+    pvTiles.innerHTML =
+      `<span class="tile t1">${glyphSVG(CAMS, ci, ei, 30)}</span>
+       <span class="tile t2">${glyphSVG(BOOKS, bi, ei, 30)}</span>
+       <span class="tile t3">${glyphSVG(WRONGS, wi, ei, 30)}</span>`;
+    pvNo.textContent = `No.${String(i + 1).padStart(2, '0')}`;
+    pvEnc.textContent = `${ENCS[ei].name}外框 · 相机字形${ci + 1} + 词本字形${bi + 1} + 错题字形${wi + 1}`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  grid.appendChild(card);
+}
+</script>
+</body>
+</html>

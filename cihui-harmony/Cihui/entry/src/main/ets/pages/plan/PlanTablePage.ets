@@ -1,10 +1,12 @@
 /**
- * F12 艾宾浩斯计划大表：
+ * F12 艾宾浩斯计划大表（W2 白·蔚蓝版）：
  * - 打卡页小日历 / 首页连续天数 chip 点击后以 zoomIn（缩放+淡入）放大进入；
- * - 6×7 月历（周一为首列），每格：橙块=当天新学，R1/R2/R4/R7/R15 彩点=计划复习；
- *   今天蓝框、已完成绿✓、已补卡绿底橙「补」、待补卡红格、未来日锁定；
- * - 顶部三统计（连续 / 本月完成 / 待补卡）与打卡页、首页同源；
+ * - 顶部蓝色渐变头卡：左侧月份冲刺文案 + 连击胶囊，右侧完成率进度环；
+ *   三枚半透明数据 chip（本月已完成 / 待补卡 / 今日待复习），flex 均分防出框；
+ * - 6×7 月历（周一为首列）：已完成浅蓝、已补卡深蓝+白✓+橙「补」、
+ *   待补卡红格、今天品牌蓝渐变放大、未来日白底虚线框，R1-R15 彩点保留；
  * - ‹ › 翻月限当前月前后 3 个月；红格按严格顺序进补卡详情；
+ * - 底部「今日任务」CTA 直达打卡页；
  * - 入场 42 格逐格果冻弹入（500ms 内完成），系统「减弱动态效果」时直接落位；
  * - 边缘左滑 / 左上返回：customTransition 缩放淡出缩回小日历。
  */
@@ -19,6 +21,19 @@ import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 
 const WEEKDAYS: string[] = ['一', '二', '三', '四', '五', '六', '日'];
 const NODE_LEGEND: string[] = ['R1', 'R2', 'R4', 'R7', 'R15'];
+
+/** W2 白·蔚蓝 专用色 */
+const BLUE_DONE_BG: string = '#E3EDFF';      // 已完成格底
+const BLUE_DONE_FG: string = '#0846C0';      // 已完成格字
+const BLUE_MADE: string = '#0846C0';         // 已补卡格底（深蓝）
+const FUTURE_DASH: string = '#D8E2F2';       // 未来日虚线框
+const FUTURE_FG: string = '#C4CAD4';         // 未来日字
+const PLAIN_BG: string = '#F5F7FA';          // 普通格底
+const HERO_GRAD_HI: string = '#3D7BFF';      // 头卡渐变亮端
+const HERO_GRAD_LO: string = '#0846C0';      // 头卡渐变暗端
+const HERO_SUB: string = '#CFE0FF';          // 头卡次级文字
+const HERO_CHIP: string = '#24FFFFFF';       // 头卡半透明白块
+const PAGE_W2: string = '#FBFCFE';           // 页面底色
 
 /** 单个月历格：负责自己的果冻入场动画（key 含年月，翻月时整体重播） */
 @ComponentV2
@@ -71,7 +86,7 @@ struct CalendarCell {
   }
 
   private badgeRadius(): BorderRadiuses {
-    const r: BorderRadiuses = { topLeft: 0, topRight: 12, bottomLeft: 8, bottomRight: 0 };
+    const r: BorderRadiuses = { topLeft: 10, topRight: 10, bottomLeft: 10, bottomRight: 10 };
     return r;
   }
 
@@ -82,7 +97,7 @@ struct CalendarCell {
       .height(16)
       .commands('M2.5 9 L6.6 13 L13.8 4.6')
       .fillOpacity(0)
-      .stroke(white ? Color.White : Colors.KNOW_GREEN)
+      .stroke(white ? Color.White : Colors.BRAND)
       .strokeWidth(3)
       .strokeLineCap(LineCapStyle.Round)
       .strokeLineJoin(LineJoinStyle.Round)
@@ -98,7 +113,7 @@ struct CalendarCell {
       .padding({ left: 4, right: 4, top: 1, bottom: 1 })
       .backgroundColor(color)
       .borderRadius(this.badgeRadius())
-      .margin({ top: 0, right: 0 })
+      .margin({ top: 1, right: 1 })
   }
 
   @Builder
@@ -115,48 +130,65 @@ struct CalendarCell {
   }
 
   build() {
-    Column() {
-      Stack({ alignContent: Alignment.TopEnd }) {
+    // 数字在格内居中，「补」角标独立叠放在右上角，两者不再抢同一布局行
+    Stack({ alignContent: Alignment.TopEnd }) {
+      Column() {
         Text(this.label())
           .fontSize(this.cell.state === 'today' ? 11 : 13)
           .fontWeight(this.cell.state === 'today' ? FontWeight.Bold : FontWeight.Normal)
           .fontColor(this.dateColor())
-        if (this.cell.state === 'made') {
-          this.CornerBadge(Colors.FUZZY_ORANGE)
-        } else if (this.cell.state === 'missed') {
-          this.CornerBadge(Colors.UNKNOWN_RED)
+
+        if (this.cell.inMonth && this.cell.state === 'done') {
+          this.BigCheck(false)
+        } else if (this.cell.inMonth && this.cell.state === 'made') {
+          this.BigCheck(true)
+        } else if (this.cell.inMonth) {
+          if (this.cell.newCount > 0) {
+            Row()
+              .width(16).height(4).borderRadius(2)
+              .backgroundColor(this.cell.state === 'today' ? Color.White : Colors.STAGE_NEW)
+              .margin({ top: 3 })
+          }
+          this.Dots()
         }
       }
       .width('100%')
-      .height(20)
+      .height('100%')
+      .justifyContent(FlexAlign.Center)
 
-      if (this.cell.inMonth && this.cell.state === 'done') {
-        this.BigCheck(false)
-      } else if (this.cell.inMonth && this.cell.state === 'made') {
-        this.BigCheck(true)
-      } else if (this.cell.inMonth) {
-        if (this.cell.newCount > 0) {
-          Row()
-            .width(16).height(4).borderRadius(2)
-            .backgroundColor(this.cell.state === 'today' ? Color.White : Colors.STAGE_NEW)
-            .margin({ top: 3 })
-        }
-        this.Dots()
+      if (this.cell.state === 'made') {
+        this.CornerBadge(Colors.FUZZY_ORANGE)
+      } else if (this.cell.state === 'missed') {
+        this.CornerBadge(Colors.UNKNOWN_RED)
       }
     }
     .width('100%')
     .height(52)
-    .justifyContent(FlexAlign.Center)
     .borderRadius(12)
     .backgroundColor(this.cellBg())
+    .border(this.cellBorder())
     .opacity(this.jellyOpacity)
-    .scale({ x: this.jellyScale, y: this.jellyScale })
+    .scale({ x: this.jellyScale * this.todayBoost(), y: this.jellyScale * this.todayBoost() })
     .translate({ y: this.jellyTy })
     .onClick(() => {
       if (this.cell.inMonth) {
         this.onTap(this.cell);
       }
     })
+  }
+
+  /** 今天的格子静态放大 1.07，与果冻入场动画叠乘 */
+  private todayBoost(): number {
+    return this.cell.inMonth && this.cell.state === 'today' ? 1.07 : 1;
+  }
+
+  private cellBorder(): BorderOptions {
+    if (this.cell.inMonth && this.cell.state === 'future') {
+      const o: BorderOptions = { width: 1.5, color: FUTURE_DASH, style: BorderStyle.Dashed };
+      return o;
+    }
+    const none: BorderOptions = { width: 0 };
+    return none;
   }
 
   private dateColor(): string {
@@ -170,23 +202,23 @@ struct CalendarCell {
       return '#FFFFFF';
     }
     if (this.cell.state === 'done') {
-      return Colors.KNOW_GREEN;
+      return BLUE_DONE_FG;
     }
     if (this.cell.state === 'today') {
       return '#FFFFFF';
     }
     if (this.cell.state === 'future') {
-      return Colors.TEXT_WEAK;
+      return FUTURE_FG;
     }
     return Colors.TEXT_MAIN;
   }
 
   private cellBg(): ResourceColor {
     if (this.cell.state === 'made') {
-      return Colors.KNOW_GREEN;
+      return BLUE_MADE;
     }
     if (this.cell.state === 'done') {
-      return Colors.KNOW_GREEN_SOFT;
+      return BLUE_DONE_BG;
     }
     if (this.cell.state === 'missed') {
       return Colors.UNKNOWN_RED_SOFT;
@@ -195,7 +227,7 @@ struct CalendarCell {
       return Colors.BRAND;
     }
     if (this.cell.inMonth) {
-      return '#F3F5F9';
+      return PLAIN_BG;
     }
     return Color.Transparent;
   }
@@ -233,6 +265,29 @@ export struct PlanTablePage {
 
   private loadGrid(y: number, m: number): MonthGrid {
     return DataStore.INSTANCE.monthGrid(y, m);
+  }
+
+  /** 今日剩余待复习词数（CTA 文案用） */
+  private todayDue(): number {
+    return DataStore.INSTANCE.todayReviewWordList().length;
+  }
+
+  /** 打卡完成率：本月已打卡天数 / 已经过天数（跨月查看时按整月） */
+  private completionRate(): number {
+    let done: number = 0;
+    const cells: MonthCell[] = this.grid.cells;
+    for (const c of cells) {
+      if (c.inMonth && (c.state === 'done' || c.state === 'made')) {
+        done++;
+      }
+    }
+    const t: Date = new Date();
+    const isCur: boolean = this.year === t.getFullYear() && this.month === t.getMonth() + 1;
+    const elapsed: number = isCur ? t.getDate() : new Date(this.year, this.month, 0).getDate();
+    if (elapsed <= 0) {
+      return 0;
+    }
+    return Math.min(100, Math.round(done * 100 / elapsed));
   }
 
   private switchMonth(delta: number): void {
@@ -315,18 +370,82 @@ export struct PlanTablePage {
     .width('100%').height(56)
   }
 
+  /** W2 蓝色渐变头卡：冲刺文案 + 完成率环 + 三枚数据 chip */
   @Builder
-  StatCard(value: string, label: string, danger: boolean) {
+  HeroCard() {
+    Column() {
+      Row() {
+        Column() {
+          Text(`${this.month} 月冲刺进行中`)
+            .fontSize(16).fontWeight(FontWeight.Bold).fontColor(Colors.WHITE)
+          Text(this.grid.pendingMakeup > 0
+            ? `有 ${this.grid.pendingMakeup} 天待补卡，别让记忆曲线断掉`
+            : '按 R1/R2/R4/R7/R15 节点稳步推进')
+            .fontSize(11).fontColor(HERO_SUB)
+            .margin({ top: 4 })
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          Row() {
+            Image($r('app.media.ic_flame')).width(12).height(12).fillColor(Colors.WHITE)
+            Text(`连续 ${this.grid.streak} 天`)
+              .fontSize(11).fontWeight(FontWeight.Bold).fontColor(Colors.WHITE)
+              .margin({ left: 4 })
+          }
+          .padding({ left: 10, right: 10, top: 3, bottom: 3 })
+          .borderRadius(99)
+          .backgroundColor(HERO_CHIP)
+          .margin({ top: 8 })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        .constraintSize({ minWidth: 0 })
+
+        Stack({ alignContent: Alignment.Center }) {
+          Progress({ value: this.completionRate(), total: 100, type: ProgressType.Ring })
+            .width(70).height(70).color(Colors.WHITE)
+            .style({ strokeWidth: 6 })
+            .backgroundColor(HERO_CHIP)
+            .animation({ duration: Motion.PAGE, curve: Curve.EaseOut })
+          Text(`${this.completionRate()}%`)
+            .fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.WHITE)
+        }
+        .width(70).height(70)
+      }
+      .width('100%')
+
+      Row({ space: 8 }) {
+        this.HeroChip(`${this.grid.monthDone}`, '本月已完成')
+        this.HeroChip(`${this.grid.pendingMakeup}`, '待补卡（天）')
+        this.HeroChip(`${this.todayDue()}`, '今日待复习')
+      }
+      .width('100%')
+      .margin({ top: 12 })
+    }
+    .width('100%')
+    .padding(18)
+    .borderRadius(20)
+    .linearGradient({ angle: 140, colors: [[HERO_GRAD_HI, 0], [HERO_GRAD_LO, 1]] })
+    .shadow({ radius: 20, color: '#730A59F7', offsetX: 0, offsetY: 10 })
+  }
+
+  /** 半透明数据 chip：flex 均分 + 数字不缩格，防出框 */
+  @Builder
+  HeroChip(value: string, label: string) {
     Column() {
       Text(value)
-        .fontSize(22).fontWeight(FontWeight.Bold)
-        .fontColor(danger ? Colors.UNKNOWN_RED : Colors.TEXT_MAIN)
-      Text(label).fontSize(11).fontColor(Colors.TEXT_SUB).margin({ top: 4 })
+        .fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.WHITE)
+        .maxLines(1)
+      Text(label)
+        .fontSize(9).fontColor(HERO_SUB)
+        .margin({ top: 2 })
+        .maxLines(1)
     }
     .layoutWeight(1)
-    .padding({ top: 12, bottom: 12 })
-    .backgroundColor(Colors.WHITE)
-    .borderRadius(Radius.CONTROL)
+    .constraintSize({ minWidth: 0 })
+    .padding({ top: 8, bottom: 8 })
+    .backgroundColor(HERO_CHIP)
+    .borderRadius(12)
     .alignItems(HorizontalAlign.Center)
   }
 
@@ -348,9 +467,9 @@ export struct PlanTablePage {
       Row() {
         Row().width(10).height(10).borderRadius(3).backgroundColor(Colors.BRAND)
         Text('今天').fontSize(11).fontColor(Colors.TEXT_SUB).margin({ left: 4, right: 12 })
-        Row().width(10).height(10).borderRadius(3).backgroundColor(Colors.KNOW_GREEN_SOFT)
+        Row().width(10).height(10).borderRadius(3).backgroundColor(BLUE_DONE_BG)
         Text('已完成').fontSize(11).fontColor(Colors.TEXT_SUB).margin({ left: 4, right: 12 })
-        Row().width(10).height(10).borderRadius(3).backgroundColor(Colors.FUZZY_ORANGE)
+        Row().width(10).height(10).borderRadius(3).backgroundColor(BLUE_MADE)
         Text('已补卡').fontSize(11).fontColor(Colors.TEXT_SUB).margin({ left: 4, right: 12 })
         Row().width(10).height(10).borderRadius(3).backgroundColor(Colors.UNKNOWN_RED_SOFT)
         Text('待补卡').fontSize(11).fontColor(Colors.TEXT_SUB).margin({ left: 4 })
@@ -361,7 +480,25 @@ export struct PlanTablePage {
     .padding(12)
     .backgroundColor(Colors.WHITE)
     .borderRadius(Radius.CONTROL)
-    .margin({ top: 12 })
+    .margin({ top: 12, left: 16, right: 16 })
+  }
+
+  @Builder
+  TodayCta() {
+    Column() {
+      Text(this.todayDue() > 0 ? `今日任务 · 剩 ${this.todayDue()} 个待复习` : '今日任务已完成')
+        .fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.WHITE)
+    }
+    .width('100%')
+    .padding({ top: 13, bottom: 13 })
+    .borderRadius(16)
+    .linearGradient({ angle: 135, colors: [[HERO_GRAD_HI, 0], [Colors.BRAND, 1]] })
+    .shadow({ radius: 16, color: '#590A59F7', offsetX: 0, offsetY: 8 })
+    .margin({ top: 14, left: 16, right: 16, bottom: 28 })
+    .onClick(() => {
+      NavStore.INSTANCE.goTab(1);
+      NavStore.INSTANCE.back();
+    })
   }
 
   build() {
@@ -377,7 +514,7 @@ export struct PlanTablePage {
                 .fontSize(22).fontColor(Colors.TEXT_MAIN)
                 .type(ButtonType.Normal).width(36).height(36)
                 .borderRadius(12).backgroundColor(Colors.WHITE)
-                .shadow({ radius: 8, color: 'rgba(23,32,46,0.10)', offsetY: 2 })
+                .border({ width: 1, color: '#E7EAF1' })
                 .onClick(() => this.switchMonth(-1))
               Text(`${this.year} 年 ${this.month} 月`)
                 .fontSize(17).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
@@ -386,19 +523,19 @@ export struct PlanTablePage {
                 .fontSize(22).fontColor(Colors.TEXT_MAIN)
                 .type(ButtonType.Normal).width(36).height(36)
                 .borderRadius(12).backgroundColor(Colors.WHITE)
-                .shadow({ radius: 8, color: 'rgba(23,32,46,0.10)', offsetY: 2 })
+                .border({ width: 1, color: '#E7EAF1' })
                 .onClick(() => this.switchMonth(1))
             }
             .width('100%')
             .padding({ left: 12, right: 12 })
 
-            // 三统计
-            Row({ space: 10 }) {
-              this.StatCard(`${this.grid.streak}`, '连续打卡（天）', false)
-              this.StatCard(`${this.grid.monthDone}`, '本月已完成', false)
-              this.StatCard(`${this.grid.pendingMakeup}`, '待补卡（天）', this.grid.pendingMakeup > 0)
+            // W2 蓝色渐变头卡（替代原三统计卡）
+            Column() {
+              this.HeroCard()
             }
-            .width('100%').padding({ left: 16, right: 16 }).margin({ top: 4 })
+            .width('100%')
+            .padding({ left: 16, right: 16 })
+            .margin({ top: 4 })
 
             // 月历卡
             Column() {
@@ -435,6 +572,7 @@ export struct PlanTablePage {
             .padding(12)
             .backgroundColor(Colors.WHITE)
             .borderRadius(Radius.CARD)
+            .shadow({ radius: 16, color: '#140A59F7', offsetX: 0, offsetY: 6 })
             .margin({ top: 12, left: 16, right: 16 })
 
             this.Legend()
@@ -452,7 +590,9 @@ export struct PlanTablePage {
             .padding(14)
             .backgroundColor(Colors.WHITE)
             .borderRadius(Radius.CONTROL)
-            .margin({ top: 12, left: 16, right: 16, bottom: 28 })
+            .margin({ top: 12, left: 16, right: 16 })
+
+            this.TodayCta()
           }
           .width('100%')
         }
@@ -460,7 +600,7 @@ export struct PlanTablePage {
         .scrollBar(BarState.Off)
         .align(Alignment.Top)
       }
-      .width('100%').height('100%').backgroundColor(Colors.PAGE_BG)
+      .width('100%').height('100%').backgroundColor(PAGE_W2)
     }
     .hideTitleBar(true)
     .opacity(1 + this.showTick * 0)
@@ -468,7 +608,7 @@ export struct PlanTablePage {
     .opacity(this.zoomOpacity)
     .onShown(() => {
       this.showTick++;
-      // 从补卡详情返回时重算（红格应变绿底橙「补」）
+      // 从补卡详情返回时重算（红格应变蓝底橙「补」）
       this.grid = this.loadGrid(this.year, this.month);
       this.animateCovered(true);
     })

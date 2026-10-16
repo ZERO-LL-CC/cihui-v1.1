@@ -266,10 +266,10 @@ export function shortNodeDue(fromTs: number, node: string): number {
   return fromTs + (SHORT_NODE_MS[node] ?? 0);
 }
 
-/* ================= 新词排期（每日新词量 5–40） ================= */
+/* ================= 新词排期（每日新词量 10–1000，导入词本后在弹框设置） ================= */
 
-export const MIN_DAILY_NEW: number = 5;
-export const MAX_DAILY_NEW: number = 40;
+export const MIN_DAILY_NEW: number = 10;
+export const MAX_DAILY_NEW: number = 1000;
 
 export function clampDailyNew(n: number): number {
   if (n < MIN_DAILY_NEW) {
@@ -284,23 +284,49 @@ export function clampDailyNew(n: number): number {
 /**
  * 把未排期（dueDay 为空）的 NEW 单词按每日新词量分配到从今天起的日期。
  * 导入后立即调用（F4：新词立即排期，首页数字同源刷新）。
+ *
+ * 性能口径（P20 修复）：原实现 remaining() 对全量数组 filter（O(n²)），
+ * 导入几千词的云词本会卡死/闪退，且每日新词量滚轮每次预览都会放大卡顿。
+ * 现改为 Map<dayKey, count> 增量计数：预扫描一遍已排期 NEW 词分布，
+ * 游标前进/分配单词均为 O(1)，整体 O(n)。语义与原实现严格一致：
+ * 已排期词计入每日配额、while 在赋值前判定、游标只前进不回头。
+ *
+ * F-D 单词本限制：scopeWordIds 传入时，只有集合内的未排期词会被分配日期
+ * （= 背诵中的词本 + 拍照/梗句词本例外）；集合外的词保持未排期（暂停）。
+ * undefined = 全部参与（旧数据 / 未设置背诵词本时向后兼容）。
  */
-export function planNewWords(schedules: ReviewSchedule[], now: number, dailyNewCount: number): ReviewSchedule[] {
+export function planNewWords(schedules: ReviewSchedule[], now: number, dailyNewCount: number,
+  scopeWordIds?: Set<string>): ReviewSchedule[] {
   const quota: number = clampDailyNew(dailyNewCount);
   const result: ReviewSchedule[] = schedules.map((s: ReviewSchedule) => ({ ...s }));
+
+  // 预扫描：已排期 NEW 词按 dueDay 分布（这些词占用每日配额，但不会被重排）。
+  // F-A：intake='TODAY'（拍照导入·加入当天计划）的词不占每日新词配额。
+  const countByDay: Map<string, number> = new Map();
+  for (const s of result) {
+    if (s.stage === 'NEW' && s.dueDay !== '' && s.intake !== 'TODAY') {
+      countByDay.set(s.dueDay, (countByDay.get(s.dueDay) ?? 0) + 1);
+    }
+  }
+
   let cursorDay: string = dayKeyFromTs(now);
-  const remaining: () => number = (): number =>
-    result.filter((s: ReviewSchedule): boolean => s.stage === 'NEW' && s.dueDay === cursorDay).length;
+  let cursorCount: number = countByDay.get(cursorDay) ?? 0;
 
   for (let i = 0; i < result.length; i++) {
     const s: ReviewSchedule = result[i];
     if (s.stage !== 'NEW' || s.dueDay !== '') {
       continue;
     }
-    while (remaining() >= quota) {
+    if (scopeWordIds !== undefined && !scopeWordIds.has(s.wordId)) {
+      continue;
+    }
+    while (cursorCount >= quota) {
       cursorDay = addDays(cursorDay, 1);
+      cursorCount = countByDay.get(cursorDay) ?? 0;
     }
     s.dueDay = cursorDay;
+    cursorCount += 1;
+    countByDay.set(cursorDay, cursorCount);
   }
   return result;
 }
@@ -309,11 +335,26 @@ export function planNewWords(schedules: ReviewSchedule[], now: number, dailyNewC
 
 const REVIEW_STAGES: StageCode[] = ['R1', 'R2', 'R4', 'R7', 'R15'];
 
+/**
+ * F-B 逾期打散（缺席补课）分摊天数：逾期复习词每天只放行 ceil(积压数 / 3) 个进今日桶，
+ * 按 1/3 几何衰减直到清零（如积压 9 → 6 → 4 → 3 → 2 → 2 → 1 → 清零）。
+ */
+export const OVERDUE_SPREAD_DAYS: number = 3;
+
+/** 逾期复习项（打散排序用） */
+interface OverdueItem {
+  wordId: string;
+  stage: StageCode;
+  dueDay: string;
+}
+
 export function buildDayPlan(state: SchedulerState, day: string): DayPlan {
   const newWords: string[] = [];
-  const overdue: string[] = [];
-  const buckets: Record<string, string[]> = { R1: [], R2: [], R4: [], R7: [], R15: [] };
   const wrongWords: string[] = [];
+  const buckets: Record<string, string[]> = { R1: [], R2: [], R4: [], R7: [], R15: [] };
+  // F-B：逾期项与今日到期项分开收集；overdue 数组保持全量（首页积压条/补卡页口径不变）
+  const overdueEntries: OverdueItem[] = [];
+  const dueEntries: OverdueItem[] = [];
 
   for (const s of state.schedules) {
     if (s.status === 'WRONG') {
@@ -325,11 +366,31 @@ export function buildDayPlan(state: SchedulerState, day: string): DayPlan {
     }
     if (s.status === 'LEARNING' && REVIEW_STAGES.indexOf(s.stage) >= 0 && s.dueDay !== ''
       && diffDays(s.dueDay, day) >= 0) {
-      buckets[s.stage].push(s.wordId);
       if (diffDays(s.dueDay, day) > 0) {
-        overdue.push(s.wordId);
+        overdueEntries.push({ wordId: s.wordId, stage: s.stage, dueDay: s.dueDay });
+      } else {
+        dueEntries.push({ wordId: s.wordId, stage: s.stage, dueDay: s.dueDay });
       }
     }
+  }
+
+  // 逾期打散（F-B 缺席补课）：逾期词不再全部塞进今天，按到期日升序（最老的先），
+  // 每天只放行 ceil(积压数 / OVERDUE_SPREAD_DAYS) 个进今日桶，其余明天继续摊还。
+  // 视图层截断：不修改 dueDay、不写任何数据；无逾期时行为与旧实现完全一致。
+  const overdue: string[] = [];
+  for (const e of overdueEntries) {
+    overdue.push(e.wordId);
+  }
+  if (overdueEntries.length > 0) {
+    overdueEntries.sort((a: OverdueItem, b: OverdueItem): number =>
+      a.dueDay < b.dueDay ? -1 : a.dueDay > b.dueDay ? 1 : 0);
+    const allow: number = Math.ceil(overdueEntries.length / OVERDUE_SPREAD_DAYS);
+    for (let i = 0; i < allow && i < overdueEntries.length; i++) {
+      dueEntries.push(overdueEntries[i]);
+    }
+  }
+  for (const e of dueEntries) {
+    buckets[e.stage].push(e.wordId);
   }
   return { newWords, reviewBuckets: buckets, overdue, wrongWords };
 }
@@ -659,7 +720,7 @@ export function computeStreak(records: CheckInRecord[], day: string): number {
   return streak;
 }
 
-/** 改设置：每日新词量夹取 5–40 */
+/** 改设置：每日新词量夹取 10–1000 */
 export function withDailyNew(settings: Settings, n: number): Settings {
   return { ...settings, dailyNewCount: clampDailyNew(n) };
 }
@@ -874,7 +935,9 @@ export interface DailyNewPreview {
 export const NEW_WORD_SECONDS: number = 40;
 export const REVIEW_WORD_SECONDS: number = 15;
 
-export function previewDailyNew(state: SchedulerState, n: number, now: number): DailyNewPreview {
+/** 每日新词量调整预览（F-D：scopeWordIds 与 planNewWords 口径一致，由调用方按当前背诵词本计算） */
+export function previewDailyNew(state: SchedulerState, n: number, now: number,
+  scopeWordIds?: Set<string>): DailyNewPreview {
   const day: string = dayKeyFromTs(now);
   const quota: number = clampDailyNew(n);
 
@@ -898,7 +961,7 @@ export function previewDailyNew(state: SchedulerState, n: number, now: number): 
     }
     return { ...s };
   });
-  const planned: ReviewSchedule[] = planNewWords(hypot, now, quota);
+  const planned: ReviewSchedule[] = planNewWords(hypot, now, quota, scopeWordIds);
   const plan: DayPlan = buildDayPlan(
     { schedules: planned, records: state.records, settings: withDailyNew(state.settings, quota) },
     day,

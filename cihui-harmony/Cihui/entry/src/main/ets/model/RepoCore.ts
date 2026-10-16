@@ -13,6 +13,7 @@ import { DEFAULT_SETTINGS, STAGE_OFFSET_DAYS, STAGE_ORDER } from './Types';
 import type {
   BookSource,
   CheckInRecord,
+  IntakeMode,
   LearnPhase,
   MemeCard,
   MemeSentence,
@@ -206,21 +207,30 @@ function toWord(draft: WordDraft, id: string, now: number): Word {
   };
 }
 
-/** 新增单词并同时建学习记录 + 调度，随后立即按每日新词量排期（与导入事务口径一致） */
-export function addWord(data: AppData, draft: WordDraft, now: number): AppData {
+/** 新增单词并同时建学习记录 + 调度，随后立即按每日新词量排期（与导入事务口径一致）。
+ *  F-A：intake='TODAY' 时词当天到期、不占每日新词配额（拍照·加入当天计划同口径）。 */
+export function addWord(data: AppData, draft: WordDraft, now: number, intake: IntakeMode = 'QUEUE'): AppData {
   const v: ValidateResult = validateWord(draft);
   if (!v.ok) {
     throw new Error(v.message);
   }
   const id: string = genId('word');
   const word: Word = toWord(draft, id, now);
+  let schedule: ReviewSchedule = newImportedSchedule(id);
+  if (intake === 'TODAY') {
+    schedule = { ...schedule, dueDay: dayKeyFromTs(now), intake: 'TODAY' };
+  }
   const next: AppData = {
     ...data,
     words: [...data.words, word],
     records: [...data.records, newStudyRecord(id)],
-    schedules: [...data.schedules, newImportedSchedule(id)],
+    schedules: [...data.schedules, schedule],
   };
-  return { ...next, schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount) };
+  // F-D：scope 限制 = 背诵中词本 + 拍照/梗句例外词本
+  return {
+    ...next,
+    schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next)),
+  };
 }
 
 export function updateWord(data: AppData, wordId: string, patch: Partial<WordDraft>): AppData {
@@ -268,30 +278,103 @@ export function batchDeleteWords(data: AppData, wordIds: string[]): AppData {
 /**
  * 一次性导入整批单词（F4 OCR 确认导入 / F5 云词书下载）：
  * 单次“事务”——要么全部成功，要么抛异常不产生半截数据；导入后立即按每日新词量排期。
+ *
+ * F-A 入列方式（拍照导入两模式，口径与算法 Demo 一致）：
+ * - QUEUE（默认）：直接加入词本 → planNewWords 从今天起找第一个配额空位插入，满则顺延；
+ * - TODAY：加入当天计划 → 词 dueDay=今天、intake='TODAY'，今天立即首学且不占每日新词配额
+ *   （planNewWords 预扫描排除 intake='TODAY'，不会挤占当天队列词的配额）。
+ *
+ * 性能口径（P20 修复）：原实现循环内每条 draft 都做 words/records/schedules
+ * 全量数组展开（O(n²)）外加 cloneData JSON 深拷贝，导入几千词的云词本明显卡顿。
+ * 现改为各 slice() 一次后 push（摊销 O(1)）。事务语义不变：
+ * 校验失败中途抛错时 data 原样未动（slice 是副本），genId 生成时序不变。
  */
-export function importTransaction(data: AppData, drafts: WordDraft[], now: number): AppData {
+export function importTransaction(data: AppData, drafts: WordDraft[], now: number,
+  intake: IntakeMode = 'QUEUE'): AppData {
   if (drafts.length === 0) {
     throw new Error('没有可导入的单词');
   }
-  let next: AppData = cloneData(data);
+  const words: Word[] = data.words.slice();
+  const records: StudyRecord[] = data.records.slice();
+  const schedules: ReviewSchedule[] = data.schedules.slice();
+  const todayKey: string = dayKeyFromTs(now);
   for (const draft of drafts) {
     const v: ValidateResult = validateWord(draft);
     if (!v.ok) {
       throw new Error(v.message + '：' + draft.english);
     }
     const id: string = genId('word');
-    next = {
-      ...next,
-      words: [...next.words, toWord(draft, id, now)],
-      records: [...next.records, newStudyRecord(id)],
-      schedules: [...next.schedules, newImportedSchedule(id)],
-    };
+    words.push(toWord(draft, id, now));
+    records.push(newStudyRecord(id));
+    if (intake === 'TODAY') {
+      schedules.push({ ...newImportedSchedule(id), dueDay: todayKey, intake: 'TODAY' });
+    } else {
+      schedules.push(newImportedSchedule(id));
+    }
   }
-  next = { ...next, schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount) };
-  return next;
+  const next: AppData = { ...data, words, records, schedules };
+  // TODAY 分支也走 planNewWords：给可能存在的未排期词补排期；TODAY 词因 intake 标记不占配额。
+  // F-D：scope 限制 = 背诵中词本 + 拍照/梗句例外词本。
+  return {
+    ...next,
+    schedules: planNewWords(schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next)),
+  };
 }
 
 /* ================= 云词书下载导入（F5，mock 目录见 service/CloudCatalog.ts） ================= */
+
+/** 拍照导入的固定独立词本名（F-D：不随日期建多本，始终参与算法排期） */
+export const PHOTO_BOOK_NAME: string = '拍照词本';
+
+/**
+ * F-D 单词本限制（一次只能背一本）：
+ * 返回当前允许参与每日新词排期的词 id 集合 = 背诵中词本 ∪ 拍照词本（例外） ∪ 梗句词本（例外）。
+ * activeBookId 为空（旧数据 / 从未设置）时返回 undefined = 全部参与排期（向后兼容）。
+ */
+export function activeScopeWordIds(data: AppData): Set<string> | undefined {
+  const activeId: string = data.settings.activeBookId ?? '';
+  if (activeId.length === 0) {
+    return undefined;
+  }
+  // bookId → 是否例外词本（拍照 / 梗句）
+  const freeByBook: Map<string, boolean> = new Map();
+  for (const b of data.books) {
+    freeByBook.set(b.id, b.source === 'DIY_PHOTO' || b.source === 'MEME');
+  }
+  const scope: Set<string> = new Set();
+  for (const w of data.words) {
+    if (w.bookId === activeId || freeByBook.get(w.bookId) === true) {
+      scope.add(w.id);
+    }
+  }
+  return scope;
+}
+
+/**
+ * F-D 切换背诵词本：
+ * - 旧背诵词本中「未首学」的新词清空排期（暂停，切回来时再排）；
+ * - 已首学的词（R1–R15 复习义务）不动，继续按节点复习；
+ * - 设置 activeBookId = 新词本。重复切到同一本幂等。
+ */
+export function switchActiveBookData(data: AppData, newBookId: string, now: number): AppData {
+  const oldId: string = data.settings.activeBookId ?? '';
+  let schedules: ReviewSchedule[] = data.schedules;
+  if (oldId.length > 0 && oldId !== newBookId) {
+    const oldWordIds: Set<string> = new Set();
+    for (const w of data.words) {
+      if (w.bookId === oldId) {
+        oldWordIds.add(w.id);
+      }
+    }
+    schedules = data.schedules.map((s: ReviewSchedule): ReviewSchedule => {
+      if (oldWordIds.has(s.wordId) && s.stage === 'NEW' && s.firstLearnDay === '' && s.dueDay !== '') {
+        return { ...s, dueDay: '' };
+      }
+      return s;
+    });
+  }
+  return { ...data, schedules, settings: { ...data.settings, activeBookId: newBookId } };
+}
 
 /** 云词书下载导入入参中的单词（结构与 service 层 CloudSampleWord 兼容） */
 export interface CloudWordInput {
@@ -310,6 +393,8 @@ export interface CloudBookImport {
 /**
  * 云词书下载落库：先建 CLOUD 词本，再走整批导入事务（任一单词校验失败整体回滚，
  * 不产生半截词书）；同一 cloudBookId 幂等拦截。
+ * F-D：下载即切换背诵词本（一次只能背一本）——旧词本未首学新词暂停排期，
+ * 新词本词与拍照/梗句例外词本一起按每日新词量排期。
  */
 export function importCloudBook(data: AppData, draft: CloudBookImport, now: number): AppData {
   const exists: boolean =
@@ -323,6 +408,7 @@ export function importCloudBook(data: AppData, draft: CloudBookImport, now: numb
     now,
   );
   const book: WordBook = withBook.books[withBook.books.length - 1];
+  const withActive: AppData = switchActiveBookData(withBook, book.id, now);
   const drafts: WordDraft[] = [];
   for (const w of draft.words) {
     const meanings: string[] = w.meaning
@@ -338,7 +424,8 @@ export function importCloudBook(data: AppData, draft: CloudBookImport, now: numb
     };
     drafts.push(d);
   }
-  return importTransaction(withBook, drafts, now);
+  // F-D：用切换后的数据（activeBookId=新书）导入，新书词进入 scope 参与排期
+  return importTransaction(withActive, drafts, now);
 }
 
 /* ================= 学习判定（语音自动与手动闪卡共用） ================= */
@@ -656,7 +743,8 @@ export function applyDailyNewCount(data: AppData, n: number, now: number): AppDa
 
   const checkins: CheckInRecord[] = data.checkins.filter((c: CheckInRecord): boolean => c.day !== today);
 
-  const replanned: ReviewSchedule[] = planNewWords(schedules, now, quota);
+  const replanned: ReviewSchedule[] =
+    planNewWords(schedules, now, quota, activeScopeWordIds(data));
 
   return {
     ...data,
@@ -665,4 +753,31 @@ export function applyDailyNewCount(data: AppData, n: number, now: number): AppDa
     checkins,
     settings: withDailyNew(data.settings, quota),
   };
+}
+
+/**
+ * 设置每日新词量（F-D 导入词本后的弹框口径）：
+ * 只更新设置并重排「未首学」新词的未来排期——
+ * 与 applyDailyNewCount 的区别：不回退今天已学的词、不删除当天打卡
+ * （导入新书设定配额时不应影响用户今天在旧词本的学习成果）。
+ */
+export function setDailyNewCount(data: AppData, n: number, now: number): AppData {
+  const today: string = dayKeyFromTs(now);
+  const quota: number = clampDailyNew(n);
+  const schedules: ReviewSchedule[] = data.schedules.map((s: ReviewSchedule): ReviewSchedule => {
+    if (s.stage === 'NEW' && s.firstLearnDay === '') {
+      // 逾期未学新词保留为今天到期
+      if (s.dueDay !== '' && diffDays(s.dueDay, today) > 0) {
+        return { ...s, dueDay: today };
+      }
+      // 未来排期清空，按新额度重排
+      if (s.dueDay !== '' && diffDays(today, s.dueDay) > 0) {
+        return { ...s, dueDay: '' };
+      }
+    }
+    return s;
+  });
+  const replanned: ReviewSchedule[] =
+    planNewWords(schedules, now, quota, activeScopeWordIds(data));
+  return { ...data, schedules: replanned, settings: withDailyNew(data.settings, quota) };
 }

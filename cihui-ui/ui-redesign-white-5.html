@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>词慧 · 白色风格计划表 5 版（基于 V3 游戏化骨架）</title>
+<style>
+/* ============================================================
+   白色风格 ×5 —— 保留 V3 游戏化骨架（进度环/火焰连击/方糖日历）
+   全部纯白底，防出框策略与上一稿一致
+   ============================================================ */
+:root{
+  --brand:#0A59F7; --ink:#17202E; --ink2:#5A6575; --ink3:#98A2B2;
+  --ok:#179C5B; --bad:#E14B4B; --violet:#6E5CF6;
+  --page:#F0F2F7;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:"MiSans","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  background:
+    radial-gradient(1000px 460px at 90% -5%, rgba(10,89,247,.05), transparent 60%),
+    radial-gradient(800px 400px at 8% 40%, rgba(236,106,15,.06), transparent 60%),
+    var(--page);
+  color:var(--ink);padding:48px 20px 80px;
+}
+.wrap{max-width:1360px;margin:0 auto;}
+.hero .kicker{
+  display:inline-block;font-size:12px;font-weight:800;letter-spacing:.18em;color:var(--brand);
+  background:#E9F0FE;padding:6px 14px;border-radius:999px;margin-bottom:14px;
+}
+.hero h1{font-size:clamp(24px,3.6vw,36px);font-weight:900;letter-spacing:-.02em;line-height:1.18;}
+.hero h1 em{font-style:normal;color:#EC6A0F;}
+.hero p{margin-top:10px;font-size:14px;color:var(--ink2);max-width:66ch;line-height:1.7;}
+
+.sec-head{display:flex;align-items:baseline;gap:12px;margin:40px 0 20px;}
+.sec-head h2{font-size:20px;font-weight:900;}
+.sec-head span{font-size:13px;color:var(--ink3);}
+
+.shelf{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:24px;}
+.phone-col{display:flex;flex-direction:column;gap:12px;}
+.phone{
+  width:100%;max-width:370px;margin:0 auto;
+  background:#14171d;border-radius:42px;padding:9px;
+  box-shadow:0 26px 54px -16px rgba(23,32,46,.32),0 4px 12px rgba(23,32,46,.16);
+}
+.screen{background:#fff;border-radius:34px;overflow:hidden;height:716px;display:flex;flex-direction:column;position:relative;}
+.island{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:88px;height:22px;background:#14171d;border-radius:999px;z-index:50;}
+.ver-tag{align-self:center;font-size:13px;font-weight:800;display:inline-flex;gap:8px;align-items:center;}
+.ver-tag i{font-style:normal;font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px;letter-spacing:.06em;}
+.note{background:#fff;border:1px solid #E4E8F0;border-radius:14px;padding:11px 13px;font-size:12px;color:var(--ink2);line-height:1.6;width:100%;max-width:370px;margin:0 auto;}
+.note b{color:var(--ink);}
+.note .fix{color:var(--ok);font-weight:700;}
+
+/* —— 共用：顶栏 —— */
+.app-topbar{display:flex;align-items:center;justify-content:space-between;padding:50px 18px 0;}
+.app-title{font-size:18px;font-weight:900;}
+.month-nav{display:flex;align-items:center;gap:8px;}
+.month-label{font-size:12.5px;font-weight:700;color:var(--ink2);min-width:62px;text-align:center;}
+.mbtn{width:30px;height:30px;border-radius:10px;background:#fff;border:1px solid #E7EAF1;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--ink2);box-shadow:0 1px 3px rgba(23,32,46,.05);}
+
+/* —— 共用：日历骨架 —— */
+.cal{margin:11px 18px 0;background:#fff;border-radius:20px;padding:13px 11px;}
+.accent-card{box-shadow:0 4px 18px var(--cal-shadow,rgba(23,32,46,.07));}
+.cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:7px;}
+.cal-week i{font-style:normal;text-align:center;font-size:10px;font-weight:700;color:var(--ink3);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.cell{aspect-ratio:1/1.04;border-radius:11px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:#F5F7FA;}
+.cell .d{font-size:12px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;}
+.cell .dot{width:4px;height:4px;border-radius:99px;}
+.cell .dot.multi{background:linear-gradient(90deg,var(--ok) 33%,var(--violet) 33% 66%,var(--bad) 66%);}
+.cell.done{background:var(--done-bg);}
+.cell.done .d{color:var(--done-fg);}
+.cell.done .dot{background:var(--ac);}
+.cell.future{background:#fff;border:1.5px dashed var(--dash,#DDE3EC);}
+.cell.future .d{color:#C4CAD4;font-weight:600;}
+.cell.miss{background:var(--miss-bg);}
+.cell.miss .d{color:var(--bad);}
+.cell.miss .dot{background:var(--bad);}
+.cell.today{background:var(--today-bg,var(--ac));box-shadow:0 6px 14px var(--today-shadow,var(--ac-shadow));transform:scale(1.07);}
+.cell.today .d{color:var(--today-fg,#fff);}
+.cell.today .dot{background:rgba(255,255,255,.95);}
+.cell .bud{position:absolute;top:3px;right:4px;font-size:8px;font-weight:800;color:#fff;background:var(--bad);border-radius:99px;padding:1px 4px;line-height:1.3;}
+.cell.today .bud{background:#fff;color:var(--ac);}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;padding:11px 18px 0;}
+.legend span{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink2);}
+.legend i{width:9px;height:9px;border-radius:99px;}
+.cta{margin:auto 18px 16px;padding:12px;border-radius:15px;text-align:center;color:#fff;font-size:14px;font-weight:800;letter-spacing:.02em;background:linear-gradient(135deg,var(--ac-hi),var(--ac));box-shadow:0 8px 18px var(--ac-shadow);}
+
+/* —— 共用：进度环 —— */
+.ring{border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;}
+.ring>div{border-radius:50%;background:var(--ring-hole,#fff);display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.ring b{font-size:16px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink);}
+.ring span{font-size:7.5px;color:var(--ink3);margin-top:1px;font-weight:700;}
+
+/* ============ W1 白瓷·橙芯 ============ */
+.w1 .screen{background:#fff;}
+.w1 .cell{background:#FFF7EF;}
+.w1 .cell.future{background:#fff;border-color:#F3E3D2;}
+.w1 .cell.miss{background:#FFE9E5;}
+.w1{--ac:#F4691E;--ac-hi:#FF8A3D;--ac-shadow:rgba(244,105,30,.35);--done-bg:#FFEDD9;--done-fg:#C25E12;--miss-bg:#FFE9E5;--cal-shadow:rgba(244,105,30,.09);}
+.w1 .hero{margin:12px 18px 0;padding:15px;border:1px solid #F3E8DC;border-radius:20px;background:linear-gradient(180deg,#FFFDFB,#FFF7EF);box-shadow:0 4px 18px rgba(244,105,30,.08);}
+.w1 .hrow{display:flex;align-items:center;gap:13px;}
+.w1 .ring{width:70px;height:70px;background:conic-gradient(var(--ac) 0 78%,#FFE7D2 78% 100%);}
+.w1 .ring>div{width:54px;height:54px;}
+.w1 .htx{flex:1;min-width:0;}
+.w1 .htx h3{font-size:15.5px;font-weight:900;}
+.w1 .htx p{font-size:11px;color:var(--ink3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.w1 .flame{display:inline-flex;align-items:center;gap:4px;background:#FFF0E2;color:#C25E12;border-radius:99px;padding:3px 9px;font-size:11px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums;}
+.w1 .chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:11px;}
+.w1 .chip{background:#fff;border:1px solid #F3E8DC;border-radius:12px;padding:8px 4px;text-align:center;}
+.w1 .chip b{display:block;font-size:15px;font-weight:900;font-variant-numeric:tabular-nums;}
+.w1 .chip span{font-size:9px;color:var(--ink3);white-space:nowrap;}
+
+/* ============ W2 白·蔚蓝 ============ */
+.w2 .screen{background:#FBFCFE;}
+.w2{--ac:#0A59F7;--ac-hi:#3D7BFF;--ac-shadow:rgba(10,89,247,.3);--done-bg:#E3EDFF;--done-fg:#0846C0;--miss-bg:#FFE9E5;--dash:#D8E2F2;--cal-shadow:rgba(10,89,247,.08);}
+.w2 .hero{
+  margin:12px 18px 0;padding:15px;border-radius:20px;color:#fff;
+  background:linear-gradient(140deg,#3D7BFF,#0846C0);
+  box-shadow:0 12px 26px -8px rgba(10,89,247,.45);position:relative;overflow:hidden;
+}
+.w2 .hero::after{content:"";position:absolute;right:-30px;top:-40px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.12);}
+.w2 .hrow{display:flex;align-items:center;gap:13px;}
+.w2 .ring{width:70px;height:70px;background:conic-gradient(#fff 0 78%,rgba(255,255,255,.22) 78% 100%);}
+.w2 .ring>div{width:54px;height:54px;background:#1D63F0;}
+.w2 .ring b,.w2 .ring span{color:#fff;}
+.w2 .htx{flex:1;min-width:0;}
+.w2 .htx h3{font-size:15.5px;font-weight:900;}
+.w2 .htx p{font-size:11px;color:#CFE0FF;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.w2 .flame{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.18);color:#fff;border-radius:99px;padding:3px 9px;font-size:11px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums;}
+.w2 .chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:11px;}
+.w2 .chip{background:rgba(255,255,255,.14);border-radius:12px;padding:8px 4px;text-align:center;}
+.w2 .chip b{display:block;font-size:15px;font-weight:900;color:#fff;font-variant-numeric:tabular-nums;}
+.w2 .chip span{font-size:9px;color:#CFE0FF;white-space:nowrap;}
+
+/* ============ W3 白·多巴胺 ============ */
+.w3 .screen{background:#fff;}
+.w3{--done-bg:#E5F5EC;--done-fg:#179C5B;--miss-bg:#FCEAEA;--ac:#7C5CF0;--ac-hi:#9D7BFF;--ac-shadow:rgba(124,92,240,.3);--dash:#E4DDF6;}
+.w3 .hero{margin:12px 18px 0;padding:0;display:grid;grid-template-columns:1fr auto;align-items:center;border-radius:20px;background:#fff;box-shadow:0 4px 18px rgba(23,32,46,.07);overflow:hidden;}
+.w3 .htx{padding:15px 4px 15px 16px;min-width:0;}
+.w3 .htx h3{font-size:15.5px;font-weight:900;}
+.w3 .htx h3 em{font-style:normal;}
+.w3 .htx p{font-size:11px;color:var(--ink3);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.w3 .confetti{display:flex;gap:5px;margin-top:8px;}
+.w3 .confetti i{width:14px;height:14px;border-radius:5px;}
+.w3 .ringwrap{padding:0 14px;}
+.w3 .ring{width:74px;height:74px;background:conic-gradient(#179C5B 0 30%,#0A59F7 30% 55%,#F4691E 55% 78%,#EDEBFB 78% 100%);}
+.w3 .ring>div{width:56px;height:56px;background:#fff;}
+.w3 .stats3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 18px 0;}
+.w3 .chip{border-radius:13px;padding:9px 4px;text-align:center;color:#fff;}
+.w3 .chip b{display:block;font-size:15px;font-weight:900;font-variant-numeric:tabular-nums;}
+.w3 .chip span{font-size:9px;opacity:.9;white-space:nowrap;}
+.w3 .c1{background:linear-gradient(150deg,#2EBD72,#179C5B);}
+.w3 .c2{background:linear-gradient(150deg,#FF9A4D,#F4691E);}
+.w3 .c3{background:linear-gradient(150deg,#9D7BFF,#7C5CF0);}
+.w3 .cell{background:#F6F4FC;}
+.w3 .cell.done{background:#E5F5EC;}
+.w3 .cell.done .dot{background:#179C5B;}
+.w3 .cell.future{background:#fff;border-color:#E4DDF6;}
+.w3 .cell.today{--today-bg:#7C5CF0;--today-shadow:rgba(124,92,240,.35);}
+
+/* ============ W4 白·薄荷 ============ */
+.w4 .screen{background:#F7FBF9;}
+.w4{--ac:#0FA97E;--ac-hi:#2EC48F;--ac-shadow:rgba(15,169,126,.3);--done-bg:#DFF5EC;--done-fg:#0B8A66;--miss-bg:#FFE9E5;--dash:#CFE8DE;--cal-shadow:rgba(15,169,126,.09);}
+.w4 .hero{margin:12px 18px 0;padding:15px;border-radius:20px;background:#fff;box-shadow:0 4px 18px rgba(15,169,126,.1);display:flex;align-items:center;gap:13px;position:relative;overflow:hidden;}
+.w4 .hero::before{content:"";position:absolute;left:-24px;bottom:-40px;width:110px;height:110px;border-radius:50%;background:radial-gradient(circle,rgba(15,169,126,.1),transparent 68%);}
+.w4 .ring{width:76px;height:76px;background:conic-gradient(var(--ac) 0 78%,#E2F4EC 78% 100%);}
+.w4 .ring>div{width:58px;height:58px;background:#fff;}
+.w4 .htx{flex:1;min-width:0;}
+.w4 .htx h3{font-size:15.5px;font-weight:900;}
+.w4 .htx p{font-size:11px;color:var(--ink3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.w4 .medal{
+  display:inline-flex;align-items:center;gap:5px;margin-top:7px;background:#E2F4EC;color:#0B8A66;
+  border-radius:99px;padding:3px 10px;font-size:10.5px;font-weight:800;
+}
+.w4 .streakline{margin:10px 18px 0;background:#fff;border-radius:16px;padding:11px 14px;box-shadow:0 3px 12px rgba(15,169,126,.08);display:flex;align-items:center;gap:10px;}
+.w4 .streakline b{font-size:12px;font-weight:800;white-space:nowrap;}
+.w4 .track{flex:1;height:6px;border-radius:99px;background:#EAF4F0;overflow:hidden;}
+.w4 .fill{height:100%;width:80%;border-radius:99px;background:linear-gradient(90deg,#2EC48F,var(--ac));}
+.w4 .streakline em{font-style:normal;font-size:11px;color:var(--ac);font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;}
+
+/* ============ W5 白·墨线贴纸 ============ */
+.w5 .screen{background:#fff;}
+.w5{--done-bg:#FFF3D6;--done-fg:#B8860B;--miss-bg:#FFE9E5;--dash:#D9D9D9;}
+.w5 .hero{margin:12px 18px 0;border:2px solid var(--ink);border-radius:18px;padding:14px;display:flex;align-items:center;gap:13px;position:relative;box-shadow:5px 5px 0 var(--ink);}
+.w5 .ring{width:66px;height:66px;background:conic-gradient(var(--ink) 0 78%,#fff 78% 100%);border:2px solid var(--ink);}
+.w5 .ring>div{width:44px;height:44px;background:#fff;border-radius:50%;}
+.w5 .htx{flex:1;min-width:0;}
+.w5 .htx h3{font-size:15.5px;font-weight:900;letter-spacing:.01em;}
+.w5 .htx p{font-size:11px;color:var(--ink3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.w5 .sticker{
+  position:absolute;top:-11px;right:12px;background:#FFD84D;border:2px solid var(--ink);
+  border-radius:99px;padding:2px 9px;font-size:10px;font-weight:900;color:var(--ink);
+  transform:rotate(4deg);box-shadow:2px 2px 0 var(--ink);font-variant-numeric:tabular-nums;
+}
+.w5 .chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:11px;}
+.w5 .chip{background:#fff;border:1.5px solid var(--ink);border-radius:11px;padding:7px 4px;text-align:center;box-shadow:2.5px 2.5px 0 var(--ink);}
+.w5 .chip b{display:block;font-size:14px;font-weight:900;font-variant-numeric:tabular-nums;}
+.w5 .chip span{font-size:8.5px;color:var(--ink3);white-space:nowrap;}
+.w5 .cell{background:#fff;border:1.5px solid #E7E7E7;}
+.w5 .cell.done{background:#FFF3D6;border-color:#F3DFA6;}
+.w5 .cell.done .d{color:#B8860B;}
+.w5 .cell.done .dot{background:#F0A500;}
+.w5 .cell.future{background:#fff;border:1.5px dashed #D9D9D9;}
+.w5 .cell.miss{background:#FFE9E5;border-color:#F5C6C0;}
+.w5 .cell.today{background:#FFD84D;--today-shadow:rgba(23,32,46,.28);border:2px solid var(--ink);box-shadow:2.5px 2.5px 0 var(--ink);}
+.w5 .cell.today .d{color:var(--ink);}
+.w5 .cell.today .dot{background:var(--ink);}
+.w5 .cta{background:var(--ink);box-shadow:4px 4px 0 rgba(23,32,46,.25);border-radius:14px;}
+
+.foot{margin-top:52px;text-align:center;font-size:12px;color:var(--ink3);line-height:1.8;}
+.foot b{color:var(--ink2);}
+@media (max-width:760px){.shelf{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <span class="kicker">CIHUI · WHITE EDITION ×5</span>
+    <h1>白色风格计划表 5 版 —— 保留 V3 游戏化骨架，<em>白底重绘</em></h1>
+    <p>同一套骨架（进度环 + 连击 + 方糖日历），五种白底性格。防出框策略全部继承：数字容器预留左右 padding、
+       tabular-nums 等宽数字、日历格只保留「数字 + 状态点」两个槽位。</p>
+  </header>
+
+  <div class="shelf">
+
+    <!-- W1 -->
+    <div class="phone-col w1">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="app-topbar">
+          <div class="app-title">艾宾浩斯计划表</div>
+          <div class="month-nav"><div class="mbtn">‹</div><div class="month-label">2026年10月</div><div class="mbtn">›</div></div>
+        </div>
+        <div class="hero">
+          <div class="hrow">
+            <div class="ring"><div><b>80</b><span>完成率%</span></div></div>
+            <div class="htx">
+              <h3>十月冲刺进行中</h3>
+              <p>再坚持 7 天解锁「全勤勋章」</p>
+              <span class="flame">
+                <svg width="10" height="11" viewBox="0 0 24 24" fill="#F4691E"><path d="M12 2c1 4-3 5.5-3 9a5 5 0 0 0 10 0c0-2-1-3.5-2-5-.3 1.4-1 2.2-2 3-.4-2.4-1.4-4.8-3-7z"/></svg>
+                连续 12 天
+              </span>
+            </div>
+          </div>
+          <div class="chips">
+            <div class="chip"><b>138</b><span>本月已完成</span></div>
+            <div class="chip"><b>2</b><span>待补卡（天）</span></div>
+            <div class="chip"><b>42</b><span>今日待复习</span></div>
+          </div>
+        </div>
+        <div class="cal accent-card">
+          <div class="cal-week"><i>一</i><i>二</i><i>三</i><i>四</i><i>五</i><i>六</i><i>日</i></div>
+          <div class="cal-grid" data-cal="w1"></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:#F4691E"></i>已完成</span>
+          <span><i style="background:#F4691E;box-shadow:0 0 0 3px rgba(244,105,30,.2)"></i>今天</span>
+          <span><i style="background:#C4CAD4"></i>待复习</span>
+          <span><i style="background:#E14B4B"></i>漏卡待补</span>
+        </div>
+        <div class="cta">今日任务 · 42 词待复习</div>
+      </div></div>
+      <div class="ver-tag">W1 <i style="background:#FFEDD9;color:#C25E12">白瓷·橙芯</i></div>
+      <div class="note">V3 最直接的白色转译：白卡 + 奶油橙描边卡片，进度环与方糖保留橙色。<span class="fix">与首页白卡视觉无缝衔接</span>，改造成本最低。</div>
+    </div>
+
+    <!-- W2 -->
+    <div class="phone-col w2">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="app-topbar">
+          <div class="app-title">艾宾浩斯计划表</div>
+          <div class="month-nav"><div class="mbtn">‹</div><div class="month-label">2026年10月</div><div class="mbtn">›</div></div>
+        </div>
+        <div class="hero">
+          <div class="hrow">
+            <div class="htx">
+              <h3>十月冲刺进行中</h3>
+              <p>再坚持 7 天解锁「全勤勋章」</p>
+              <span class="flame">连续 12 天</span>
+            </div>
+            <div class="ring"><div><b>80</b><span>完成率%</span></div></div>
+          </div>
+          <div class="chips">
+            <div class="chip"><b>138</b><span>本月已完成</span></div>
+            <div class="chip"><b>2</b><span>待补卡（天）</span></div>
+            <div class="chip"><b>42</b><span>今日待复习</span></div>
+          </div>
+        </div>
+        <div class="cal accent-card">
+          <div class="cal-week"><i>一</i><i>二</i><i>三</i><i>四</i><i>五</i><i>六</i><i>日</i></div>
+          <div class="cal-grid" data-cal="w2"></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:#0A59F7"></i>已完成</span>
+          <span><i style="background:#0A59F7;box-shadow:0 0 0 3px rgba(10,89,247,.2)"></i>今天</span>
+          <span><i style="background:#C4CAD4"></i>待复习</span>
+          <span><i style="background:#E14B4B"></i>漏卡待补</span>
+        </div>
+        <div class="cta">今日任务 · 42 词待复习</div>
+      </div></div>
+      <div class="ver-tag">W2 <i style="background:#E3EDFF;color:#0846C0">白·蔚蓝</i></div>
+      <div class="note">白底 + 品牌蓝头卡，<span class="fix">与首页「今日任务」蓝色主卡形成同族呼应</span>；文字在左、环在右的镜像构图，信息扫读顺序更自然。</div>
+    </div>
+
+    <!-- W3 -->
+    <div class="phone-col w3">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="app-topbar">
+          <div class="app-title">艾宾浩斯计划表</div>
+          <div class="month-nav"><div class="mbtn">‹</div><div class="month-label">2026年10月</div><div class="mbtn">›</div></div>
+        </div>
+        <div class="hero">
+          <div class="htx">
+            <h3>十月冲刺 <em style="color:#7C5CF0">80%</em></h3>
+            <p>绿=掌握 · 蓝=巩固 · 橙=冲刺</p>
+            <div class="confetti">
+              <i style="background:#2EBD72"></i><i style="background:#4C8DFF"></i><i style="background:#FF9A4D"></i><i style="background:#9D7BFF"></i><i style="background:#FFD84D"></i>
+            </div>
+          </div>
+          <div class="ringwrap"><div class="ring"><div><b>80</b><span>完成率%</span></div></div></div>
+        </div>
+        <div class="stats3">
+          <div class="chip c1"><b>138</b><span>本月已完成</span></div>
+          <div class="chip c2"><b>2</b><span>待补卡（天）</span></div>
+          <div class="chip c3"><b>42</b><span>今日待复习</span></div>
+        </div>
+        <div class="cal accent-card">
+          <div class="cal-week"><i>一</i><i>二</i><i>三</i><i>四</i><i>五</i><i>六</i><i>日</i></div>
+          <div class="cal-grid" data-cal="w3"></div>
+        </div>
+        <div class="cta">今日任务 · 42 词待复习</div>
+      </div></div>
+      <div class="ver-tag">W3 <i style="background:#EDEBFB;color:#7C5CF0">白·多巴胺</i></div>
+      <div class="note">白底 + 彩色药丸统计（绿/橙/紫各司其职），进度环按节点色分段。<span class="fix">统计色即语义色，一眼区分三个数字</span>，最适合喜欢活泼但不想满屏橙的你。</div>
+    </div>
+
+    <!-- W4 -->
+    <div class="phone-col w4">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="app-topbar">
+          <div class="app-title">艾宾浩斯计划表</div>
+          <div class="month-nav"><div class="mbtn">‹</div><div class="month-label">2026年10月</div><div class="mbtn">›</div></div>
+        </div>
+        <div class="hero">
+          <div class="ring"><div><b>80</b><span>完成率%</span></div></div>
+          <div class="htx">
+            <h3>十月冲刺进行中</h3>
+            <p>再坚持 7 天解锁「全勤勋章」</p>
+            <span class="medal">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="#0B8A66"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8z"/></svg>
+              距离全勤勋章还差 7 天
+            </span>
+          </div>
+        </div>
+        <div class="streakline">
+          <b>本月热度</b>
+          <div class="track"><div class="fill"></div></div>
+          <em>80%</em>
+        </div>
+        <div class="cal accent-card">
+          <div class="cal-week"><i>一</i><i>二</i><i>三</i><i>四</i><i>五</i><i>六</i><i>日</i></div>
+          <div class="cal-grid" data-cal="w4"></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:#0FA97E"></i>已完成</span>
+          <span><i style="background:#0FA97E;box-shadow:0 0 0 3px rgba(15,169,126,.2)"></i>今天</span>
+          <span><i style="background:#C4CAD4"></i>待复习</span>
+          <span><i style="background:#E14B4B"></i>漏卡待补</span>
+        </div>
+        <div class="cta">今日任务 · 42 词待复习</div>
+      </div></div>
+      <div class="ver-tag">W4 <i style="background:#DFF5EC;color:#0B8A66">白·薄荷</i></div>
+      <div class="note">薄荷绿 + 勋章胶囊 + 细热度条，<span class="fix">游戏元素全部「胶囊化」</span>，整体最清爽收敛；绿色也暗合 App 的 KNOW_GREEN 认知语义。</div>
+    </div>
+
+    <!-- W5 -->
+    <div class="phone-col w5">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="app-topbar">
+          <div class="app-title">艾宾浩斯计划表</div>
+          <div class="month-nav"><div class="mbtn">‹</div><div class="month-label">2026年10月</div><div class="mbtn">›</div></div>
+        </div>
+        <div class="hero">
+          <span class="sticker">🔥 12 天连击</span>
+          <div class="ring"><div><b>80</b><span>完成率%</span></div></div>
+          <div class="htx">
+            <h3>十月冲刺进行中</h3>
+            <p>再坚持 7 天解锁「全勤勋章」</p>
+          </div>
+        </div>
+        <div class="chips" style="margin:11px 18px 0">
+          <div class="chip"><b>138</b><span>本月已完成</span></div>
+          <div class="chip"><b>2</b><span>待补卡（天）</span></div>
+          <div class="chip"><b>42</b><span>今日待复习</span></div>
+        </div>
+        <div class="cal" style="box-shadow:none">
+          <div class="cal-week"><i>一</i><i>二</i><i>三</i><i>四</i><i>五</i><i>六</i><i>日</i></div>
+          <div class="cal-grid" data-cal="w5"></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:#F0A500"></i>已完成</span>
+          <span><i style="background:#FFD84D;border:1.5px solid #17202E"></i>今天</span>
+          <span><i style="background:#E7E7E7"></i>待复习</span>
+          <span><i style="background:#E14B4B"></i>漏卡待补</span>
+        </div>
+        <div class="cta">今日任务 · 42 词待复习</div>
+      </div></div>
+      <div class="ver-tag">W5 <i style="background:#FFF3D6;color:#B8860B">白·墨线贴纸</i></div>
+      <div class="note">黑描边 + 硬投影贴纸风（与图标第 4 版同族）。游戏元素线稿化：<span class="fix">连击做成歪头贴纸、今日格黑框</span>，个性最强、辨识度最高。</div>
+    </div>
+
+  </div>
+
+  <footer class="foot">
+    <b>与已落地图标的搭配建议：</b>渐变玻璃图标（橙/蓝/红）与 W1、W2 最搭；想更跳选 W3，想更潮选 W5。<br>
+    拍板后我直接改 PlanTablePage.ets 并出真机构建。
+  </footer>
+</div>
+
+<script>
+/* 日历数据：2026年10月，1日周四 → 周一起始偏移3；今天16日 */
+const OFFSET = 3, DAYS = 31, TODAY = 16;
+const MISS = new Set([9, 20]);
+const FUT_DOT = { 18:'#179C5B', 23:'#6E5CF6', 26:'#179C5B', 29:'multi', 11:null, 2:null, 4:'multi', 7:'#6E5CF6', 14:'#E14B4B' };
+
+function build(id){
+  const g = document.querySelector(`[data-cal="${id}"]`);
+  let html = '';
+  for(let i=0;i<OFFSET;i++) html += '<div class="cell" style="visibility:hidden"></div>';
+  for(let d=1; d<=DAYS; d++){
+    const cls = ['cell'];
+    let bud = '', dot = '';
+    if(d === TODAY) cls.push('today');
+    else if(d < TODAY) cls.push(MISS.has(d) ? 'miss' : 'done');
+    else cls.push('future');
+    if(MISS.has(d)) bud = '<span class="bud">补</span>';
+    const dk = FUT_DOT[d];
+    if(dk === 'multi') dot = '<span class="dot multi"></span>';
+    else if(dk) dot = `<span class="dot" style="background:${dk}"></span>`;
+    html += `<div class="${cls.join(' ')}"><span class="d">${d}</span>${dot}${bud}</div>`;
+  }
+  g.innerHTML = html;
+}
+document.querySelectorAll('[data-cal]').forEach(el => build(el.dataset.cal));
+</script>
+</body>
+</html>

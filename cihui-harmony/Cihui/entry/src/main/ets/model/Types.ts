@@ -22,6 +22,9 @@ export type Verdict = 'KNOWN' | 'VAGUE' | 'UNKNOWN';
 /** 学习环节：新词首测 / 到期复习（模糊重考也归入对应环节） */
 export type LearnPhase = 'FIRST' | 'REVIEW';
 
+/** 新词入列方式：QUEUE=按每日新词量排队（默认）；TODAY=加入当天计划（今天立即首学、不占每日新词配额） */
+export type IntakeMode = 'QUEUE' | 'TODAY';
+
 /** 一轮学习中某个单词的判定结果（F8 复核清单 / F9 一轮汇总通用；null=未判定） */
 export interface RoundVerdict {
   wordId: string;
@@ -95,6 +98,9 @@ export interface ReviewSchedule {
   /** 错词原因标签：不认识·转明天新词 / 模糊·次日强制复习 */
   wrongReason: string;
   lastVerdictAt: number;
+  /** 入列方式：QUEUE=按每日新词量排队；TODAY=当天计划（不占每日新词配额）。
+   * 旧数据无此字段视为 QUEUE（planNewWords 预扫描排除 intake==='TODAY'）。 */
+  intake?: IntakeMode;
 }
 
 /** 打卡记录（一天一条） */
@@ -119,8 +125,11 @@ export interface CheckInRecord {
 
 /** 设置（轻量 KV，后续接 preferences） */
 export interface Settings {
-  /** 每日新词量 5–40，默认 20（常量占位，待用户确认） */
+  /** 每日新词量 10–1000，默认 20；导入词本后在弹框里一次性设置 */
   dailyNewCount: number;
+  /** 当前背诵中的词本 id（F-D：一次只能背一本；''=未设置，全部词本可排期）。
+   *  拍照词本与梗句词本例外：独立词本但始终参与算法排期。 */
+  activeBookId: string;
   /** 短时复习 S1/S2/S3 开关，默认关闭 */
   shortReviewEnabled: boolean;
   /** P3 错词强化严格度开关 */
@@ -140,6 +149,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   dailyNewCount: 20,
+  activeBookId: '',
   shortReviewEnabled: false,
   p3Strict: true,
   ttsRate: 1.0,

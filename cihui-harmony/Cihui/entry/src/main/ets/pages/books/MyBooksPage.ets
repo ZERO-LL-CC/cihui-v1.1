@@ -53,6 +53,7 @@ struct BookCardView {
   @Require @Param book: WordBook;
   @Require @Param wordCount: number;
   @Require @Param fresh: boolean;
+  @Require @Param learning: boolean;
   @Require @Param index: number;
   @Require @Param onTap: (book: WordBook) => void;
   @Local cardOpacity: number = 0;
@@ -85,6 +86,16 @@ struct BookCardView {
               .fontSize(11)
               .fontColor(Colors.BRAND)
               .backgroundColor(Colors.BRAND_SOFT)
+              .borderRadius(8)
+              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+              .margin({ right: 6 })
+          }
+          if (this.learning) {
+            // F-D 一次只能背一本：当前背诵中的词本
+            Text('背诵中')
+              .fontSize(11)
+              .fontColor(Colors.WHITE)
+              .backgroundColor(Colors.BRAND)
               .borderRadius(8)
               .padding({ left: 8, right: 8, top: 3, bottom: 3 })
               .margin({ right: 6 })
@@ -238,6 +249,7 @@ export struct MyBooksPage {
                     book,
                     wordCount: DataStore.INSTANCE.wordCountOfBook(book.id),
                     fresh: book.createdAt > this.freshCutoff,
+                    learning: DataStore.INSTANCE.isBookLearning(book.id),
                     index,
                     onTap: (b: WordBook): void => this.openBook(b),
                   })

@@ -15,6 +15,7 @@ import { RouteName } from '../../common/RouteNames';
 import { DataStore } from '../../viewmodel/DataStore';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
 import type { SpeechRouteParam } from '../../common/RouteNames';
+import type { ReviewRouteParam } from '../../common/RouteNames';
 import type { AsrListener, AsrState } from '../../service/SpeechService';
 import { HmsSpeechService } from '../../service/SpeechService';
 import { TtsService } from '../../service/TtsService';
@@ -120,6 +121,9 @@ export struct SpeechTestPage {
     this.cursorTimer = setInterval(() => {
       this.cursorVisible = !this.cursorVisible;
     }, 530);
+
+    // TTS 引擎需先初始化（此前遗漏，导致本页喇叭只在别的页面 init 过时才有声）
+    TtsService.init(DataStore.INSTANCE.settings.ttsRate);
 
     if (this.items.length > 0) {
       this.bootAsr();
@@ -353,8 +357,19 @@ export struct SpeechTestPage {
     this.clearTimers();
     this.service.release();
     TtsService.stop();
-    this.toast('本轮完成，调度已更新');
-    NavStore.INSTANCE.finishToHome();
+    // F-C 统一入口：新学完成后若当天还有到期复习词，提示并直接切换复习模式（通知式，不强制额外操作）。
+    // 判定已逐词落盘，中途退出进度不丢，退出后从首页「去复习」继续剩余词。
+    const remain: Word[] = DataStore.INSTANCE.todayReviewWordList();
+    if (remain.length > 0) {
+      this.toast(`新学完成，进入复习模式（${remain.length} 个待复习）`);
+      const ids: string[] = remain.map((w: Word): string => w.id);
+      const param: ReviewRouteParam = { wordIds: ids, title: '到期复习', mode: 'REVIEW' };
+      NavStore.INSTANCE.finishToHome();
+      NavStore.INSTANCE.push(RouteName.REVIEW_CARDS, param);
+    } else {
+      this.toast('本轮完成，调度已更新');
+      NavStore.INSTANCE.finishToHome();
+    }
   }
 
   private animateCovered(covered: boolean): void {

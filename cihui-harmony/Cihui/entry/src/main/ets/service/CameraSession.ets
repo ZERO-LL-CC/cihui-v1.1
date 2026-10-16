@@ -47,11 +47,25 @@ export class CameraSession {
         manager.createSession<camera.PhotoSession>(camera.SceneMode.NORMAL_PHOTO);
       step = 'createCameraInput';
       const input: camera.CameraInput = manager.createCameraInput(device);
+
+      // 关键修复：必须先取该设备在 NORMAL_PHOTO 场景下支持的输出能力，再用其中的真实 profile 创建输出流。
+      // 若像原来那样用缺 profile 的 createPreviewOutput(surfaceId) / createPhotoOutput()，addOutput 时
+      // 底层校验“profile 与 input 对应且非空”失败，抛出无数字码的普通 Error，页面表现为
+      // “相机启动失败（addInputOutput，错误码 -1）”。
+      step = 'getSupportedOutputCapability';
+      const outputCap: camera.CameraOutputCapability =
+        manager.getSupportedOutputCapability(device, camera.SceneMode.NORMAL_PHOTO);
+      const previewProfile: camera.Profile | undefined = outputCap?.previewProfiles?.[0];
+      const photoProfile: camera.Profile | undefined = outputCap?.photoProfiles?.[0];
+      if (!previewProfile || !photoProfile) {
+        throw new Error('当前设备不支持拍照输出配置');
+      }
+
       step = 'createPreviewOutput';
-      const previewOutput: camera.PreviewOutput = manager.createPreviewOutput(surfaceId);
+      const previewOutput: camera.PreviewOutput = manager.createPreviewOutput(previewProfile, surfaceId);
       step = 'createPhotoOutput';
-      // 无 surface 重载：拍照结果通过 photoAvailable 事件回传
-      const photoOutput: camera.PhotoOutput = manager.createPhotoOutput();
+      // 单 profile 重载（无 surface）：拍照结果通过 photoAvailable 事件回传
+      const photoOutput: camera.PhotoOutput = manager.createPhotoOutput(photoProfile);
 
       photoOutput.on('photoAvailable', async (err: Error, photo: camera.Photo): Promise<void> => {
         if (err) {

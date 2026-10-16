@@ -1,21 +1,21 @@
 /**
- * F12 每日新词量（iOS 时钟式滚轮）：
- * - 竖向 scroll-snap 滚轮，档位 5/8/10/12/15/20/25/30/40，点按也可定位；
- * - 滑动实时预览当天「新学 N + 复习 M = X 词，预计约 Y 分钟」（previewDailyNew 纯函数，不落数据）；
+ * F12 每日新词量（F-D 重做：自定义 10–1000）：
+ * - 快捷档位 chips + 数字输入框，任意值 10–1000 均可设置（不再只有 9 个固定档）；
+ * - 实时预览当天「新学 N + 复习 M = X 词，预计约 Y 分钟」（previewDailyNew 纯函数，不落数据）；
  * - 确定后 applyDailyNew：重置当日完成态与打卡、按 1/2/4/7/15 重排未来新词，历史不篡改；
  * - 取消 / 边缘左滑直接返回，不改动任何数据。
+ * - 导入词本后的弹框设置走 setDailyNew（不重置当日），与本页手动调整口径不同。
  */
 import { NavStore } from '../../viewmodel/NavStore';
 import { RouteName } from '../../common/RouteNames';
 import { DataStore } from '../../viewmodel/DataStore';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
+import { MIN_DAILY_NEW, MAX_DAILY_NEW } from '../../model/SchedulerCore';
 import { promptAction } from '@kit.ArkUI';
 import type { DailyNewPreview } from '../../model/SchedulerCore';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 
-const WHEEL_VALUES: number[] = [5, 8, 10, 12, 15, 20, 25, 30, 40];
-const ITEM_HEIGHT: number = 46;
-const VISIBLE_ROWS: number = 5;
+const QUOTA_PRESETS: number[] = [10, 20, 30, 50, 80, 100, 200, 500, 1000];
 
 @ComponentV2
 export struct DailyNewPage {
@@ -31,21 +31,12 @@ export struct DailyNewPage {
   };
   @Local sheetOpacity: number = 0;
   @Local selected: number = DataStore.INSTANCE.settings.dailyNewCount;
+  @Local inputText: string = `${DataStore.INSTANCE.settings.dailyNewCount}`;
   @Local preview: DailyNewPreview = DataStore.INSTANCE.previewDailyNew(DataStore.INSTANCE.settings.dailyNewCount);
-  private scroller: Scroller = new Scroller();
-  private initialized: boolean = false;
 
   aboutToAppear(): void {
     REFRESH_BUS.onNav(this.refreshWhenTop);
     REFRESH_BUS.onData(this.refreshWhenTop);
-    // 初始定位到当前设置档位
-    setTimeout(() => {
-      const idx: number = WHEEL_VALUES.indexOf(this.selected);
-      if (idx >= 0) {
-        this.scroller.scrollToIndex(idx, false, ScrollAlign.CENTER);
-      }
-      this.initialized = true;
-    }, 60);
   }
 
   aboutToDisappear(): void {
@@ -63,35 +54,31 @@ export struct DailyNewPage {
     );
   }
 
-  private updateSelected(value: number): void {
+  private updateSelected(value: number, syncInput: boolean): void {
     if (value === this.selected) {
+      if (syncInput && `${value}` !== this.inputText) {
+        this.inputText = `${value}`;
+      }
       return;
     }
     this.selected = value;
+    if (syncInput) {
+      this.inputText = `${value}`;
+    }
     this.preview = DataStore.INSTANCE.previewDailyNew(value);
   }
 
-  private onVisibleChange(first: number, last: number, center: number): void {
-    if (!this.initialized) {
+  private confirm(): void {
+    const n: number = parseInt(this.inputText, 10);
+    if (isNaN(n) || n < MIN_DAILY_NEW || n > MAX_DAILY_NEW) {
+      promptAction.showToast({
+        message: `每日新词量需在 ${MIN_DAILY_NEW}–${MAX_DAILY_NEW} 之间`,
+        duration: 2200
+      });
       return;
     }
-    // List onScrollIndex 直接给居中下标；个别机型首帧为 -1 时用 first+2 兜底
-    let idx: number = center;
-    if (idx < 0) {
-      idx = first + Math.floor(VISIBLE_ROWS / 2);
-    }
-    if (idx < 0) {
-      idx = 0;
-    }
-    if (idx > WHEEL_VALUES.length - 1) {
-      idx = WHEEL_VALUES.length - 1;
-    }
-    this.updateSelected(WHEEL_VALUES[idx]);
-  }
-
-  private confirm(): void {
-    DataStore.INSTANCE.applyDailyNew(this.selected);
-    promptAction.showToast({ message: `计划已按每日 ${this.selected} 个新词重新分好`, duration: 2000 });
+    DataStore.INSTANCE.applyDailyNew(n);
+    promptAction.showToast({ message: `计划已按每日 ${n} 个新词重新分好`, duration: 2000 });
     NavStore.INSTANCE.back();
   }
 
@@ -114,18 +101,15 @@ export struct DailyNewPage {
   }
 
   @Builder
-  WheelItem(value: number, index: number) {
+  PresetChip(value: number) {
     Text(`${value}`)
-      .fontSize(value === this.selected ? 26 : 18)
-      .fontWeight(value === this.selected ? FontWeight.Bold : FontWeight.Normal)
-      .fontColor(value === this.selected ? Colors.BRAND : Colors.TEXT_WEAK)
-      .width('100%')
-      .height(ITEM_HEIGHT)
-      .textAlign(TextAlign.Center)
-      .onClick(() => {
-        this.scroller.scrollToIndex(index, true, ScrollAlign.CENTER);
-        this.updateSelected(value);
-      })
+      .fontSize(14)
+      .fontColor(this.selected === value ? Colors.WHITE : Colors.TEXT_SUB)
+      .backgroundColor(this.selected === value ? Colors.BRAND : Colors.WHITE)
+      .borderRadius(16)
+      .padding({ left: 14, right: 14, top: 6, bottom: 6 })
+      .margin(4)
+      .onClick(() => this.updateSelected(value, true))
   }
 
   build() {
@@ -144,42 +128,38 @@ export struct DailyNewPage {
           }
           .margin({ top: 6 })
 
-          // 滚轮
-          Stack({ alignContent: Alignment.Center }) {
-            // 中心高亮条
-            Column()
-              .width('86%').height(ITEM_HEIGHT)
-              .borderRadius(Radius.CONTROL)
-              .backgroundColor(Colors.BRAND_SOFT)
-            // 上下渐隐遮罩
-            Column()
-              .width('100%').height('100%')
-              .linearGradient({
-                angle: 180,
-                colors: [
-                  [Colors.PAGE_BG, 0.0],
-                  ['#00EDF0F6', 0.28],
-                  ['#00EDF0F6', 0.72],
-                  [Colors.PAGE_BG, 1.0],
-                ],
-              })
-            List({ scroller: this.scroller, initialIndex: WHEEL_VALUES.indexOf(this.selected) }) {
-              ForEach(WHEEL_VALUES, (value: number, index: number) => {
-                ListItem() {
-                  this.WheelItem(value, index)
-                }
-                .height(ITEM_HEIGHT)
-              }, (value: number) => 'wheel-' + value)
-            }
-            .width('100%')
-            .height(ITEM_HEIGHT * VISIBLE_ROWS)
-            .scrollBar(BarState.Off)
-            .scrollSnapAlign(ScrollSnapAlign.CENTER)
-            .onScrollIndex((first: number, last: number, center: number) => this.onVisibleChange(first, last, center))
+          // 快捷档位
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Center }) {
+            ForEach(QUOTA_PRESETS, (value: number) => {
+              this.PresetChip(value)
+            }, (value: number): string => 'preset-' + value)
           }
-          .width('100%')
-          .height(ITEM_HEIGHT * VISIBLE_ROWS)
-          .margin({ top: 18 })
+          .width('100%').margin({ top: 18 })
+
+          // 自定义输入（10–1000）
+          Row() {
+            Text('自定义').fontSize(14).fontColor(Colors.TEXT_SUB)
+            TextInput({ text: this.inputText, placeholder: `${MIN_DAILY_NEW}–${MAX_DAILY_NEW}` })
+              .type(InputType.Number)
+              .fontSize(17).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
+              .textAlign(TextAlign.Center)
+              .width(120).height(44)
+              .backgroundColor(Colors.WHITE).borderRadius(10)
+              .margin({ left: 12 })
+              .onChange((v: string): void => {
+                this.inputText = v;
+                const n: number = parseInt(v, 10);
+                if (!isNaN(n)) {
+                  this.updateSelected(n, false);
+                }
+              })
+            Text('个 / 天').fontSize(14).fontColor(Colors.TEXT_SUB).margin({ left: 8 })
+          }
+          .width('100%').justifyContent(FlexAlign.Center).margin({ top: 14 })
+
+          Text(`可选范围 ${MIN_DAILY_NEW}–${MAX_DAILY_NEW}，设置后一直用到本词本学完`)
+            .fontSize(12).fontColor(Colors.TEXT_WEAK).width('100%').textAlign(TextAlign.Center)
+            .margin({ top: 10 })
 
           // 实时预览
           Column() {

@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>词慧 · 遗忘曲线算法对比 Demo — 固定节点 vs FSRS</title>
+<style>
+  :root {
+    --bg: #f4f6fa; --card: #ffffff; --border: #e3e8f0; --text: #1f2733;
+    --muted: #6b7686; --a: #2E6BE6; --b: #F28A2E; --warn-bg: #fff7e8; --warn-border: #f0d9a8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+  .banner { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 10px; padding: 10px 16px; font-size: 13px; margin-bottom: 16px; }
+  .banner b { color: #9a6b00; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+  .ctrl { display: flex; flex-direction: column; gap: 6px; }
+  .ctrl label { font-size: 12px; color: var(--muted); }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { border: none; background: #fff; padding: 6px 14px; cursor: pointer; font-size: 13px; color: var(--text); border-right: 1px solid var(--border); }
+  .seg button:last-child { border-right: none; }
+  .seg button.on { background: var(--a); color: #fff; }
+  input[type=range] { width: 150px; accent-color: var(--a); }
+  .btn { border: none; border-radius: 8px; padding: 9px 18px; font-size: 14px; cursor: pointer; font-weight: 600; }
+  .btn-primary { background: var(--a); color: #fff; }
+  .btn-ghost { background: #eef2f8; color: var(--text); }
+  .btn:active { opacity: .85; }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 8px; }
+  .chart-card h3 { font-size: 14px; margin-bottom: 2px; }
+  .chart-card .desc { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  canvas { width: 100%; height: 240px; display: block; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+  #tooltip { position: fixed; pointer-events: none; background: rgba(31,39,51,.94); color: #fff; border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 1.7; display: none; z-index: 10; max-width: 260px; }
+  #log { font-size: 12px; color: var(--muted); font-family: Consolas, monospace; max-height: 120px; overflow-y: auto; margin-top: 8px; line-height: 1.8; }
+  .kpis { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+  .kpi { flex: 1; min-width: 150px; background: #f8fafd; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .kpi .t { font-size: 11px; color: var(--muted); }
+  .kpi .v { font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .kpi .v.a { color: var(--a); } .kpi .v.b { color: var(--b); }
+  details { font-size: 13px; color: var(--muted); line-height: 1.9; }
+  details summary { cursor: pointer; color: var(--text); font-weight: 600; }
+  details b { color: var(--text); }
+  input[type=text] { border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 13px; width: 130px; }
+  .trace-ctrl { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); margin: 8px 0; flex-wrap: wrap; }
+  .trace-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; background: #fbfcfe; }
+  .trow { display: flex; align-items: center; gap: 2px; height: 21px; }
+  .trow .wlabel { width: 88px; flex: none; font-size: 11px; cursor: pointer; color: var(--text); white-space: nowrap; user-select: none; }
+  .trow .wlabel.sel { font-weight: 700; color: var(--a); }
+  .tcell { flex: none; width: 16px; height: 16px; border-radius: 3px; font-size: 9px; line-height: 14px; text-align: center; color: #51607a; background: #fff; border: 1px solid #eef1f6; }
+  .tc-new { background: #dce9ff; border-color: #b7cff5; }
+  .tc-k { background: #ddf2e4; border-color: #b6e2c4; }
+  .tc-v { background: #ffedc2; border-color: #f0dc9e; }
+  .tc-x { background: #ffd9d9; border-color: #f2b8b8; }
+  .tc-rest { background: #eceff3; }
+  .tc-master { background: #ffe9b3; border-color: #eccb72; color: #8a6100; }
+  .tday { flex: none; width: 16px; font-size: 9px; color: #a5aebc; text-align: center; line-height: 14px; }
+  #traceList { margin-top: 10px; font-size: 12px; overflow-x: auto; }
+  #traceList table { border-collapse: collapse; margin-top: 6px; }
+  #traceList td, #traceList th { border: 1px solid var(--border); padding: 3px 10px; font-size: 12px; text-align: left; }
+  #traceList th { background: #f2f5fa; color: var(--muted); font-weight: 600; }
+  .lg { display: inline-flex; align-items: center; gap: 4px; }
+  .lg .tcell { cursor: default; }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  ⚠️ <b>算法出处与协议声明</b>：算法乙（FSRS）移植自开源项目
+  <b>open-spaced-repetition/ts-fsrs</b>（<a href="https://github.com/open-spaced-repetition/ts-fsrs" target="_blank">GitHub</a>），
+  <b>MIT License，允许商用</b>。本 Demo 为教学对比用途的简化移植（按天模拟、无 fuzz、无当日短时步骤），仅供对比参考。
+</div>
+
+<h1>词慧 · 遗忘曲线算法对比模拟器</h1>
+<div class="sub">算法甲（蓝）＝ 词慧现有「固定节点 1/2/4/7/15 天」· 算法乙（橙）＝ FSRS-6 自适应调度 · 两种算法共用同一套「真实记忆底模」（FSRS 状态方程），唯一变量是复习排期策略</div>
+
+<div class="panel">
+  <div class="controls">
+    <div class="ctrl">
+      <label>词本规模</label>
+      <div class="seg" id="segSize">
+        <button data-v="20" class="on">20 词</button>
+        <button data-v="100">100 词</button>
+        <button data-v="500">500 词</button>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label>每日新词量：<span id="lblQuota">20</span> 词/天</label>
+      <input type="range" id="quota" min="5" max="40" step="5" value="20">
+    </div>
+    <div class="ctrl">
+      <label>模拟天数</label>
+      <div class="seg" id="segDays">
+        <button data-v="30">30 天</button>
+        <button data-v="60" class="on">60 天</button>
+        <button data-v="90">90 天</button>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label>用户画像（新词首测命中率 / 遗忘后补认率）</label>
+      <div class="seg" id="segProfile">
+        <button data-v="0">学霸</button>
+        <button data-v="1" class="on">普通</button>
+        <button data-v="2">学渣</button>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label>&nbsp;</label>
+      <label class="toggle"><input type="checkbox" id="simpleMode"> 简化模式：判定完全按固定概率（不看记忆强度）</label>
+    </div>
+    <div class="ctrl">
+      <label>📷 拍照导入</label>
+      <div class="seg" id="segCam">
+        <button data-v="off" class="on">关闭</button>
+        <button data-v="today">加入当天计划</button>
+        <button data-v="queue">直接加入词本</button>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label>导入量：<span id="lblCam">5</span> 词/天</label>
+      <input type="range" id="camCount" min="1" max="10" step="1" value="5">
+    </div>
+    <div class="ctrl">
+      <label>起始天：第 <span id="lblCamStart">10</span> 天起</label>
+      <input type="range" id="camStart" min="2" max="45" step="1" value="10">
+    </div>
+    <div class="ctrl">
+      <label>缺席日（第几天，逗号分隔）</label>
+      <input type="text" id="absentDays" value="" placeholder="如 12,13">
+    </div>
+    <div class="ctrl">
+      <label>&nbsp;</label>
+      <label class="toggle"><input type="checkbox" id="spreadMode"> 缺席补课·打散：逾期复习分摊到之后几天</label>
+    </div>
+    <div class="ctrl" style="flex-direction:row; gap:8px; align-items:flex-end;">
+      <button class="btn btn-primary" id="btnRun">▶ 一键模拟</button>
+      <button class="btn btn-ghost" id="btnStep">逐步 +1 天</button>
+      <button class="btn btn-ghost" id="btnReset">重置</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="kpis" id="kpis"></div>
+  <div id="log"></div>
+</div>
+
+<div class="grid">
+  <div class="chart-card">
+    <h3>① 每日复习负担（次/天）</h3>
+    <div class="desc">每天需要复习的单词次数。柱子越矮、越平稳，说明算法越会"挑时间"。</div>
+    <canvas id="c1"></canvas>
+    <div class="legend"><span><span class="dot" style="background:var(--a)"></span>甲·固定节点</span><span><span class="dot" style="background:var(--b)"></span>乙·FSRS</span></div>
+  </div>
+  <div class="chart-card">
+    <h3>② 复习命中率（留存率，3 日滑动平均）</h3>
+    <div class="desc">复习时判"认识"的比例。FSRS 按目标留存率 90% 安排复习，理论上应更贴近 90% 上下小幅波动。</div>
+    <canvas id="c2"></canvas>
+    <div class="legend"><span><span class="dot" style="background:var(--a)"></span>甲·固定节点</span><span><span class="dot" style="background:var(--b)"></span>乙·FSRS</span><span style="margin-left:8px">灰色虚线 = 90% 目标线</span></div>
+  </div>
+  <div class="chart-card">
+    <h3>③ 累计复习总次数</h3>
+    <div class="desc">同样的词、同样的记忆规律，谁花在复习上的总功夫更少。</div>
+    <canvas id="c3"></canvas>
+    <div class="legend"><span><span class="dot" style="background:var(--a)"></span>甲·固定节点</span><span><span class="dot" style="background:var(--b)"></span>乙·FSRS</span></div>
+  </div>
+  <div class="chart-card">
+    <h3>④ 掌握进度对比（词数）</h3>
+    <div class="desc">甲的"掌握"＝R15 复习通过毕业；乙的"掌握"＝记忆强度 S ≥ 21 天（口径差异见页脚说明）。</div>
+    <canvas id="c4"></canvas>
+    <div class="legend"><span><span class="dot" style="background:var(--a)"></span>甲·固定节点</span><span><span class="dot" style="background:var(--b)"></span>乙·FSRS</span></div>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:16px">
+  <h3 style="font-size:15px;margin-bottom:2px">🔍 单词流水追踪 — 每个词在计划表里怎么流动</h3>
+  <div class="desc" style="font-size:12px;color:var(--muted);margin-bottom:6px">
+    每行一个词（编号 = 词#1、词#2…），横轴是天。带 📷 的是拍照导入的词。点某个词的编号，下方显示它的逐日事件明细。
+    <span class="lg"><span class="tcell tc-new">新</span>首学</span>
+    <span class="lg"><span class="tcell tc-k">复</span>复习·认识</span>
+    <span class="lg"><span class="tcell tc-v">复</span>模糊</span>
+    <span class="lg"><span class="tcell tc-x">复</span>不认识</span>
+    <span class="lg"><span class="tcell tc-master">★</span>掌握毕业</span>
+    <span class="lg"><span class="tcell tc-rest">休</span>缺席日</span>
+  </div>
+  <div class="trace-ctrl">
+    <div class="seg" id="segTraceAlgo">
+      <button data-v="A" class="on">甲·固定节点</button>
+      <button data-v="B">乙·FSRS</button>
+    </div>
+    <button class="btn btn-ghost" id="tracePrev" style="padding:4px 10px;font-size:12px">◀ 前 9 词</button>
+    <span id="traceRange"></span>
+    <button class="btn btn-ghost" id="traceNext" style="padding:4px 10px;font-size:12px">后 9 词 ▶</button>
+  </div>
+  <div class="trace-wrap"><div id="traceGrid"></div></div>
+  <div id="traceList"></div>
+</div>
+
+<div class="panel" style="margin-top:16px">
+  <details>
+    <summary>模拟规则说明（点开查看公平性设计）</summary>
+    <b>1. 记忆底模（对两种算法一视同仁）</b>：每个词的"真实记忆状态"用 FSRS 状态方程维护——记忆强度 S、难度 D 随每次复习按官方公式演化（含难度线性阻尼与均值回归、遗忘后稳定性公式）。这是模拟里的"客观记忆规律"。<br>
+    <b>2. 判定生成</b>：复习时先按真实经过天数算出记忆留存率 R（遗忘曲线），取 R 的画像指数次幂（学霸 ^0.6 / 普通 ^1.0 / 学渣 ^1.6）得到实际命中率；掷随机数：命中 → 认识；未命中 → 按画像"补认率"（学霸 0.5 / 普通 0.4 / 学渣 0.3）分摊为模糊/不认识。新词首测无记忆记录，按画像固定概率（学霸 75/20/5、普通 50/30/20、学渣 25/35/40）。<br>
+    <b>3. 两种算法的唯一差别</b>：什么时候安排复习。甲永远按首学后第 1/2/4/7/15 天；乙按每个词自己的 S 值算出"留存率降到 90%"的那一天。判定与记忆更新完全同模。<br>
+    <b>4. 甲的语义细节</b>（与词慧 App 一致）：认识 → 推进节点且不早于明天；模糊 → 停留当前节点 + 次日强制复习；不认识 → 节点清零、次日按新词重学；R15 通过 → 掌握毕业。<br>
+    <b>5. 已知口径差异</b>：乙的"掌握"用 S≥21 天近似（App 融入时可改为具体阈值策略）；模拟按天粒度，忽略 App 内的同日短时步骤；FSRS 移植为 FSRS-6.0 公式（21 参数默认权重、目标留存率 0.9、无 fuzz）。<br>
+    <b>6. 随机源</b>：mulberry32 固定种子，参数不变时每次模拟结果可复现。<br>
+    <b>7. 分流规则（词怎么流通）</b>：甲——新词首测<b>认识</b> → R1（第2天）；之后每个节点<b>命中才推进</b> R1→R2→R4→R7→R15（对应首学后第 1/2/4/7/15 天，跨节点按首学日+offset 对齐）；中途<b>模糊</b> → 停留当前节点、次日强制复习；<b>不认识</b> → 节点清零、次日当新词重学（学习记录归零）；R15 命中 → <b>掌握毕业</b>，等价于"复习连续命中 5 次且中途从没清零"。乙——每次判定后按公式更新记忆强度 S，下次复习日 = 留存率降到 90% 的那天；S≥21 天即真实掌握，但<b>不毕业</b>，继续按 FSRS 排期巩固。<br>
+    <b>8. 拍照导入两种模式</b>（与词慧 App 语义一致）：「加入当天计划」= 导入日<b>立刻首学</b>，不占每日新词配额（用户主动行为）；「直接加入词本」= 进新学队列，从导入日起找<b>第一个有配额空位的天</b>插入，队列满则自动顺延到队尾（planNewWords 的真实行为）。<br>
+    <b>9. 缺席日与打散</b>：缺席日整休，学习/复习都不进行，但记忆照常衰减，所有任务<b>顺延堆积</b>到回来的那天；勾选「打散」后，逾期复习每天只摊还约 1/3（老的先复习），当天的任务照常，避免回来第一天被几百个逾期词劝退。<br>
+  </details>
+</div>
+
+<div class="panel" style="font-size:12px;color:var(--muted);line-height:1.8">
+  FSRS 算法版权归 open-spaced-repetition 所有，按 MIT 协议使用（保留本页声明即满足协议要求）。固定节点算法为词慧 App 现有自研逻辑。
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+'use strict';
+/* ================= 工具 ================= */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
+const round8 = (x) => Math.round(x * 1e8) / 1e8;
+
+/* ================= FSRS-6 核心（移植自 open-spaced-repetition/ts-fsrs，MIT License） ================= */
+const FSRS_W = [0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.001, 1.8722,
+  0.1666, 0.796, 1.4835, 0.0614, 0.2629, 1.6483, 0.6014, 1.8729, 0.5425, 0.0912, 0.0658, 0.1542];
+const S_MIN = 0.001, S_MAX = 36500, RETENTION = 0.9;
+const DECAY = -FSRS_W[20];                                     // decay = -w20
+const FACTOR = Math.exp(Math.log(0.9) / DECAY) - 1;            // factor = e^(ln0.9/decay) - 1
+const INTERVAL_MOD = Math.round(((Math.pow(RETENTION, 1 / DECAY) - 1) / FACTOR) * 1e8) / 1e8;
+const GRADE = { AGAIN: 1, HARD: 2, GOOD: 3, EASY: 4 };
+
+function forgettingCurve(elapsed, s) {                         // R(t,S) = (1 + FACTOR·t/S)^DECAY
+  return round8(Math.pow(1 + (FACTOR * elapsed) / s, DECAY));
+}
+function initStability(g) { return Math.max(FSRS_W[g - 1], 0.1); }
+function initDifficulty(g) {
+  return clamp(round8(FSRS_W[4] - Math.exp((g - 1) * FSRS_W[5]) + 1), 1, 10);
+}
+function nextDifficulty(d, g) {                                // 线性阻尼 + 均值回归
+  const deltaD = -FSRS_W[6] * (g - 3);
+  const nextD = d + (deltaD * (10 - d)) / 9;
+  const reverted = FSRS_W[7] * initDifficulty(GRADE.EASY) + (1 - FSRS_W[7]) * nextD;
+  return clamp(round8(reverted), 1, 10);
+}
+function nextRecallStability(d, s, r, g) {                     // 复习成功
+  const hardPenalty = g === GRADE.HARD ? FSRS_W[15] : 1;
+  const easyBonus = g === GRADE.EASY ? FSRS_W[16] : 1;
+  return clamp(round8(s * (1 + Math.exp(FSRS_W[8]) * (11 - d) * Math.pow(s, -FSRS_W[9]) *
+    (Math.exp((1 - r) * FSRS_W[10]) - 1) * hardPenalty * easyBonus)), S_MIN, S_MAX);
+}
+function nextForgetStability(d, s, r) {                        // 遗忘
+  return clamp(round8(FSRS_W[11] * Math.pow(d, -FSRS_W[12]) * (Math.pow(s + 1, FSRS_W[13]) - 1) *
+    Math.exp((1 - r) * FSRS_W[14])), S_MIN, S_MAX);
+}
+function nextInterval(s) {
+  return Math.min(Math.max(1, Math.round(s * INTERVAL_MOD)), 36500);
+}
+/* 记忆底模：一次复习后更新 S/D（两种算法共用，保证公平） */
+function memoryUpdate(mem, g, elapsed) {
+  let r;
+  if (mem.reps === 0) {
+    mem.stability = initStability(g);
+    mem.difficulty = initDifficulty(g);
+    mem.reps = 1;
+    mem.lastDay = mem.lastDay; // 由调用方设置
+    return;
+  }
+  r = forgettingCurve(elapsed, mem.stability);
+  if (g === GRADE.AGAIN) {
+    const sAfterFail = nextForgetStability(mem.difficulty, mem.stability, r);
+    mem.stability = clamp(mem.stability, S_MIN, sAfterFail);   // 短时关闭口径：S' ≤ S
+    mem.lapses += 1;
+  } else {
+    mem.stability = nextRecallStability(mem.difficulty, mem.stability, r, g);
+  }
+  mem.difficulty = nextDifficulty(mem.difficulty, g);
+  mem.reps += 1;
+}
+/* FSRS 锚点自检：新词首评 Good → S=w2=2.3065，间隔≈2 天 */
+(function anchor() {
+  const m = { stability: 0, difficulty: 0, reps: 0, lapses: 0, lastDay: 0 };
+  memoryUpdate(m, GRADE.GOOD, 0);
+  console.assert(Math.abs(m.stability - FSRS_W[2]) < 1e-6, 'FSRS 锚点失败: init S');
+  console.assert(nextInterval(m.stability) === 2, 'FSRS 锚点失败: interval');
+})();
+
+/* ================= 用户画像 =================
+ * exp = 记忆强度指数：实际命中率 = 真实留存率 R 的 exp 次幂（有界，永不超过 1）
+ * 学霸 0.6 → 0.9^0.6≈94%；普通 1.0 → 90%；学渣 1.6 → 0.9^1.6≈85% */
+const PROFILES = [
+  { name: '学霸', exp: 0.6, vagueGivenForget: 0.5, first: [0.75, 0.20, 0.05] },
+  { name: '普通', exp: 1.0, vagueGivenForget: 0.4, first: [0.50, 0.30, 0.20] },
+  { name: '学渣', exp: 1.6, vagueGivenForget: 0.3, first: [0.25, 0.35, 0.40] },
+];
+
+/* ================= 算法甲：词慧固定节点（语义移植自 SchedulerCore.ts） ================= */
+const OFFSET = { R1: 1, R2: 2, R4: 4, R7: 7, R15: 15 };
+const RSTAGES = ['R1', 'R2', 'R4', 'R7', 'R15'];
+const ORDER = ['NEW', 'R1', 'R2', 'R4', 'R7', 'R15'];
+
+function AlgA(nWords, quota) {
+  const st = [];
+  for (let i = 0; i < nWords; i++) {
+    st.push({ id: i + 1, cam: false, stage: 'NEW', firstLearn: -1, due: -1, status: 'LEARNING',
+      forceNextDay: false, attempted: false, log: [],
+      mem: { stability: 0, difficulty: 0, reps: 0, lapses: 0, lastDay: -1 } });
+  }
+  // planNewWords（Map 增量计数版语义）：未排期新词按每日配额分配
+  const countByDay = new Map();
+  let cursor = 0, cursorCount = 0;
+  for (const s of st) {
+    if (s.stage === 'NEW' && s.due >= 0) countByDay.set(s.due, (countByDay.get(s.due) ?? 0) + 1);
+  }
+  cursorCount = countByDay.get(0) ?? 0;
+  for (const s of st) {
+    if (s.stage !== 'NEW' || s.due >= 0) continue;
+    while (cursorCount >= quota) { cursor += 1; cursorCount = countByDay.get(cursor) ?? 0; }
+    s.due = cursor; cursorCount += 1; countByDay.set(cursor, cursorCount);
+  }
+  return st;
+}
+/* 甲的单次判定更新（对应 judge()） */
+function judgeA(s, verdict, d) {
+  if (verdict === 'KNOWN') {
+    s.forceNextDay = false;
+    if (s.stage === 'NEW' || s.status === 'WRONG') {
+      s.stage = 'R1'; s.firstLearn = d; s.due = d + 1; s.status = 'LEARNING';
+    } else if (s.stage === 'R15') {
+      s.stage = 'MASTERED'; s.due = -1; s.status = 'MASTERED';
+    } else {
+      const adv = ORDER[ORDER.indexOf(s.stage) + 1];
+      s.stage = adv; s.due = Math.max(s.firstLearn + OFFSET[adv], d + 1);
+    }
+  } else if (verdict === 'VAGUE') {
+    s.forceNextDay = true; s.due = d + 1;
+  } else {
+    s.stage = 'NEW'; s.firstLearn = -1; s.due = d + 1; s.status = 'WRONG'; s.forceNextDay = false;
+    s.mem = { stability: 0, difficulty: 0, reps: 0, lapses: 0, lastDay: -1 }; // 学习记录整体重置
+  }
+}
+
+/* ================= 算法乙：FSRS 调度 ================= */
+function AlgB(nWords) {
+  const st = [];
+  for (let i = 0; i < nWords; i++) {
+    st.push({ id: i + 1, cam: false, state: 'New', due: 0, lastDay: -1, log: [],
+      mem: { stability: 0, difficulty: 0, reps: 0, lapses: 0, lastDay: -1 } });
+  }
+  return st;
+}
+/* 乙的单次判定更新 */
+function judgeB(c, grade, d) {
+  memoryUpdate(c.mem, grade, c.mem.reps === 0 ? 0 : d - c.mem.lastDay);
+  c.mem.lastDay = d;
+  if (c.state === 'New') { c.state = grade === GRADE.AGAIN ? 'Relearning' : 'Review'; }
+  else if (grade === GRADE.AGAIN) { c.state = 'Relearning'; }
+  else { c.state = 'Review'; }
+  c.due = d + nextInterval(c.mem.stability);
+}
+
+/* ================= 模拟器 ================= */
+const sim = {
+  nWords: 20, quota: 20, days: 60, profile: 1, simple: false,
+  camMode: 'off', camCount: 5, camStart: 9, absent: new Set(), spread: false,
+  A: null, B: null, poolB: 0, day: 0, rng: null,
+  nextCamA: 0, nextCamB: 0, camQueueB: [], quotaUsedA: null,
+  stats: null, done: false,
+};
+const MS = () => ({ review: 0, known: 0, first: 0, cum: 0, mastered: 0, rm: 0 });
+
+function drawFirstVerdict(rng, profile) {
+  const u = rng();
+  const [pK, pV] = profile.first;
+  if (u < pK) return 'KNOWN';
+  if (u < pK + pV) return 'VAGUE';
+  return 'UNKNOWN';
+}
+/* 复习判定：真实记忆底模 R → 命中率 → 三档 */
+function drawReviewVerdict(rng, profile, mem, d, simple) {
+  if (simple) {
+    const u = rng();
+    const [pK, pV] = profile.first; // 简化模式：沿用画像固定概率
+    if (u < pK) return 'KNOWN';
+    if (u < pK + pV) return 'VAGUE';
+    return 'UNKNOWN';
+  }
+  const elapsed = d - mem.lastDay;
+  const R = forgettingCurve(elapsed, mem.stability);
+  const hit = Math.pow(R, profile.exp);
+  const u = rng();
+  if (u < hit) return 'KNOWN';
+  const u2 = rng();
+  return u2 < profile.vagueGivenForget ? 'VAGUE' : 'UNKNOWN';
+}
+function verdictToGrade(v) {
+  return v === 'KNOWN' ? GRADE.GOOD : v === 'VAGUE' ? GRADE.HARD : GRADE.AGAIN;
+}
+
+function parseAbsent(txt) {
+  const s = new Set();
+  String(txt || '').split(/[,，\s]+/).forEach((t) => {
+    const n = parseInt(t, 10);
+    if (Number.isInteger(n) && n >= 1) s.add(n - 1); // 用户按「第几天」输入 → 0 基
+  });
+  return s;
+}
+function readControls() {
+  return {
+    nWords: +document.querySelector('#segSize .on').dataset.v,
+    quota: +document.getElementById('quota').value,
+    days: +document.querySelector('#segDays .on').dataset.v,
+    profile: +document.querySelector('#segProfile .on').dataset.v,
+    simple: document.getElementById('simpleMode').checked,
+    camMode: document.querySelector('#segCam .on').dataset.v,
+    camCount: +document.getElementById('camCount').value,
+    camStart: +document.getElementById('camStart').value - 1, // 第N天 → 0 基
+    absent: parseAbsent(document.getElementById('absentDays').value),
+    spread: document.getElementById('spreadMode').checked,
+  };
+}
+function initSimState(cfg) {
+  sim.nWords = cfg.nWords; sim.quota = cfg.quota; sim.days = cfg.days;
+  sim.profile = cfg.profile; sim.simple = cfg.simple;
+  sim.camMode = cfg.camMode; sim.camCount = cfg.camCount; sim.camStart = cfg.camStart;
+  sim.absent = cfg.absent; sim.spread = cfg.spread;
+  sim.A = AlgA(sim.nWords, sim.quota);
+  sim.B = AlgB(sim.nWords);
+  sim.poolB = sim.nWords;
+  sim.nextCamA = sim.nWords + 1; sim.nextCamB = sim.nWords + 1;
+  sim.camQueueB = [];
+  // 甲的新词配额占用表：拍照排队词要按 planNewWords 语义找第一个有配额空位的天
+  sim.quotaUsedA = new Map();
+  for (const s of sim.A) {
+    if (s.stage === 'NEW' && s.due >= 0) sim.quotaUsedA.set(s.due, (sim.quotaUsedA.get(s.due) ?? 0) + 1);
+  }
+  sim.day = 0; sim.done = false;
+  sim.rng = mulberry32(20261016);
+  sim.stats = { A: [], B: [] };
+  document.getElementById('log').innerHTML = '';
+}
+function resetSim() {
+  initSimState(readControls());
+  traceState.offset = 0; traceState.selId = 1;
+}
+
+/* ================= 事件流水（单词追踪用） ================= */
+const VERDICT_TXT = { KNOWN: '认识', VAGUE: '模糊', UNKNOWN: '不认识' };
+function logEvent(w, d, act, verdict, note) {
+  w.log.push({ d, act, v: verdict ? VERDICT_TXT[verdict] : '', note: note || '' });
+}
+function noteA(s, d, verdict) {
+  if (s.stage === 'MASTERED') return '→ 掌握毕业 ★（此后不再出现）';
+  if (verdict === 'VAGUE') return '→ 停留' + s.stage + '，次日强制复习';
+  if (verdict === 'UNKNOWN') return '→ 节点清零，第' + (d + 2) + '天当新词重学';
+  return '→ 推进到 ' + s.stage + '，第' + (s.due + 1) + '天到期';
+}
+function noteB(c) {
+  const rm = c.mem.stability >= 21 ? '（真实掌握✓）' : '';
+  return '→ S=' + c.mem.stability.toFixed(2) + '，第' + (c.due + 1) + '天到期' + rm;
+}
+/* 甲：找第一个有新词配额空位的天（跳过缺席日）——planNewWords 的真实语义 */
+function findQuotaDayA(from) {
+  let day = from;
+  while ((sim.quotaUsedA.get(day) ?? 0) >= sim.quota || sim.absent.has(day)) day += 1;
+  return day;
+}
+/* 拍照导入：today=加入当天计划（立即首学，不占配额）；queue=直接加入词本（排进之后几天的新学配额） */
+function importCamera(sb) {
+  const d = sim.day;
+  const profile = PROFILES[sim.profile];
+  for (let k = 0; k < sim.camCount; k++) {
+    const wa = { id: sim.nextCamA++, cam: true, stage: 'NEW', firstLearn: -1, due: -1,
+      status: 'LEARNING', forceNextDay: false, attempted: false, log: [],
+      mem: { stability: 0, difficulty: 0, reps: 0, lapses: 0, lastDay: -1 } };
+    if (sim.camMode === 'today') {
+      wa.due = d;
+      logEvent(wa, d, '导入', '', '拍照导入 → 加入当天计划，今天首学');
+    } else {
+      const day = findQuotaDayA(d);
+      wa.due = day;
+      sim.quotaUsedA.set(day, (sim.quotaUsedA.get(day) ?? 0) + 1);
+      logEvent(wa, d, '导入', '', '拍照导入 → 加入词本，排到第' + (day + 1) + '天新学');
+    }
+    sim.A.push(wa);
+    const wb = { id: sim.nextCamB++, cam: true, state: 'New', due: 0, lastDay: -1, log: [],
+      mem: { stability: 0, difficulty: 0, reps: 0, lapses: 0, lastDay: -1 } };
+    if (sim.camMode === 'today') {
+      logEvent(wb, d, '导入', '', '拍照导入 → 加入当天计划，今天首学');
+      const verdict = drawFirstVerdict(sim.rng, profile);
+      sb.first += 1;
+      judgeB(wb, verdictToGrade(verdict), d);
+      logEvent(wb, d, '首学', verdict, noteB(wb));
+    } else {
+      logEvent(wb, d, '导入', '', '拍照导入 → 加入词本，排队等新学配额');
+      sim.camQueueB.push(wb);
+    }
+    sim.B.push(wb);
+  }
+}
+
+/* 模拟一天（两种算法共用同一随机流与同一记忆底模） */
+function stepDay() {
+  if (sim.done) return;
+  const d = sim.day;
+  const sa = MS(); const sb = MS();
+  if (sim.absent.has(d)) {
+    sim.stats.A.push(sa); sim.stats.B.push(sb);
+    logDay(d, sa, sb, '← 缺席休息：学习/复习都不进行，记忆自然衰减，任务顺延堆积');
+    sim.day += 1;
+    if (sim.day >= sim.days) sim.done = true;
+    return;
+  }
+  const rng = sim.rng;
+  const profile = PROFILES[sim.profile];
+
+  /* 拍照导入（当天计划模式的乙词立即首测） */
+  if (sim.camMode !== 'off' && d >= sim.camStart) importCamera(sb);
+
+  /* ---- 甲：固定节点 ---- */
+  const dueA = [];
+  for (let i = 0; i < sim.A.length; i++) {
+    const s = sim.A[i];
+    if (s.stage === 'MASTERED') continue;
+    if (s.due >= 0 && s.due <= d) {
+      const isFirst = s.stage === 'NEW' && s.firstLearn < 0 && s.status === 'LEARNING';
+      dueA.push({ i, s, kind: isFirst ? 0 : (s.status === 'WRONG' ? 2 : 1) });
+    }
+  }
+  dueA.sort((x, y) => x.s.due - y.s.due || x.i - y.i);
+  let listA = dueA;
+  if (sim.spread) {
+    // 打散：逾期（due<今天）的复习每天只摊还约 1/3（老的先），当天的照常
+    const overdue = dueA.filter((e) => e.s.due < d);
+    const todays = dueA.filter((e) => e.s.due === d);
+    listA = overdue.slice(0, Math.ceil(overdue.length / 3)).concat(todays);
+  }
+  for (const ev of listA) {
+    // mem.reps===0 = 从未写入记忆：新词首测 / 不认识清零后的重学 → 按画像固定概率
+    const isFresh = ev.s.mem.reps === 0;
+    let verdict;
+    if (isFresh) {
+      verdict = drawFirstVerdict(rng, profile);
+      const act = ev.s.attempted ? '复测' : '首学';
+      if (!ev.s.attempted) { sa.first += 1; ev.s.attempted = true; }
+      else { sa.review += 1; } // 模糊复测/重学计入复习负担，但不进命中率分母
+      if (verdict === 'KNOWN') {
+        memoryUpdate(ev.s.mem, GRADE.GOOD, 0);
+        ev.s.mem.lastDay = d;
+      }
+      judgeA(ev.s, verdict, d);
+      logEvent(ev.s, d, act, verdict, noteA(ev.s, d, verdict));
+    } else {
+      verdict = drawReviewVerdict(rng, profile, ev.s.mem, d, sim.simple);
+      sa.review += 1;
+      if (verdict === 'KNOWN') sa.known += 1;
+      memoryUpdate(ev.s.mem, verdictToGrade(verdict), d - ev.s.mem.lastDay);
+      ev.s.mem.lastDay = d;
+      judgeA(ev.s, verdict, d);
+      logEvent(ev.s, d, '复习', verdict, noteA(ev.s, d, verdict));
+    }
+  }
+  sa.cum = sa.first + sa.review;
+  sa.mastered = sim.A.filter((s) => s.stage === 'MASTERED').length;
+  sa.rm = sim.A.filter((s) => s.mem.reps > 0 && s.mem.stability >= 21).length;
+
+  /* ---- 乙：FSRS ---- */
+  const dueB = [];
+  for (let i = 0; i < sim.B.length; i++) {
+    const c = sim.B[i];
+    if (c.state !== 'New' && c.due <= d) dueB.push({ i, c });
+  }
+  dueB.sort((x, y) => x.c.due - y.c.due || x.i - y.i);
+  let listB = dueB;
+  if (sim.spread) {
+    const overdue = dueB.filter((e) => e.c.due < d);
+    const todays = dueB.filter((e) => e.c.due === d);
+    listB = overdue.slice(0, Math.ceil(overdue.length / 3)).concat(todays);
+  }
+  for (const ev of listB) {
+    const verdict = drawReviewVerdict(rng, profile, ev.c.mem, d, sim.simple);
+    sb.review += 1;
+    if (verdict === 'KNOWN') sb.known += 1;
+    judgeB(ev.c, verdictToGrade(verdict), d);
+    logEvent(ev.c, d, '复习', verdict, noteB(ev.c));
+  }
+  // 每日新词首测：先原词本池（配额内），再拍照排队词（与甲 planNewWords 的「配额空位插入」一致）
+  let slots = sim.quota;
+  while (slots > 0) {
+    const c = sim.B.find((x) => x.state === 'New' && !x.cam);
+    if (!c) break;
+    const verdict = drawFirstVerdict(rng, profile);
+    sb.first += 1;
+    judgeB(c, verdictToGrade(verdict), d);
+    logEvent(c, d, '首学', verdict, noteB(c));
+    sim.poolB -= 1;
+    slots -= 1;
+  }
+  while (slots > 0 && sim.camQueueB.length) {
+    const c = sim.camQueueB.shift();
+    const verdict = drawFirstVerdict(rng, profile);
+    sb.first += 1;
+    judgeB(c, verdictToGrade(verdict), d);
+    logEvent(c, d, '首学', verdict, noteB(c));
+    slots -= 1;
+  }
+  sb.cum = sb.first + sb.review;
+  sb.mastered = sim.B.filter((c) => c.state === 'Review' && c.mem.stability >= 21).length;
+  sb.rm = sim.B.filter((c) => c.mem.reps > 0 && c.mem.stability >= 21).length;
+
+  sim.stats.A.push(sa); sim.stats.B.push(sb);
+  logDay(d, sa, sb);
+  sim.day += 1;
+  if (sim.day >= sim.days) sim.done = true;
+}
+
+function logDay(d, sa, sb, note) {
+  const el = document.getElementById('log');
+  const line = `第${d + 1}天 | 甲: 复习${sa.review} 新学${sa.first} 命中${sa.review ? Math.round(100 * sa.known / Math.max(1, sa.review)) : '-'}% 掌握${sa.mastered} | 乙: 复习${sb.review} 新学${sb.first} 命中${sb.review ? Math.round(100 * sb.known / Math.max(1, sb.review)) : '-'}% 掌握${sb.mastered}` + (note ? ' ' + note : '');
+  const div = document.createElement('div');
+  div.textContent = line;
+  el.prepend(div);
+  while (el.children.length > 60) el.removeChild(el.lastChild);
+}
+
+/* ================= 图表 ================= */
+function setupCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cv.getBoundingClientRect();
+  cv.width = rect.width * dpr; cv.height = rect.height * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: rect.width, h: rect.height };
+}
+function chartFrame(ctx, w, h) {
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = '#e3e8f0'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(34, 8); ctx.lineTo(34, h - 22); ctx.lineTo(w - 6, h - 22); ctx.stroke();
+}
+function yScale(maxV) {
+  if (maxV <= 0) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(maxV)));
+  for (const m of [1, 2, 5, 10]) { if (maxV <= m * pow) return m * pow; }
+  return 10 * pow;
+}
+function movingAvg(arr, k) {
+  return arr.map((_, i) => {
+    const s = Math.max(0, i - k + 1);
+    const seg = arr.slice(s, i + 1).filter((v) => v !== null);
+    if (!seg.length) return null;
+    return seg.reduce((a, b) => a + b, 0) / seg.length;
+  });
+}
+
+function drawBars(ctx, w, h, A, B, colorA, colorB) {
+  const n = A.length;
+  if (!n) return;
+  const maxV = yScale(Math.max(...A, ...B, 1));
+  const x0 = 40, y0 = h - 22, hh = h - 34, ww = w - 48;
+  const pitch = ww / n;
+  const bw = Math.max(1, pitch * 0.38);
+  for (let i = 0; i < n; i++) {
+    const x = x0 + i * pitch;
+    ctx.fillStyle = colorA;
+    ctx.fillRect(x, y0 - (A[i] / maxV) * hh, bw, (A[i] / maxV) * hh);
+    ctx.fillStyle = colorB;
+    ctx.fillRect(x + bw + Math.max(0.5, pitch * 0.08), y0 - (B[i] / maxV) * hh, bw, (B[i] / maxV) * hh);
+  }
+  drawAxis(ctx, x0, y0, hh, maxV, n, ww);
+}
+function drawLines(ctx, w, h, series, opts) {
+  const n = series[0].data.length;
+  if (!n) return;
+  let maxV = 0;
+  for (const s of series) for (const v of s.data) if (v !== null && v > maxV) maxV = v;
+  if (opts.percent) maxV = Math.max(maxV, opts.target * 100 * 1.05);
+  maxV = yScale(maxV || 1);
+  const x0 = 40, y0 = h - 22, hh = h - 34, ww = w - 48;
+  const px = (i) => x0 + (n === 1 ? ww / 2 : (i / (n - 1)) * ww);
+  const py = (v) => y0 - (v / maxV) * hh;
+  if (opts.percent) {
+    ctx.strokeStyle = '#b8c2cf'; ctx.setLineDash([4, 4]); ctx.beginPath();
+    ctx.moveTo(x0, py(opts.target * 100)); ctx.lineTo(w - 6, py(opts.target * 100)); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  for (const s of series) {
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
+    let started = false;
+    s.data.forEach((v, i) => {
+      if (v === null) return;
+      if (!started) { ctx.moveTo(px(i), py(v)); started = true; }
+      else ctx.lineTo(px(i), py(v));
+    });
+    ctx.stroke();
+  }
+  drawAxis(ctx, x0, y0, hh, maxV, n, ww);
+}
+function drawAxis(ctx, x0, y0, hh, maxV, n, ww) {
+  ctx.fillStyle = '#8a93a3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+  for (let g = 0; g <= 2; g++) {
+    const v = (maxV / 2) * g;
+    ctx.fillText(fmtNum(v), x0 - 4, y0 - (v / maxV) * hh + 3);
+  }
+  ctx.textAlign = 'center';
+  const ticks = Math.min(n, 8);
+  for (let t = 0; t < ticks; t++) {
+    const i = Math.round((t / Math.max(1, ticks - 1)) * (n - 1));
+    const x = x0 + (n === 1 ? ww / 2 : (i / Math.max(1, n - 1)) * ww);
+    ctx.fillText('D' + (i + 1), x, y0 + 14);
+  }
+}
+function fmtNum(v) { return v >= 100 ? Math.round(v) + '' : (Math.round(v * 10) / 10) + ''; }
+
+function drawMastered(ctx, w, h) {
+  const A = sim.stats ? sim.stats.A : [];
+  const B = sim.stats ? sim.stats.B : [];
+  const d30 = Math.min(30, A.length) - 1;
+  const last = A.length - 1;
+  if (d30 < 0 || last < 0) return;
+  const vals = [
+    ['第30天', A[d30].mastered, B[d30].mastered],
+    ['结束', A[last].mastered, B[last].mastered],
+  ];
+  const maxV = yScale(Math.max(vals[0][1], vals[0][2], vals[1][1], vals[1][2], 1));
+  const x0 = 60, y0 = h - 22, hh = h - 34, ww = w - 80;
+  vals.forEach((v, gi) => {
+    const cx = x0 + ww * (gi + 0.5) / 2;
+    const bw = 42;
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--a').trim();
+    ctx.fillRect(cx - bw - 4, y0 - (v[1] / maxV) * hh, bw, (v[1] / maxV) * hh);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--b').trim();
+    ctx.fillRect(cx + 4, y0 - (v[2] / maxV) * hh, bw, (v[2] / maxV) * hh);
+    ctx.fillStyle = '#1f2733'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(String(Math.round(v[1])), cx - bw / 2 - 4, y0 - (v[1] / maxV) * hh - 4);
+    ctx.fillText(String(Math.round(v[2])), cx + bw / 2 + 4, y0 - (v[2] / maxV) * hh - 4);
+    ctx.fillStyle = '#8a93a3'; ctx.font = '11px sans-serif';
+    ctx.fillText(v[0], cx, y0 + 14);
+  });
+  ctx.strokeStyle = '#e3e8f0'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(34, 8); ctx.lineTo(34, y0); ctx.lineTo(w - 6, y0); ctx.stroke();
+}
+
+/* ================= 渲染 ================= */
+function render() {
+  const A = sim.stats ? sim.stats.A : [];
+  const B = sim.stats ? sim.stats.B : [];
+  // KPI
+  const kpis = document.getElementById('kpis');
+  if (A.length) {
+    const la = A[A.length - 1], lb = B[B.length - 1];
+    const totA = A.reduce((x, s) => x + s.cum, 0), totB = B.reduce((x, s) => x + s.cum, 0);
+    const revA = A.reduce((x, s) => x + s.review, 0), revB = B.reduce((x, s) => x + s.review, 0);
+    const knA = A.reduce((x, s) => x + s.known, 0), knB = B.reduce((x, s) => x + s.known, 0);
+    const rA = revA ? Math.round((100 * knA) / revA) : 0;
+    const rB = revB ? Math.round((100 * knB) / revB) : 0;
+    kpis.innerHTML = `
+      <div class="kpi"><div class="t">模拟进度</div><div class="v">${sim.day} / ${sim.days} 天</div></div>
+      <div class="kpi"><div class="t">甲·累计学习+复习次数</div><div class="v a">${totA}</div></div>
+      <div class="kpi"><div class="t">乙·累计学习+复习次数</div><div class="v b">${totB}</div></div>
+      <div class="kpi"><div class="t">甲·复习命中率</div><div class="v a">${rA}%</div></div>
+      <div class="kpi"><div class="t">乙·复习命中率</div><div class="v b">${rB}%</div></div>
+      <div class="kpi"><div class="t">名义掌握·甲毕业 / 乙S≥21</div><div class="v"><span style="color:var(--a)">${la.mastered}</span> / <span style="color:var(--b)">${lb.mastered}</span></div></div>
+      <div class="kpi"><div class="t">真实掌握 S≥21天（甲/乙·同口径）</div><div class="v"><span style="color:var(--a)">${la.rm}</span> / <span style="color:var(--b)">${lb.rm}</span></div></div>`;
+  } else {
+    kpis.innerHTML = '<div class="kpi"><div class="t">点击「一键模拟」或「逐步 +1 天」开始</div><div class="v" style="font-size:13px;color:var(--muted)">两种算法同池对比</div></div>';
+  }
+  // 图表
+  const c1 = setupCanvas(document.getElementById('c1'));
+  drawBars(c1.ctx, c1.w, c1.h, A.map((s) => s.review), B.map((s) => s.review),
+    '#2E6BE6', '#F28A2E');
+  const c2 = setupCanvas(document.getElementById('c2'));
+  const rA = A.map((s) => (s.review >= 3 ? (100 * s.known) / s.review : null));
+  const rB = B.map((s) => (s.review >= 3 ? (100 * s.known) / s.review : null));
+  drawLines(c2.ctx, c2.w, c2.h, [
+    { color: '#2E6BE6', data: movingAvg(rA, 3) },
+    { color: '#F28A2E', data: movingAvg(rB, 3) },
+  ], { percent: true, target: 0.9 });
+  const c3 = setupCanvas(document.getElementById('c3'));
+  let ca = 0, cb = 0;
+  const cumA = A.map((s) => (ca += s.cum));
+  const cumB = B.map((s) => (cb += s.cum));
+  drawLines(c3.ctx, c3.w, c3.h, [
+    { color: '#2E6BE6', data: cumA },
+    { color: '#F28A2E', data: cumB },
+  ], {});
+  const c4 = setupCanvas(document.getElementById('c4'));
+  drawMastered(c4.ctx, c4.w, c4.h);
+  renderTrace();
+}
+
+/* ================= 单词流水追踪 ================= */
+const traceState = { algo: 'A', offset: 0, selId: 1, pageSize: 9 };
+function renderTrace() {
+  const gridEl = document.getElementById('traceGrid');
+  const listEl = document.getElementById('traceList');
+  const rangeEl = document.getElementById('traceRange');
+  if (!sim.A) {
+    gridEl.innerHTML = '';
+    rangeEl.textContent = '';
+    listEl.innerHTML = '<i style="color:var(--muted)">先点「一键模拟」，这里会显示每个词在计划表里的逐日流水。</i>';
+    return;
+  }
+  const words = (traceState.algo === 'A' ? sim.A : sim.B).slice().sort((a, b) => a.id - b.id);
+  const page = words.slice(traceState.offset, traceState.offset + traceState.pageSize);
+  const camN = words.filter((w) => w.cam).length;
+  rangeEl.textContent = page.length
+    ? `词 #${page[0].id} ~ #${page[page.length - 1].id}（共 ${words.length} 词，其中拍照导入 ${camN} 词）`
+    : '（无更多词）';
+  const days = sim.stats ? sim.stats.A.length : 0;
+  let html = '<div class="trow"><div class="wlabel" style="cursor:default;color:var(--muted)">天 →</div>';
+  for (let d = 0; d < days; d++) {
+    html += `<div class="tday">${(d % 5 === 0 || d === days - 1) ? (d + 1) : ''}</div>`;
+  }
+  html += '</div>';
+  for (const w of page) {
+    const byDay = new Map();
+    for (const e of w.log) byDay.set(e.d, e); // 同日多事件取最后一次
+    const sel = w.id === traceState.selId ? ' sel' : '';
+    html += `<div class="trow"><div class="wlabel${sel}" data-id="${w.id}" title="点击查看该词的逐日明细">词#${w.id}${w.cam ? '📷' : ''}</div>`;
+    for (let d = 0; d < days; d++) {
+      if (sim.absent.has(d)) { html += '<div class="tcell tc-rest" title="缺席日：任务顺延堆积">休</div>'; continue; }
+      const e = byDay.get(d);
+      if (!e) { html += '<div class="tcell"></div>'; continue; }
+      let cls = 'tcell', ch = '';
+      if (e.act === '导入') { cls += ' tc-rest'; ch = '📷'; }
+      else {
+        ch = e.act === '首学' ? '新' : (e.act === '复测' ? '测' : '复');
+        if (e.v === '认识') cls += ' tc-k';
+        else if (e.v === '模糊') cls += ' tc-v';
+        else if (e.v === '不认识') cls += ' tc-x';
+        if (e.note && e.note.indexOf('★') >= 0) { cls = 'tcell tc-master'; ch = '★'; }
+      }
+      const tip = `词#${w.id} 第${d + 1}天 ${e.act}${e.v ? '·' + e.v : ''} ${e.note}`;
+      html += `<div class="${cls}" title="${tip}">${ch}</div>`;
+    }
+    html += '</div>';
+  }
+  gridEl.innerHTML = html;
+  // 选中词的逐日明细表
+  const wsel = words.find((w) => w.id === traceState.selId);
+  if (!wsel) { listEl.innerHTML = '<i style="color:var(--muted)">点击上方任意词的编号，查看它在计划表里的完整流水。</i>'; return; }
+  const algoName = traceState.algo === 'A' ? '甲·固定节点 1/2/4/7/15' : '乙·FSRS 自适应';
+  let rows = `<b>词#${wsel.id}${wsel.cam ? '（📷 拍照导入）' : ''} 在「${algoName}」里的完整流水：</b>
+    <table><tr><th>天</th><th>事件</th><th>判定</th><th>排期结果</th></tr>`;
+  for (const e of wsel.log) {
+    rows += `<tr><td>第${e.d + 1}天</td><td>${e.act}</td><td>${e.v || '—'}</td><td>${e.note || '—'}</td></tr>`;
+  }
+  if (!wsel.log.length) rows += '<tr><td colspan="4">还没进入计划（排队等新学配额中）</td></tr>';
+  const status = traceState.algo === 'A'
+    ? (wsel.stage === 'MASTERED' ? '已掌握毕业（不再出现）'
+      : (wsel.due < 0 ? '未排期（新词配额顺延中）' : '学习管线中：' + wsel.stage + '，第' + (wsel.due + 1) + '天到期'))
+    : (wsel.state === 'New' ? '等待首学' : '状态 ' + wsel.state + '，S=' + wsel.mem.stability.toFixed(2) + '，第' + (wsel.due + 1) + '天到期');
+  rows += `<tr><td colspan="4"><b>当前状态：</b>${status}</td></tr></table>`;
+  listEl.innerHTML = rows;
+}
+
+/* ================= 交互 ================= */
+document.querySelectorAll('.seg').forEach((seg) => {
+  seg.addEventListener('click', (e) => {
+    if (e.target.tagName !== 'BUTTON') return;
+    seg.querySelectorAll('button').forEach((b) => b.classList.remove('on'));
+    e.target.classList.add('on');
+  });
+});
+document.getElementById('quota').addEventListener('input', (e) => {
+  document.getElementById('lblQuota').textContent = e.target.value;
+});
+document.getElementById('btnRun').addEventListener('click', () => {
+  resetSim();
+  while (!sim.done) stepDay();
+  render();
+});
+document.getElementById('btnStep').addEventListener('click', () => {
+  if (sim.done || sim.stats.A.length === 0) resetSim();
+  stepDay();
+  render();
+});
+document.getElementById('btnReset').addEventListener('click', () => {
+  resetSim(); render();
+});
+document.getElementById('camCount').addEventListener('input', (e) => {
+  document.getElementById('lblCam').textContent = e.target.value;
+});
+document.getElementById('camStart').addEventListener('input', (e) => {
+  document.getElementById('lblCamStart').textContent = e.target.value;
+});
+/* 流水追踪交互 */
+document.querySelectorAll('#segTraceAlgo button').forEach((b) => {
+  b.addEventListener('click', () => { traceState.algo = b.dataset.v; renderTrace(); });
+});
+document.getElementById('tracePrev').addEventListener('click', () => {
+  traceState.offset = Math.max(0, traceState.offset - traceState.pageSize); renderTrace();
+});
+document.getElementById('traceNext').addEventListener('click', () => {
+  traceState.offset += traceState.pageSize; renderTrace();
+});
+document.getElementById('traceGrid').addEventListener('click', (e) => {
+  const id = e.target && e.target.dataset ? e.target.dataset.id : null;
+  if (id) { traceState.selId = +id; renderTrace(); }
+});
+
+/* tooltip：十字线吸附最近一天 */
+const tooltip = document.getElementById('tooltip');
+function bindTip(cvId) {
+  const cv = document.getElementById(cvId);
+  cv.addEventListener('mousemove', (e) => {
+    if (!sim.stats.A.length) return;
+    const rect = cv.getBoundingClientRect();
+    const n = sim.stats.A.length;
+    const x0 = 40, ww = rect.width - 48;
+    const i = clamp(Math.round(((e.clientX - rect.left - x0) / ww) * (n - 1)), 0, n - 1);
+    const sa = sim.stats.A[i], sb = sim.stats.B[i];
+    const rA = sa.review ? Math.round(100 * sa.known / sa.review) + '%' : '—';
+    const rB = sb.review ? Math.round(100 * sb.known / sb.review) + '%' : '—';
+    tooltip.innerHTML = `<b>第 ${i + 1} 天</b><br>
+      <span style="color:#7ea4ee">■ 甲</span> 复习 ${sa.review} · 新学 ${sa.first} · 命中 ${rA} · 掌握 ${sa.mastered}<br>
+      <span style="color:#f5b56e">■ 乙</span> 复习 ${sb.review} · 新学 ${sb.first} · 命中 ${rB} · 掌握 ${sb.mastered}`;
+    tooltip.style.display = 'block';
+    tooltip.style.left = Math.min(e.clientX + 14, window.innerWidth - 280) + 'px';
+    tooltip.style.top = (e.clientY + 14) + 'px';
+  });
+  cv.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+}
+['c1', 'c2', 'c3'].forEach(bindTip);
+window.addEventListener('resize', render);
+render();
+</script>
+</body>
+</html>
