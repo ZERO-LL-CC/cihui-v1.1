@@ -21,6 +21,7 @@ import { ShareService } from '../../service/ShareService';
 import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
+import { openTodayNewWords } from '../../viewmodel/StudyEntry';
 
 /** 前置条件行视图数据 */
 class GateView {
@@ -428,7 +429,7 @@ export struct CheckInPage {
   /** 点击未完成行 / 置灰按钮：直达第一个缺口 */
   private jumpGap(kind: number): void {
     if (kind === 1) {
-      NavStore.INSTANCE.push(RouteName.NEW_WORDS);
+      openTodayNewWords();
       return;
     }
     if (kind === 2) {

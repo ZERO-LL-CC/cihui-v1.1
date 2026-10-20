@@ -472,6 +472,7 @@ export struct SpeechTestPage {
     DataStore.INSTANCE.applyFirstRound(verdicts);
     // 本轮已确认落调度，断点草稿使命结束（再次进入即全新一轮）
     RoundDraftStore.clear(RoundDraftStore.SPEECH);
+    RoundDraftStore.clearBrowse();
     this.clearTimers();
     this.service.release();
     TtsService.stop();

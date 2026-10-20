@@ -14,6 +14,7 @@ import { AuthStore } from '../../viewmodel/AuthStore';
 import { dayKeyFromTs, type HomeStats } from '../../model/SchedulerCore';
 import type { Word, StudySession } from '../../model/Types';
 import type { CameraRouteParam, MemeReviewRouteParam, ReviewRouteParam } from '../../common/RouteNames';
+import { openTodayNewWords } from '../../viewmodel/StudyEntry';
 import { MIN_WORDS_FOR_SENTENCE } from '../../model/SentenceCore';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 
@@ -153,7 +154,7 @@ export struct HomePage {
   private tapBucket(item: BucketItem): void {
     if (item.key === 'NEW') {
       if (item.count > 0) {
-        NavStore.INSTANCE.push(RouteName.NEW_WORDS);
+        openTodayNewWords();
       } else {
         this.toast('今天没有新词任务');
       }
@@ -209,7 +210,7 @@ export struct HomePage {
         .width('100%').height(46).borderRadius(Radius.BUTTON)
         .backgroundColor(Colors.WHITE).fontColor(Colors.BRAND)
         .fontSize(16).fontWeight(FontWeight.Medium)
-        .onClick(() => NavStore.INSTANCE.push(RouteName.NEW_WORDS));
+        .onClick(() => openTodayNewWords());
     } else {
       Button(`去复习（剩 ${s.reviewDue} 个）`)
         .width('100%').height(46).borderRadius(Radius.BUTTON)

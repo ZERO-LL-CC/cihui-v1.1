@@ -42,9 +42,62 @@ export interface RoundDraft {
   savedAt: number;
 }
 
+/**
+ * F7 首学浏览的进度快照。
+ *
+ * 背景：F8 判到一半退出后，首页入口仍只会 push F7，用户被迫把整批词
+ * 从头再滑一遍才能回到 F8（=「学过一遍还让我重学」）。浏览完成与否是
+ * 路由决策的凭据，必须和「这批词是同一批」一起落盘。
+ */
+export interface BrowseDraft {
+  /** 草稿所属日期 yyyy-mm-dd */
+  day: string;
+  /** 本批词 id（按浏览顺序），用于判定是否同一批 */
+  wordIds: string[];
+  /** 当前看到第几张（0 基） */
+  index: number;
+  /** 是否已翻到最后一张（进入 F8 的唯一凭据） */
+  reachedEnd: boolean;
+  savedAt: number;
+}
+
 export class RoundDraftStore {
   static readonly SPEECH: string = 'speech';
   static readonly REVIEW: string = 'review';
+  static readonly BROWSE: string = 'browse';
+
+  /** 保存 F7 浏览进度（每翻一张写一次，开销仅百字节） */
+  static saveBrowse(draft: BrowseDraft): void {
+    try {
+      LocalStateFiles.write(RoundDraftStore.fileOf(RoundDraftStore.BROWSE), JSON.stringify(draft));
+    } catch (e) {
+      console.warn(`[RoundDraft] save browse failed: ${(e as Error)?.message ?? e}`);
+    }
+  }
+
+  /** 读 F7 浏览进度：跨天/解析失败一律作废 */
+  static loadBrowse(): BrowseDraft | null {
+    const raw: string | null = LocalStateFiles.read(RoundDraftStore.fileOf(RoundDraftStore.BROWSE));
+    if (raw === null) {
+      return null;
+    }
+    let draft: BrowseDraft | null = null;
+    try {
+      draft = JSON.parse(raw) as BrowseDraft;
+    } catch (_e) {
+      draft = null;
+    }
+    if (draft === null || draft === undefined || draft.day !== RoundDraftStore.today()
+      || draft.wordIds === undefined || draft.wordIds.length === 0) {
+      RoundDraftStore.clear(RoundDraftStore.BROWSE);
+      return null;
+    }
+    return draft;
+  }
+
+  static clearBrowse(): void {
+    RoundDraftStore.clear(RoundDraftStore.BROWSE);
+  }
 
   private static fileOf(kind: string): string {
     return `round-draft-${kind}.json`;

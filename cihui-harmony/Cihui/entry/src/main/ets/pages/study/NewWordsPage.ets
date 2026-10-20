@@ -18,6 +18,8 @@ import { TtsService } from '../../service/TtsService';
 import type { TtsState } from '../../service/TtsService';
 import { promptAction } from '@kit.ArkUI';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
+import { RoundDraftStore } from '../../service/RoundDraftStore';
+import type { BrowseDraft } from '../../service/RoundDraftStore';
 
 @ComponentV2
 export struct NewWordsPage {
@@ -44,11 +46,50 @@ export struct NewWordsPage {
   aboutToAppear(): void {
     REFRESH_BUS.onNav(this.refreshWhenTop);
     REFRESH_BUS.onData(this.refreshWhenTop);
+    this.restoreBrowse();
     const rate: number = DataStore.INSTANCE.settings.ttsRate;
     TtsService.init(rate).then((state: TtsState): void => {
       this.ttsState = state;
       this.scheduleSpeak(350);
     });
+  }
+
+  /** 同批（词 id 顺序一致）才续上次看到的那张，避免换批后错位 */
+  private restoreBrowse(): void {
+    const draft: BrowseDraft | null = RoundDraftStore.loadBrowse();
+    if (draft === null || this.words.length === 0) {
+      return;
+    }
+    if (draft.wordIds.length !== this.words.length) {
+      return;
+    }
+    for (let i = 0; i < this.words.length; i++) {
+      if (draft.wordIds[i] !== this.words[i].id) {
+        return;
+      }
+    }
+    if (draft.index < 0 || draft.index >= this.words.length) {
+      return;
+    }
+    this.index = draft.index;
+    if (draft.reachedEnd) {
+      // 已浏览完：整批 firstStudyAt 可能已落库，标记为已到头，CTA 直接可用
+      this.reachedEnd = true;
+      this.studiedMarked = true;
+    }
+  }
+
+  /** 落盘浏览位置：离开/杀进程后回到这张 */
+  private saveBrowse(): void {
+    const ids: string[] = this.words.map((w: Word): string => w.id);
+    const draft: BrowseDraft = {
+      day: RoundDraftStore.today(),
+      wordIds: ids,
+      index: this.index,
+      reachedEnd: this.reachedEnd,
+      savedAt: Date.now(),
+    };
+    RoundDraftStore.saveBrowse(draft);
   }
 
   aboutToDisappear(): void {
@@ -102,6 +143,7 @@ export struct NewWordsPage {
       const ids: string[] = this.words.map((w: Word): string => w.id);
       DataStore.INSTANCE.markBatchFirstStudied(ids);
     }
+    this.saveBrowse();
     this.scheduleSpeak(220);
   }
 
