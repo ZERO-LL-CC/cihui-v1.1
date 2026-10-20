@@ -1,18 +1,17 @@
 /**
- * F11 打卡页（v13.18 对齐网页原型 page-checkin 重做）
+ * F11 打卡页 · 任务驱动版（v14）
  *
- * - 页头「打卡」+ 副标「完成今天的全部任务，打卡按钮才会点亮」；
- * - 前置条件白卡：三行小米笔记风方形勾选框（对勾 200ms 描边出现 + 删除线变暗），
- *   P3 错词强化非轮到日 ghost 虚线；卡内 56 高三态大按钮（还差 N 项 / 完成今日打卡 / 今日已打卡），
- *   已打卡态与前置条件同卡（不再悬浮、不另起弹窗栏）；
- * - 艾宾浩斯迷你月历与 F12 计划大表同源（DataStore.monthGrid）：42 格圆角方块，
- *   橙块=当天新学，R1/R2/R4/R7/R15 彩点=计划复习，今天实心蓝、已完成浅绿勾、
- *   待补卡红格、已补卡绿渐变+橙「补」角标；双行图例；点格与大表同一套跳转；
- * - 补卡规则说明卡；打卡成功弹层 88 圆绿底 + 对勾描边 draw，可保存分享图到相册。
+ * - 无词本：整页待机（「今日任务」+ 空环「还没有任务」+ 拍照导入 / 从词库选一本），
+ *   不渲染任务卡、日历、规则；
+ * - 有词本：今日任务卡 = 复习 X + 新学 Y = 总量 Z（每日按调度重算的变量），
+ *   两行进度条 + 「去完成」直达学习流；错词强化轮到日追加一行；本月欠卡降级为一条红色提示行；
+ * - 卡内三态大按钮（还差 N 词 / 完成今日打卡 / 今日已打卡），门槛仍复用 gatesToday；
+ * - 艾宾浩斯迷你月历保留在任务卡下方（与 F12 计划大表同源），图例与补卡规则卡保留；
+ * - 打卡成功弹层 88 圆绿底 + 对勾描边 draw，可保存分享图到相册。
  */
 import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
-import { Colors, TypeScale, Radius, StageColors } from '../../common/DesignTokens';
+import { Colors, TypeScale, Radius, StageColors, FloatingTab } from '../../common/DesignTokens';
 import { RouteName } from '../../common/RouteNames';
 import type { ReviewRouteParam, MakeupRouteParam } from '../../common/RouteNames';
 import type { Word } from '../../model/Types';
@@ -30,6 +29,18 @@ class GateView {
   subtitle: string = '';
   done: boolean = false;
   active: boolean = true; // false = P3 非轮到日 ghost
+}
+
+/** 今日任务变量：复习 X + 新学 Y = 总量 Z（每日按调度重算） */
+class TaskStat {
+  reviewTotal: number = 0;
+  reviewDone: number = 0;
+  newTotal: number = 0;
+  newDone: number = 0;
+  total: number = 0;
+  done: number = 0;
+  left: number = 0;
+  missed: number = 0; // 本月待补卡天数
 }
 
 /** 小米笔记风方形勾选框：对勾用 Path 描边动画 draw */
@@ -485,6 +496,65 @@ export struct CheckInPage {
     return DataStore.INSTANCE.isCheckedInToday();
   }
 
+  /** 真正导入过才进入任务态：既要存在词本，词本里还要真的有词（空词本仍算待机） */
+  private hasBooks(): boolean {
+    if (DataStore.INSTANCE.books.length === 0) {
+      return false;
+    }
+    return DataStore.INSTANCE.words.length > 0;
+  }
+
+  /** 今日任务变量：复习 = 到期 + 已完成；新学 = 当日分配 + 已完成 */
+  private taskStat(): TaskStat {
+    const stats = DataStore.INSTANCE.homeStats();
+    const t = new TaskStat();
+    t.newTotal = stats.newAssigned;
+    t.newDone = stats.newDone;
+    t.reviewDone = stats.reviewDone;
+    t.reviewTotal = stats.reviewDue + stats.reviewDone;
+    t.total = t.newTotal + t.reviewTotal;
+    t.done = t.newDone + t.reviewDone;
+    t.left = Math.max(0, t.total - t.done);
+    let missed: number = 0;
+    this.mini.cells.forEach((c: MonthCell): void => {
+      if (c.state === 'missed') {
+        missed += 1;
+      }
+    });
+    t.missed = missed;
+    return t;
+  }
+
+  /** 每日新词量（任务卡副标用） */
+  private dailyGoal(): number {
+    return DataStore.INSTANCE.settings.dailyNewCount;
+  }
+
+  private progressPct(t: TaskStat): number {
+    return t.total === 0 ? 100 : Math.round(t.done / t.total * 100);
+  }
+
+  private taskSubText(t: TaskStat): string {
+    if (t.reviewTotal === 0 && t.newTotal === 0) {
+      return '今天没有任务，休息一下';
+    }
+    if (t.reviewTotal === 0) {
+      return `新学 ${t.newTotal} · 导入日不复习`;
+    }
+    if (t.newTotal === 0) {
+      return `只复习 ${t.reviewTotal} · 词库已排空`;
+    }
+    return `复习 ${t.reviewTotal} + 新学 ${t.newTotal}`;
+  }
+
+  private reviewHint(): string {
+    const t = this.taskStat();
+    if (t.reviewTotal === 0) {
+      return '今天没有到期词';
+    }
+    return `艾宾浩斯到期节点 · 已过 ${t.reviewDone}/${t.reviewTotal}`;
+  }
+
   private doCheckin(): void {
     if (DataStore.INSTANCE.isCheckedInToday()) {
       return;
@@ -540,52 +610,83 @@ export struct CheckInPage {
     }
   }
 
+  /** 任务行：复习 / 新学，带进度条与「去完成」 */
   @Builder
-  GateRow(row: GateView) {
-    Row({ space: 12 }) {
-      GateCheck({ done: row.done, active: row.active })
-      Column({ space: 3 }) {
-        Text(row.title)
-          .fontSize(TypeScale.BODY)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(row.done ? Colors.TEXT_WEAK : (row.active ? Colors.TEXT_MAIN : Colors.TEXT_WEAK))
-          .decoration({ type: row.done ? TextDecorationType.LineThrough : TextDecorationType.None })
+  TaskRow(title: string, hint: string, done: number, total: number, color: string, kind: number) {
+    Row({ space: 11 }) {
+      Circle({ width: 9, height: 9 })
+        .fill(done >= total && total > 0 ? Colors.KNOW_GREEN : color)
+      Column({ space: 5 }) {
+        Row({ space: 6 }) {
+          Text(title)
+            .fontSize(TypeScale.BODY)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Colors.TEXT_MAIN)
+          if (done >= total && total > 0) {
+            Text('已完成')
+              .fontSize(10)
+              .fontColor(Colors.KNOW_GREEN)
+              .backgroundColor(Colors.KNOW_GREEN_SOFT)
+              .borderRadius(6)
+              .padding({ left: 6, right: 6, top: 1, bottom: 1 })
+          }
+        }
+        Text(hint)
+          .fontSize(10.5)
+          .fontColor(Colors.TEXT_WEAK)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(row.subtitle)
-          .fontSize(TypeScale.CAPTION)
-          .fontColor(row.done ? Colors.KNOW_GREEN : Colors.TEXT_WEAK)
-          .maxLines(1)
+        Stack({ alignContent: Alignment.Start }) {
+          Row()
+            .width('100%')
+            .height(5)
+            .borderRadius(3)
+            .backgroundColor('#EEF1F6')
+          Row()
+            .width(`${total > 0 ? Math.min(100, done / total * 100) : 0}%`)
+            .height(5)
+            .borderRadius(3)
+            .backgroundColor(done >= total && total > 0 ? Colors.KNOW_GREEN : color)
+        }
+        .width('100%')
+        .height(5)
+        .margin({ top: 2 })
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
 
-      if (row.active && !row.done) {
+      Text(`${done}`)
+        .fontSize(17)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(Colors.TEXT_MAIN)
+      Text(`/${total}`)
+        .fontSize(11)
+        .fontColor(Colors.TEXT_WEAK)
+      if (total > 0 && done < total) {
         Text('去完成')
-          .fontSize(TypeScale.CAPTION)
+          .fontSize(11)
           .fontColor(Colors.BRAND)
-          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-          .borderRadius(12)
           .backgroundColor(Colors.BRAND_SOFT)
+          .borderRadius(10)
+          .padding({ left: 9, right: 9, top: 4, bottom: 4 })
       }
     }
     .width('100%')
-    .padding(14)
-    .borderRadius(14)
-    .backgroundColor(row.done ? Colors.KNOW_GREEN_SOFT : (row.active ? Colors.WHITE : '#FAFBFD'))
-    .border(!row.active && !row.done
-      ? { width: 1, color: '#E2E6EE', style: BorderStyle.Dashed }
-      : { width: 0 })
-    .opacity(row.active ? (row.done ? 0.82 : 1) : 0.6)
+    .padding({ top: 13, bottom: 13 })
     .onClick(() => {
-      if (row.active && !row.done) {
-        this.jumpGap(row.kind);
+      if (total === 0) {
+        this.toast(kind === 1 ? '今天没有新词任务' : '今天没有到期复习');
+        return;
       }
+      if (kind === 3) {
+        NavStore.INSTANCE.push(RouteName.WRONG_BOOK);
+        return;
+      }
+      this.jumpGap(kind);
     })
-    .animation({ duration: NavStore.INSTANCE.reducedMotion ? 0 : 200, curve: Curve.EaseOut })
   }
 
-  /** 卡内三态大按钮：还差 N 项（灰）/ 完成今日打卡（蓝渐变）/ 今日已打卡（浅绿） */
+  /** 卡内三态大按钮：还差 N 词（灰）/ 完成今日打卡（蓝渐变）/ 今日已打卡（浅绿） */
   @Builder
   GateButton() {
     if (this.isChecked()) {
@@ -598,23 +699,23 @@ export struct CheckInPage {
           .letterSpacing(2)
       }
       .width('100%')
-      .height(56)
+      .height(54)
       .borderRadius(18)
       .backgroundColor(Colors.KNOW_GREEN_SOFT)
       .justifyContent(FlexAlign.Center)
       .margin({ top: 14 })
     } else if (this.missingCount(this.buildGates()) > 0) {
       Row() {
-        Text(`还差 ${this.missingCount(this.buildGates())} 项，去完成`)
-          .fontSize(17)
+        Text(`还差 ${this.taskStat().left} 词 · 完成后可打卡`)
+          .fontSize(16)
           .fontWeight(FontWeight.Bold)
-          .fontColor(Color.White)
-          .letterSpacing(1)
+          .fontColor('#7E8798')
+          .letterSpacing(0.5)
       }
       .width('100%')
-      .height(56)
+      .height(54)
       .borderRadius(18)
-      .backgroundColor('#D7DDE8')
+      .backgroundColor('#EEF1F6')
       .justifyContent(FlexAlign.Center)
       .margin({ top: 14 })
       .onClick(() => this.jumpFirstGap())
@@ -813,45 +914,194 @@ export struct CheckInPage {
     .height('100%')
   }
 
+  /** 待机整页：无词本时整页只有空卡 + 导入入口，不渲染任务卡/日历/规则 */
+  @Builder
+  IdlePage() {
+    Column() {
+      Column({ space: 5 }) {
+        Text('今日任务')
+          .fontSize(28)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Colors.TEXT_MAIN)
+          .width('100%')
+        Text('导入词表后自动生成')
+          .fontSize(TypeScale.CAPTION)
+          .fontColor(Colors.TEXT_WEAK)
+          .width('100%')
+      }
+      .alignItems(HorizontalAlign.Start)
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 14 })
+
+      Column({ space: 0 }) {
+        Stack() {
+          Circle({ width: 150, height: 150 }).fill('#F0F3F9')
+          Text('0').fontSize(26).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_WEAK)
+        }
+        .width(150)
+        .height(150)
+
+        Text('还没有任务')
+          .fontSize(19)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Colors.TEXT_MAIN)
+          .margin({ top: 20 })
+        Text('导入一本词表后，任务会按你的节奏每天自动生成\n复习到期词 + 新学当日量')
+          .fontSize(12.5)
+          .fontColor(Colors.TEXT_WEAK)
+          .lineHeight(21)
+          .textAlign(TextAlign.Center)
+          .margin({ top: 6 })
+      }
+      .layoutWeight(1)
+      .width('100%')
+      .justifyContent(FlexAlign.Center)
+
+      Column({ space: 10 }) {
+        Button('拍照导入词表')
+          .width('100%')
+          .height(54)
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Color.White)
+          .borderRadius(18)
+          .linearGradient({ angle: 135, colors: [['#1E6BFB', 0], ['#0842B8', 1]] })
+          .shadow({ radius: 16, color: 'rgba(10,89,247,0.28)', offsetY: 8 })
+          .onClick(() => {
+            NavStore.INSTANCE.push(RouteName.CAMERA);
+          })
+        Button('从词库选一本')
+          .width('100%')
+          .height(52)
+          .fontSize(15)
+          .fontColor(Colors.BRAND)
+          .backgroundColor(Colors.WHITE)
+          .borderRadius(18)
+          .border({ width: 1.5, color: Colors.BRAND_SOFT })
+          .onClick(() => {
+            NavStore.INSTANCE.push(RouteName.MY_BOOKS);
+          })
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, bottom: FloatingTab.CLEARANCE + 12 })
+    }
+    .width('100%')
+    .height('100%')
+    .opacity(this.enterOpacity)
+    .translate({ y: this.enterTy })
+  }
+
   build() {
     Stack() {
       Column() {
-        Scroll() {
+        if (!this.hasBooks()) {
+          // 待机态：整页待机，不渲染任务卡 / 日历 / 规则
+          this.IdlePage()
+        } else {
+          Scroll() {
           Column({ space: 16 }) {
-            // 页头
+            // 页头：今日任务（待机与任务态共用标题）
             Column({ space: 6 }) {
-              Text('打卡')
+              Text('今日任务')
                 .fontSize(28)
                 .fontWeight(FontWeight.Bold)
                 .fontColor(Colors.TEXT_MAIN)
                 .width('100%')
-              Text('完成今天的全部任务，打卡按钮才会点亮')
-                .fontSize(TypeScale.CAPTION)
-                .fontColor(Colors.TEXT_WEAK)
-                .width('100%')
+              Row({ space: 8 }) {
+                Text(this.dateTitle())
+                  .fontSize(TypeScale.CAPTION)
+                  .fontColor(Colors.TEXT_WEAK)
+                if (this.dailyGoal() > 0) {
+                  Text(`每日新词 ${this.dailyGoal()}`)
+                    .fontSize(10.5)
+                    .fontColor(Colors.BRAND)
+                    .backgroundColor(Colors.BRAND_SOFT)
+                    .borderRadius(10)
+                    .padding({ left: 8, right: 8, top: 2, bottom: 2 })
+                }
+              }
+              .width('100%')
             }
             .alignItems(HorizontalAlign.Start)
             .width('100%')
 
-            // 前置条件卡（含卡内三态大按钮、已打卡态）
-            Column({ space: 8 }) {
-              Row({ space: 8 }) {
-                GateCheck({ done: true, active: true })
-                Text('今日打卡前置条件')
-                  .fontSize(TypeScale.CARD_TITLE)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(Colors.TEXT_MAIN)
-                  .layoutWeight(1)
-                Text('全部完成才能打卡')
-                  .fontSize(10)
-                  .fontColor(Colors.TEXT_WEAK)
+            // 今日任务卡：复习 X + 新学 Y = 总量 Z（每日变量）
+            Column({ space: 0 }) {
+              Row() {
+                Column({ space: 2 }) {
+                  Row() {
+                    Text(`${this.taskStat().total}`)
+                      .fontSize(46)
+                      .fontWeight(FontWeight.Bold)
+                      .fontColor(Colors.TEXT_MAIN)
+                      .letterSpacing(-1)
+                    Text(' 词 · 今日')
+                      .fontSize(12)
+                      .fontColor(Colors.TEXT_WEAK)
+                      .margin({ bottom: 8 })
+                  }
+                  .alignItems(VerticalAlign.Bottom)
+
+                  Text(this.taskSubText(this.taskStat()))
+                    .fontSize(11.5)
+                    .fontColor(Colors.TEXT_WEAK)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+
+                Column({ space: 0 }) {
+                  Text(`${this.progressPct(this.taskStat())}%`)
+                    .fontSize(19)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor(Colors.BRAND)
+                  Text('今日进度')
+                    .fontSize(9.5)
+                    .fontColor(Colors.TEXT_WEAK)
+                }
               }
               .width('100%')
-              .margin({ bottom: 4 })
+              .alignItems(VerticalAlign.Top)
 
-              ForEach(this.buildGates(), (row: GateView) => {
-                this.GateRow(row)
-              }, (row: GateView) => `${row.kind}-${row.done}-${row.active}-${row.subtitle}`)
+              Divider()
+                .strokeWidth(1)
+                .color('#EEF1F6')
+                .margin({ top: 12 })
+
+              this.TaskRow('到期复习', this.reviewHint(), this.taskStat().reviewDone,
+                this.taskStat().reviewTotal, Colors.BRAND, 2)
+              Divider().strokeWidth(1).color('#EEF1F6')
+              this.TaskRow('新学单词', `按每日新词量 ${this.dailyGoal()} 排队`,
+                this.taskStat().newDone, this.taskStat().newTotal, Colors.FUZZY_ORANGE, 1)
+
+              if (DataStore.INSTANCE.gatesToday().p3Required) {
+                Divider().strokeWidth(1).color('#EEF1F6')
+                this.TaskRow('错词强化', `还剩 ${DataStore.INSTANCE.wrongEntries().length} 个错词待强化`,
+                  DataStore.INSTANCE.gatesToday().p3 ? 1 : 0, 1, Colors.UNKNOWN_RED, 3)
+              }
+
+              if (this.taskStat().missed > 0 && !this.isChecked()) {
+                Row({ space: 8 }) {
+                  Text(`本月有 ${this.taskStat().missed} 天未打卡`)
+                    .fontSize(11.5)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor(Colors.UNKNOWN_RED)
+                  Blank()
+                  Text('去计划表补卡 ›')
+                    .fontSize(11.5)
+                    .fontColor('#B96A6A')
+                    .fontWeight(FontWeight.Medium)
+                }
+                .width('100%')
+                .padding({ left: 12, right: 12, top: 9, bottom: 9 })
+                .borderRadius(12)
+                .backgroundColor('#FDF0F0')
+                .margin({ top: 12 })
+                .onClick(() => {
+                  NavStore.INSTANCE.push(RouteName.PLAN_TABLE);
+                })
+              }
 
               this.GateButton()
             }
@@ -956,13 +1206,14 @@ export struct CheckInPage {
             .alignItems(HorizontalAlign.Start)
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 14, bottom: 28 })
+          .padding({ left: 16, right: 16, top: 14, bottom: FloatingTab.CLEARANCE })
           .alignItems(HorizontalAlign.Start)
         }
         .width('100%')
         .layoutWeight(1)
         .scrollBar(BarState.Off)
         .align(Alignment.Top)
+          }
       }
       .width('100%')
       .height('100%')

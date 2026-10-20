@@ -300,6 +300,13 @@ export class DataStore {
     this.commit(batchDeleteWords(this.data, wordIds));
   }
 
+  /** 按 id 取词（梗句确认页复用已有词的释义，避免重复查词典） */
+  wordById(wordId: string): Word | null {
+    const found: Word | undefined =
+      this.data.words.find((w: Word): boolean => w.id === wordId);
+    return found ?? null;
+  }
+
   /** OCR 确认导入 / 云词书下载：单次事务，失败不产生半截数据。
    *  F-A intake：'QUEUE'=加入词本按每日新词量排队（默认）；'TODAY'=加入当天计划立即首学不占配额。 */
   importWords(drafts: WordDraft[], intake: IntakeMode = 'QUEUE'): void {

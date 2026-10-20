@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>词慧 · 打卡页交互 Demo</title>
+<style>
+:root{
+  --brand:#0A59F7; --brand-hi:#3D7BFF; --brand-deep:#0846C0; --brand-soft:#E3EDFF;
+  --orange:#EC6A0F; --orange-soft:#FFF1E5;
+  --green:#34A853; --green-soft:#E6F4EA;
+  --red:#E14B4B;
+  --ink:#17202E; --ink2:#5A6575; --ink3:#98A2B2;
+  --page:#EEF0F4; --card:#FFFFFF; --line:#E7EAF1;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{
+  font-family:"MiSans","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  background:linear-gradient(160deg,#E9EDF4 0%,#F3F1EC 100%);color:var(--ink);
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:34px 16px 60px;
+}
+/* ===== 顶部工具条 ===== */
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:22px;}
+.bar .t{font-size:13px;font-weight:900;letter-spacing:-.01em;margin-right:4px;}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:7px 15px;
+  font-size:12px;font-weight:700;color:var(--ink2);cursor:pointer;transition:.18s;user-select:none;}
+.chip:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgba(23,32,46,.08);}
+.chip.on{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 6px 16px rgba(10,89,247,.3);}
+.chip.warn.on{background:var(--red);border-color:var(--red);box-shadow:0 6px 16px rgba(225,75,75,.3);}
+.sep{width:1px;height:22px;background:#D9DEE8;margin:0 4px;}
+/* ===== 手机 ===== */
+.phone{
+  width:384px;height:800px;background:var(--card);border-radius:40px;
+  border:1px solid #D6DAE3;box-shadow:0 34px 70px rgba(23,32,46,.22),0 4px 14px rgba(23,32,46,.08);
+  padding:24px 22px 16px;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;
+}
+.phone::before{content:"";position:absolute;top:11px;left:50%;transform:translateX(-50%);
+  width:96px;height:22px;border-radius:12px;background:#10141C;}
+.status{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+.status .r{display:flex;gap:5px;align-items:center;color:var(--ink);}
+/* 页头 */
+.p-head{margin-top:26px;}
+.p-head h1{font-size:30px;font-weight:900;letter-spacing:-.025em;}
+.p-head .sub{font-size:12px;color:var(--ink3);margin-top:4px;display:flex;align-items:center;gap:7px;}
+.p-head .pill{display:inline-flex;align-items:center;font-size:10.5px;font-weight:800;color:var(--brand);
+  background:var(--brand-soft);border-radius:999px;padding:3px 10px;}
+/* ===== 待机 ===== */
+.idle{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+.idle .ring{width:150px;height:150px;border-radius:50%;position:relative;
+  background:conic-gradient(var(--brand) 0deg,#EDF0F6 0deg);
+  display:flex;align-items:center;justify-content:center;
+  animation:breath 3.2s ease-in-out infinite;}
+.idle .ring::before{content:"";position:absolute;inset:10px;border-radius:50%;background:#fff;}
+.idle .ring em{font-style:normal;position:relative;font-size:24px;font-weight:900;color:var(--ink3);}
+@keyframes breath{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}
+.idle h3{font-size:18px;font-weight:900;margin-top:20px;}
+.idle p{font-size:12px;color:var(--ink3);line-height:1.75;max-width:24ch;margin-top:5px;}
+.cta{width:100%;padding:16px 0;border-radius:18px;text-align:center;font-size:15px;font-weight:800;
+  background:linear-gradient(150deg,var(--brand-hi),var(--brand-deep));color:#fff;cursor:pointer;
+  box-shadow:0 12px 24px rgba(10,89,247,.28);transition:.18s;user-select:none;}
+.cta:active{transform:scale(.975);}
+.cta.ghost{background:#fff;color:var(--brand);border:1.5px solid var(--brand-soft);box-shadow:none;margin-top:11px;}
+/* ===== 任务卡 ===== */
+.taskcard{background:#fff;border:1px solid var(--line);border-radius:24px;padding:19px;margin-top:16px;
+  box-shadow:0 10px 24px rgba(23,32,46,.06);}
+.taskcard .total{display:flex;align-items:baseline;gap:8px;}
+.taskcard .total b{font-size:46px;font-weight:900;letter-spacing:-.035em;font-variant-numeric:tabular-nums;}
+.taskcard .total span{font-size:12px;color:var(--ink3);font-weight:800;}
+.taskcard .sub{font-size:11.5px;color:var(--ink3);margin-top:3px;display:flex;justify-content:space-between;align-items:center;}
+.taskcard .sub .pct{font-weight:900;color:var(--brand);font-variant-numeric:tabular-nums;}
+.trow{display:flex;align-items:center;gap:12px;padding:14px 0 13px;border-top:1px dashed var(--line);
+  margin-top:12px;cursor:pointer;transition:.15s;border-radius:10px;user-select:none;}
+.trow:first-of-type{border-top:none;margin-top:0;}
+.trow:hover{background:#FAFBFD;}
+.trow:active{transform:scale(.985);}
+.dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+.trow .meta{flex:1;min-width:0;}
+.trow .meta b{font-size:14px;font-weight:800;display:block;}
+.trow .meta span{font-size:10.5px;color:var(--ink3);display:block;margin-top:2px;}
+.barwrap{height:5px;border-radius:3px;background:#EEF1F6;margin-top:8px;overflow:hidden;}
+.barwrap i{display:block;height:100%;border-radius:3px;width:0%;transition:width .45s cubic-bezier(.16,1,.3,1);}
+.trow .num{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;flex:0 0 auto;}
+.trow .num small{font-size:10.5px;color:var(--ink3);font-weight:700;}
+.tick{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--green);color:#fff;
+  display:none;align-items:center;justify-content:center;font-size:12px;font-weight:900;}
+.trow.done .tick{display:flex;}
+.trow.done .go{display:none;}
+.go{flex:0 0 auto;width:26px;height:26px;border-radius:9px;background:#F2F5FA;color:var(--ink2);
+  display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;}
+/* 欠卡 */
+.debt{display:flex;align-items:center;gap:10px;background:#FDF0F0;border:1px solid #F6D7D7;
+  border-radius:15px;padding:12px 14px;margin-top:13px;cursor:pointer;user-select:none;transition:.15s;}
+.debt:active{transform:scale(.98);}
+.debt b{font-size:12.5px;color:var(--red);font-weight:800;}
+.debt span{font-size:11px;color:#B96A6A;margin-left:auto;font-weight:800;}
+.debt.hidden{display:none;}
+/* 打卡按钮区 */
+.check{margin-top:auto;padding-top:14px;}
+.btn{border-radius:18px;padding:16px 0;text-align:center;font-size:15px;font-weight:900;transition:.25s;user-select:none;}
+.btn.off{background:#EEF1F6;color:var(--ink3);cursor:default;}
+.btn.on{background:linear-gradient(150deg,var(--brand-hi),var(--brand-deep));color:#fff;cursor:pointer;
+  box-shadow:0 12px 26px rgba(10,89,247,.32);animation:glow 2s ease-in-out infinite;}
+@keyframes glow{0%,100%{box-shadow:0 12px 26px rgba(10,89,247,.32)}50%{box-shadow:0 12px 34px rgba(10,89,247,.5)}}
+.btn.done{background:var(--green-soft);color:var(--green);}
+.tomorrow{display:flex;align-items:center;gap:9px;margin-top:12px;background:#F7F8FB;border-radius:14px;padding:11px 14px;}
+.tomorrow b{font-size:11.5px;color:var(--ink2);font-weight:900;flex:0 0 auto;}
+.tomorrow span{font-size:11px;color:var(--ink3);margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;}
+/* 已打卡态 */
+.donehead{text-align:center;margin-top:22px;}
+.donehead .seal{width:80px;height:80px;border-radius:50%;background:var(--green);margin:0 auto;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 14px 30px rgba(52,168,83,.34);
+  animation:pop .5s cubic-bezier(.34,1.56,.64,1) both;}
+@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.donehead h3{font-size:20px;font-weight:900;margin-top:15px;}
+.donehead p{font-size:11.5px;color:var(--ink3);margin-top:4px;}
+.streakrow{display:flex;justify-content:center;margin-top:12px;}
+.streak{display:inline-flex;align-items:center;gap:6px;background:var(--orange-soft);border-radius:999px;
+  padding:7px 15px;font-size:12px;font-weight:900;color:var(--orange);}
+/* 底部 tab */
+.tabbar{display:flex;justify-content:space-around;border-top:1px solid var(--line);padding-top:12px;margin-top:12px;}
+.tab{font-size:10px;color:var(--ink3);text-align:center;font-weight:800;}
+.tab.on{color:var(--brand);}
+.tab i{display:block;font-style:normal;font-size:17px;margin-bottom:2px;}
+/* ===== 弹层 ===== */
+.mask{position:absolute;inset:0;background:rgba(15,20,30,.44);backdrop-filter:blur(3px);
+  display:none;align-items:flex-end;z-index:20;border-radius:40px;}
+.mask.show{display:flex;animation:fade .22s ease both;}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet{background:#fff;width:100%;border-radius:26px 26px 40px 40px;padding:22px 20px 26px;
+  animation:up .32s cubic-bezier(.16,1,.3,1) both;max-height:82%;overflow-y:auto;}
+@keyframes up{from{transform:translateY(60%)}to{transform:translateY(0)}}
+.sheet .grab{width:38px;height:4.5px;border-radius:3px;background:#E2E6EE;margin:0 auto 16px;}
+.sheet h4{font-size:17px;font-weight:900;text-align:center;}
+.sheet .desc{font-size:12px;color:var(--ink3);text-align:center;margin-top:5px;line-height:1.7;}
+/* 导入扫描 */
+.scan{margin:20px auto 8px;width:96px;height:96px;border-radius:26px;background:linear-gradient(150deg,var(--orange-soft),#FFE3CC);
+  position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.scan svg{position:relative;z-index:2;}
+.scan::after{content:"";position:absolute;left:0;right:0;height:34%;top:-34%;
+  background:linear-gradient(180deg,transparent,rgba(236,106,15,.22),transparent);animation:scan 1.4s linear infinite;}
+@keyframes scan{to{top:110%;}}
+.scanTxt{text-align:center;font-size:12.5px;font-weight:800;color:var(--orange);margin-top:12px;min-height:18px;}
+.scanNum{text-align:center;font-size:34px;font-weight:900;letter-spacing:-.03em;margin-top:8px;font-variant-numeric:tabular-nums;}
+.scanNum small{font-size:12px;color:var(--ink3);font-weight:700;}
+.opts{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:18px;}
+.opt{border:1.5px solid var(--line);border-radius:14px;padding:13px 0;text-align:center;cursor:pointer;transition:.15s;user-select:none;}
+.opt b{font-size:18px;font-weight:900;display:block;font-variant-numeric:tabular-nums;}
+.opt span{font-size:10px;color:var(--ink3);font-weight:700;}
+.opt.on{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 0 0 3px rgba(10,89,247,.12);}
+.sheet .ok{margin-top:18px;width:100%;padding:15px 0;border-radius:16px;text-align:center;font-size:14.5px;font-weight:900;
+  background:linear-gradient(150deg,var(--brand-hi),var(--brand-deep));color:#fff;cursor:pointer;user-select:none;}
+.sheet .ok.dis{background:#EEF1F6;color:var(--ink3);cursor:default;box-shadow:none;}
+/* 背词 */
+.word{margin:20px 0 4px;text-align:center;padding:22px 16px;border-radius:20px;background:#F8F9FC;}
+.word .w{font-size:30px;font-weight:900;letter-spacing:-.02em;}
+.word .ph{font-size:12px;color:var(--ink3);margin-top:5px;}
+.word .m{font-size:14px;font-weight:700;color:var(--ink2);margin-top:9px;}
+.wbtns{display:flex;gap:10px;margin-top:16px;}
+.wbtn{flex:1;padding:14px 0;border-radius:15px;text-align:center;font-size:14px;font-weight:900;cursor:pointer;user-select:none;transition:.15s;}
+.wbtn:active{transform:scale(.96);}
+.wbtn.know{background:var(--brand-soft);color:var(--brand);}
+.wbtn.fuzzy{background:var(--orange-soft);color:var(--orange);}
+.wprog{font-size:11.5px;color:var(--ink3);text-align:center;margin-top:12px;font-variant-numeric:tabular-nums;}
+/* 成功弹层 */
+.pane{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.94);backdrop-filter:blur(6px);border-radius:40px;}
+.pane.show{display:flex;animation:fade .25s ease both;}
+.pane .inner{text-align:center;padding:0 30px;width:100%;}
+.pane .big{width:96px;height:96px;border-radius:50%;background:var(--green);margin:0 auto;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 16px 34px rgba(52,168,83,.4);}
+.pane .big svg path{stroke-dasharray:42;stroke-dashoffset:42;animation:draw .5s .25s ease-out forwards;}
+@keyframes draw{to{stroke-dashoffset:0}}
+.pane h2{font-size:23px;font-weight:900;margin-top:20px;letter-spacing:-.02em;}
+.pane p{font-size:12.5px;color:var(--ink3);margin-top:7px;line-height:1.7;}
+.pane .st{display:inline-flex;margin-top:14px;}
+.pane .cta2{margin-top:26px;width:100%;padding:16px 0;border-radius:18px;text-align:center;font-size:15px;
+  font-weight:900;background:linear-gradient(150deg,var(--brand-hi),var(--brand-deep));color:#fff;cursor:pointer;user-select:none;}
+.pane .next{margin-top:12px;font-size:12px;color:var(--ink3);line-height:1.7;}
+.pane .next b{color:var(--brand);font-variant-numeric:tabular-nums;}
+/* 提示 toast */
+.toast{position:absolute;left:50%;bottom:110px;transform:translateX(-50%) translateY(14px);
+  background:rgba(23,32,46,.88);color:#fff;font-size:12px;font-weight:700;border-radius:12px;
+  padding:9px 16px;opacity:0;transition:.25s;z-index:40;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.hide{display:none!important;}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+
+<!-- 演示控制 -->
+<div class="bar">
+  <span class="t">演示控制</span>
+  <span class="chip on" id="c-day">第 1 天</span>
+  <span class="sep"></span>
+  <span class="chip" data-goal="50">新词 50</span>
+  <span class="chip on" data-goal="100">新词 100</span>
+  <span class="chip" data-goal="200">新词 200</span>
+  <span class="sep"></span>
+  <span class="chip warn" id="c-debt">模拟昨日欠卡</span>
+  <span class="chip" id="c-reset">重置</span>
+</div>
+
+<div class="phone">
+  <div class="status"><span id="clock">18:55</span><span class="r">📶 🔋 100%</span></div>
+
+  <!-- 页头 -->
+  <div class="p-head" id="head">
+    <h1>今日任务</h1>
+    <div class="sub"><span id="dateline">10 月 20 日 · 周二</span><span class="pill hide" id="goalPill">每日新词 100</span></div>
+  </div>
+
+  <!-- ① 待机 -->
+  <div class="idle" id="idleView">
+    <div class="ring"><em>0</em></div>
+    <h3>还没有任务</h3>
+    <p>导入一本词表后，任务会按你的节奏每天自动生成</p>
+  </div>
+
+  <!-- 任务卡 / 已打卡（由 JS 渲染） -->
+  <div id="taskArea"></div>
+
+  <div class="check" id="checkArea"></div>
+
+  <div class="tabbar">
+    <div class="tab"><i>⌂</i>首页</div>
+    <div class="tab on"><i>▣</i>打卡</div>
+    <div class="tab"><i>◉</i>我的</div>
+  </div>
+
+  <!-- 弹层：导入 -->
+  <div class="mask" id="importMask">
+    <div class="sheet">
+      <div class="grab"></div>
+      <div id="scanStep">
+        <div class="scan">
+          <svg width="40" height="40" viewBox="0 0 24 24"><path fill="#EC6A0F" d="M8.2 4.6c.3-.66.96-1.1 1.69-1.1h4.22c.73 0 1.39.44 1.69 1.1l.5 1.15h1.95A2.75 2.75 0 0 1 21 8.5v8.75A2.75 2.75 0 0 1 18.25 20H5.75A2.75 2.75 0 0 1 3 17.25V8.5a2.75 2.75 0 0 1 2.75-2.75H7.7l.5-1.15zM12 8.6a4.15 4.15 0 1 0 0 8.3 4.15 4.15 0 0 0 0-8.3zm0 1.9a2.25 2.25 0 1 1 0 4.5 2.25 2.25 0 0 1 0-4.5z"/></svg>
+        </div>
+        <div class="scanTxt" id="scanTxt">正在识别词表…</div>
+        <div class="scanNum"><span id="scanN">0</span><small> 词</small></div>
+      </div>
+      <div id="pickStep" class="hide">
+        <h4>设置每日新词量</h4>
+        <p class="desc">以后每天的任务 = 到期复习 + 这里的新词量<br>导入日从今天开始背</p>
+        <div class="opts" id="optGrid"></div>
+        <div class="ok dis" id="pickOk">选一个量开始</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹层：背词 -->
+  <div class="mask" id="studyMask">
+    <div class="sheet">
+      <div class="grab"></div>
+      <h4 id="sheetTitle">到期复习</h4>
+      <p class="desc">每次点击过 10 个词 · 演示加速</p>
+      <div class="word">
+        <div class="w" id="wWord">abandon</div>
+        <div class="ph" id="wPh">/əˈbændən/</div>
+        <div class="m" id="wM">v. 放弃，抛弃</div>
+      </div>
+      <div class="wbtns">
+        <div class="wbtn know" id="btnKnow">认识 ✓</div>
+        <div class="wbtn fuzzy" id="btnFuzzy">模糊 ↻</div>
+      </div>
+      <div class="wprog" id="wProg">0 / 100</div>
+    </div>
+  </div>
+
+  <!-- 成功弹层 -->
+  <div class="pane" id="donePane">
+    <div class="inner">
+      <div class="big"><svg width="46" height="46" viewBox="0 0 24 24"><path d="M4.5 12.5 L10 18 L19.5 7" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <h2>今日打卡成功</h2>
+      <p id="doneSum">200 词全部完成 · 用时 24 分钟</p>
+      <div class="st streak"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 2c1 4-4 5.5-4 10a4 4 0 0 0 8 0c0-1.8-.8-3-1.6-4-.3 1.4-1.2 2-2.4 2.4C13.4 8 14.6 5 12 2z" fill="#EC6A0F"/></svg><span id="streakTxt">连续打卡 1 天</span></div>
+      <div class="cta2" id="closeDone">太棒了</div>
+      <div class="next" id="nextHint">明天：<b>复习 100</b> + <b>新学 100</b> = 200 词</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ================= 演示状态 ================= */
+const WORDS = [
+  ['abandon','/əˈbændən/','v. 放弃，抛弃'],
+  ['efficient','/ɪˈfɪʃnt/','adj. 高效的'],
+  ['threshold','/ˈθreʃhəʊld/','n. 门槛；临界点'],
+  ['negotiate','/nɪˈɡəʊʃieɪt/','v. 谈判，协商'],
+  ['comprehensive','/ˌkɒmprɪˈhensɪv/','adj. 全面的'],
+  ['sustain','/səˈsteɪn/','v. 维持，支撑'],
+  ['derive','/dɪˈraɪv/','v. 源自；获得'],
+  ['explicit','/ɪkˈsplɪsɪt/','adj. 明确的'],
+  ['inevitable','/ɪnˈevɪtəbl/','adj. 不可避免的'],
+  ['adequate','/ˈædɪkwət/','adj. 足够的'],
+];
+const NODES = [1,2,4,7,15];               // 艾宾浩斯节点（天）
+const WEEK = ['周日','周一','周二','周三','周四','周五','周六'];
+const fmt = n => n >= 10000 ? (n/10000).toFixed(1)+'w' : n;
+
+let S;  // 全局演示状态
+function reset(keepGoal){
+  const goal = keepGoal && S ? S.goal : 100;
+  S = {
+    day: 1, goal, streak: 0,
+    learned: [],                 // learned[d-1] = 第 d 天新学数（用于复习变量）
+    done: false,                 // 今日是否已打卡
+    review: {total:0, done:0},
+    fresh:  {total:0, done:0},
+    hasBook: false,
+    debt: false, debtDone: false,
+    pick: null,
+    sheet: null,                 // 'review' | 'fresh'
+    wIdx: 0,
+  };
+  render();
+}
+const $ = id => document.getElementById(id);
+
+/* 复习变量：N 天前学过的词，凡 1/2/4/7/15 节点落到今天则到期 */
+function reviewFor(day){
+  let n = 0;
+  NODES.forEach(k => { if (day-1-k >= 0) n += S.learned[day-1-k] || 0; });
+  return n;
+}
+
+/* ================= 渲染 ================= */
+function render(){
+  /* 控制条状态 */
+  document.querySelectorAll('[data-goal]').forEach(c => c.classList.toggle('on', +c.dataset.goal === S.goal));
+  $('c-day').textContent = '第 ' + S.day + ' 天';
+  $('c-debt').classList.toggle('on', S.debt);
+  $('dateline').textContent = dateStr(S.day);
+  $('goalPill').textContent = '每日新词 ' + S.goal;
+  $('goalPill').classList.toggle('hide', !S.hasBook);
+
+  $('idleView').classList.toggle('hide', S.hasBook);
+  $('taskArea').innerHTML = '';
+  $('checkArea').innerHTML = '';
+
+  if (!S.hasBook) return;
+
+  /* ---- 任务卡 / 已打卡态 ---- */
+  const R = S.review, F = S.fresh, total = R.total + F.total, doneAll = R.done + F.done;
+  let html = '';
+
+  if (S.done){
+    html += `
+    <div class="donehead">
+      <div class="seal"><svg width="40" height="40" viewBox="0 0 24 24"><path d="M4.5 12.5 L10 18 L19.5 7" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <h3>今日已打卡</h3>
+      <p>${fmt(total)} 词全部完成</p>
+      <div class="streakrow"><div class="streak">
+        <svg width="13" height="13" viewBox="0 0 24 24"><path d="M12 2c1 4-4 5.5-4 10a4 4 0 0 0 8 0c0-1.8-.8-3-1.6-4-.3 1.4-1.2 2-2.4 2.4C13.4 8 14.6 5 12 2z" fill="#EC6A0F"/></svg>
+        连续打卡 ${S.streak} 天</div></div>
+    </div>`;
+    /* 明日预告 */
+    const tRev = reviewFor(S.day + 1);
+    html += `
+    <div class="taskcard">
+      <div class="sub" style="font-weight:900;color:var(--ink2);font-size:12.5px">明日预告</div>
+      <div class="trow" style="border:none;margin-top:6px;padding-bottom:6px">
+        <span class="dot" style="background:var(--brand)"></span>
+        <div class="meta"><b>到期复习</b><span>${nodeHint(S.day+1)}</span></div>
+        <span class="num">${tRev}<small> 词</small></span>
+      </div>
+      <div class="trow" style="border-top:1px dashed var(--line)">
+        <span class="dot" style="background:var(--orange)"></span>
+        <div class="meta"><b>新学单词</b><span>按每日新词量 ${S.goal} 排队</span></div>
+        <span class="num">${S.goal}<small> 词</small></span>
+      </div>
+    </div>`;
+    $('checkArea').innerHTML = `<div class="btn done">今日已打卡 · 明天再来</div>
+      <div class="cta" style="margin-top:11px" onclick="nextDay()">进入明天 →</div>`;
+  } else {
+    html += `
+    <div class="taskcard">
+      <div class="total"><b>${fmt(total)}</b><span>词 · 今日</span></div>
+      <div class="sub"><span>${taskSub(R, F, total)}</span><span class="pct">${total ? Math.round(doneAll/total*100) : 0}%</span></div>`;
+
+    if (R.total > 0){
+      html += row('review','到期复习', nodeHint(S.day), R, 'var(--brand)');
+    } else {
+      html += `<div class="trow" style="cursor:default;opacity:.55">
+        <span class="dot" style="background:#C9D2E0"></span>
+        <div class="meta"><b>到期复习</b><span>今天没有到期词</span></div>
+        <span class="num">0<small> 词</small></span></div>`;
+    }
+    html += row('fresh','新学单词', `按每日新词量 ${S.goal} 排队`, F, 'var(--orange)');
+    html += `</div>`;
+
+    /* 欠卡行（演示开关） */
+    html += `<div class="debt ${S.debt ? '' : 'hidden'}" onclick="toast('演示：跳转补卡流，补完变绿底橙「补」')">
+      <b>昨日欠卡 · 60 词</b><span>去补卡 ›</span></div>`;
+
+    const left = total - doneAll;
+    $('checkArea').innerHTML = left === 0
+      ? `<div class="btn on" onclick="doCheckIn()">完成今日打卡</div>`
+      : `<div class="btn off">还差 ${left} 词 · 完成后可打卡</div>`;
+  }
+  $('taskArea').innerHTML = html;
+}
+
+function row(kind, title, hint, t, color){
+  const full = t.done >= t.total && t.total > 0;
+  return `
+  <div class="trow ${full ? 'done' : ''}" onclick="openStudy('${kind}')">
+    <span class="dot" style="background:${full ? 'var(--green)' : color}"></span>
+    <div class="meta"><b>${title}</b><span>${full ? '全部完成' : hint}</span>
+      <div class="barwrap"><i style="width:${t.total ? t.done/t.total*100 : 0}%;background:${color}"></i></div>
+    </div>
+    <span class="num">${t.done}<small>/${t.total}</small></span>
+    <span class="tick">✓</span><span class="go">›</span>
+  </div>`;
+}
+function taskSub(R, F, total){
+  if (R.total === 0) return `新学 ${F.total} · 导入日不复习`;
+  if (F.total === 0) return `只复习 ${R.total} · 词库排空`;
+  return `复习 ${R.total} + 新学 ${F.total}`;
+}
+function nodeHint(day){
+  const hits = NODES.filter(k => day-1-k >= 0 && (S.learned[day-1-k]||0) > 0)
+                    .map(k => { const d = day-k; return 'D'+d+'·R'+k; });
+  return hits.length ? '艾宾浩斯 ' + hits.join(' / ') + ' 到期' : '无到期';
+}
+function dateStr(day){
+  const d = new Date(2026, 9, 19 + day);   // 10 月 20 日为第 1 天
+  return (d.getMonth()+1) + ' 月 ' + d.getDate() + ' 日 · ' + WEEK[d.getDay()];
+}
+
+/* ================= 交互 ================= */
+function openStudy(kind){
+  if (S.done) return;
+  const t = kind === 'review' ? S.review : S.fresh;
+  if (t.total === 0){ toast(kind === 'review' ? '今天没有到期复习' : '新词已全部过完'); return; }
+  if (t.done >= t.total){ toast('这一项已经完成'); return; }
+  S.sheet = kind;
+  $('sheetTitle').textContent = kind === 'review' ? '到期复习' : '新学单词';
+  showWord();
+  $('studyMask').classList.add('show');
+}
+function showWord(){
+  const [w, ph, m] = WORDS[S.wIdx % WORDS.length];
+  $('wWord').textContent = w; $('wPh').textContent = ph; $('wM').textContent = m;
+  const t = S.sheet === 'review' ? S.review : S.fresh;
+  $('wProg').textContent = `${t.done} / ${t.total}`;
+}
+function pass(){
+  const t = S.sheet === 'review' ? S.review : S.fresh;
+  const step = Math.min(10, t.total - t.done);
+  t.done += step;
+  S.wIdx++;
+  showWord(); render();
+  if (t.done >= t.total){
+    setTimeout(() => { $('studyMask').classList.remove('show'); toast((S.sheet==='review'?'复习':'新学') + ' 完成 +' + t.total); }, 260);
+  }
+}
+$('btnKnow').onclick = pass;
+$('btnFuzzy').onclick = pass;
+$('studyMask').onclick = e => { if (e.target === $('studyMask')) $('studyMask').classList.remove('show'); };
+
+/* ---- 导入流程 ---- */
+function startImport(){
+  $('importMask').classList.add('show');
+  $('scanStep').classList.remove('hide'); $('pickStep').classList.add('hide');
+  let n = 0;
+  const timer = setInterval(() => {
+    n = Math.min(320, n + Math.ceil(Math.random()*40));
+    $('scanN').textContent = n;
+    $('scanTxt').textContent = n < 320 ? '正在识别词表…' : '识别完成 · 共 320 词';
+    if (n >= 320){
+      clearInterval(timer);
+      setTimeout(() => { $('scanStep').classList.add('hide'); $('pickStep').classList.remove('hide'); renderOpts(); }, 650);
+    }
+  }, 130);
+}
+function renderOpts(){
+  $('optGrid').innerHTML = [50,80,100,150,200,300].map(v =>
+    `<div class="opt ${S.pick === v ? 'on' : ''}" onclick="pick(${v})"><b>${v}</b><span>词 / 天</span></div>`).join('');
+  $('pickOk').textContent = S.pick ? '每天背 ' + S.pick + ' 词，开始' : '选一个量开始';
+  $('pickOk').classList.toggle('dis', !S.pick);
+}
+function pick(v){ S.pick = v; renderOpts(); }
+$('pickOk').onclick = () => {
+  if (!S.pick) return;
+  S.goal = S.pick;
+  $('importMask').classList.remove('show');
+  S.hasBook = true;
+  assignToday();
+  toast('词本导入成功，今日任务已生成');
+};
+$('importMask').onclick = e => { if (e.target === $('importMask')) $('importMask').classList.remove('show'); };
+
+/* 按当天重算任务变量：复习 = 到期节点，新学 = 每日新词量（演示：已完成的量保留） */
+function assignToday(){
+  const rKeep = S.review.done, fKeep = S.fresh.done;
+  S.review = { total: reviewFor(S.day), done: rKeep };
+  S.fresh  = { total: S.goal, done: fKeep };
+  S.done = false;
+}
+
+/* ---- 打卡 ---- */
+function doCheckIn(){
+  if (S.done) return;
+  const total = S.review.total + S.fresh.total;
+  S.done = true;
+  S.streak++;
+  S.learned[S.day-1] = S.fresh.total;      // 今天新学进入历史 → 参与之后的复习变量
+  $('doneSum').textContent = `${total} 词全部完成 · 用时 ${18 + Math.round(total/14)} 分钟`;
+  $('streakTxt').textContent = '连续打卡 ' + S.streak + ' 天';
+  const tRev = reviewFor(S.day + 1);
+  $('nextHint').innerHTML = `明天：<b>复习 ${tRev}</b> + <b>新学 ${S.goal}</b> = ${tRev + S.goal} 词`;
+  $('donePane').classList.add('show');
+  render();
+}
+$('closeDone').onclick = () => { $('donePane').classList.remove('show'); };
+
+/* ---- 进入明天 ---- */
+function nextDay(){
+  if (!S.done) return;
+  S.day++;
+  assignToday();
+  toast('第 ' + S.day + ' 天 · 任务按变量重新生成');
+}
+
+/* ---- 控制条 ---- */
+document.querySelectorAll('[data-goal]').forEach(c => c.onclick = () => {
+  S.goal = +c.dataset.goal;
+  if (S.hasBook){ assignToday(); toast('每日新词量改为 ' + S.goal + '，任务已重算'); }
+  render();
+});
+$('c-debt').onclick = () => { S.debt = !S.debt; render(); };
+$('c-reset').onclick = () => { reset(true); toast('已重置（保留新词量 ' + S.goal + '）'); };
+
+/* ---- toast ---- */
+let toastTimer = null;
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+/* 待机 CTA 挂到渲染出的空态按钮上（待机视图固定存在两个 CTA） */
+document.querySelector('#idleView').insertAdjacentHTML('afterend',
+  `<div style="margin-top:auto" id="idleCtas">
+     <div class="cta" onclick="startImport()">拍照导入词表</div>
+     <div class="cta ghost" onclick="startImport()">从词库选一本</div>
+   </div>`);
+const obs = new MutationObserver(() => {
+  $('idleCtas').style.display = S.hasBook ? 'none' : 'block';
+});
+
+reset();
+obs.observe($('taskArea'), {childList:true});
+$('idleCtas').style.display = 'block';
+</script>
+</body>
+</html>

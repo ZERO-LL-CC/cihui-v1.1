@@ -50,6 +50,19 @@ signing/
 cihui-harmony/_ecdict/ecdict.csv
 *.csv
 
+# ===== 离线翻译验证用 Demo（232MB：onnx 模型 116MB + npm 包 66MB + wasm 38MB）=====
+# 仅本地实验；真正的精简逻辑已落在 entry/.../model/OfflineTranslateCore.ts，无需入库
+cihui-translate-demo/
+
+# ===== 词典旧版留档（2.7MB，仅本地回滚用，不进包体也不入库） =====
+cihui-harmony/_ecdict/ecdict-lite.v1.bak.json
+
+# ===== 词典容量探测的一次性脚本（结论已固化进 generate_lite_dict.py） =====
+cihui-harmony/_ecdict/probe_*.py
+
+# ===== 真机调试工具（内含本机 hdc 绝对路径，换机器即失效） =====
+cihui-harmony/Cihui/_dev/
+
 # ===== 系统文件 =====
 Thumbs.db
 .DS_Store

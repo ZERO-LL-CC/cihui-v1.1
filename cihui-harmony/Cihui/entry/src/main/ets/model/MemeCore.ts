@@ -32,8 +32,11 @@ import { newImportedSchedule, newStudyRecord, planNewWords } from './SchedulerCo
 /* ================= 拆词与停用词 ================= */
 
 /**
- * 约 100 个高频英文停用词（功能词/代词/系动词/常见虚词）。
+ * 约 130 个高频英文停用词（功能词/代词/系动词/常见虚词/缩写）。
  * 梗句背诵只背有实义的词；用户在确认页仍可逐行删除。
+ *
+ * 缩写必须单列：分词器保留词内撇号（don't 是一个 token），
+ * 只写 'im' 挡不住 "i'm"，成语化缩写被拆成可背词后词典永远查不到中文。
  */
 export const STOP_WORDS: Set<string> = new Set<string>([
   'a', 'an', 'the', 'and', 'or', 'but', 'if', 'then', 'else', 'when',
@@ -52,6 +55,15 @@ export const STOP_WORDS: Set<string> = new Set<string>([
   'because', 'until', 'unless', 'however', 'also', 'still', 'even', 'ever',
   'never', 'always', 'often', 'sometimes', 'now', 'oh', 'yeah', 'yes',
   'no', 'ok', 'okay', 'hi', 'hello', 'please', 'thanks', 'thank',
+  // 缩写形式（分词后是整词，必须单独列）
+  "i'm", "i've", "i'll", "i'd", 'im', 'ive',
+  "you're", "you've", "you'll", "you'd", 'youre',
+  "he's", "she's", "it's", "that's", "what's", "there's", "here's",
+  "we're", "they're", "who's", "how's", "let's", "ain't",
+  "don't", "doesn't", "didn't", "isn't", "aren't", "wasn't", "weren't",
+  "can't", "cannot", "won't", "wouldn't", "couldn't", "shouldn't", "haven't",
+  "hasn't", "hadn't", 'dont', 'cant', 'wont', 'didnt', 'isnt',
+  'gonna', 'wanna', 'gotta', 'kinda', 'sorta', 'ya', 'yall', 'em',
 ]);
 
 /** 小写化并按非字母（保留词内撇号）分词；丢纯数字、单字符、停用词；按出现顺序去重 */
@@ -73,6 +85,15 @@ export function tokenizeEnglish(text: string): string[] {
     }
     if (STOP_WORDS.has(tok)) {
       continue;
+    }
+    // 缩写兜底：i'm / it's / you're 这类去掉撇号后的前半段若本身是停用词，
+    // 说明整词只是「停用词 + 助动词/系动词」的缩写，不该进背诵（词典也查不到）。
+    const apos: number = tok.indexOf("'");
+    if (apos > 0) {
+      const head: string = tok.substring(0, apos);
+      if (head.length < 2 || STOP_WORDS.has(head)) {
+        continue;
+      }
     }
     if (seen.has(tok)) {
       continue;
@@ -98,6 +119,15 @@ export interface MemeCandidate {
   selected: boolean;
   /** 是否允许改选（已掌握置灰不可改） */
   toggleable: boolean;
+  /**
+   * 离线词典查到的音标（可空）。这一组三个字段由页面层在进确认页/导入前用
+   * LocalDictService 填充，MemeCore 本身不依赖系统 API，保持纯逻辑可测。
+   */
+  phonetic?: string;
+  /** 离线词典查到的中文释义（可空；空=词典未收录，卡片走「结合原句语境理解」） */
+  meaning?: string;
+  /** 释义实际来自哪个原形（shattered → shatter 时为 shatter；与 token 相同则不显示） */
+  lemma?: string;
 }
 
 /** 由调度判断一个已入库单词的三态：MASTERED 节点=已掌握，其余=学习中 */
@@ -211,6 +241,20 @@ export interface MemeImportResult {
   session: StudySession;
 }
 
+/**
+ * 词典释义文本 → 义项数组。词典用「；」分隔词性分组（n. …；vt. …），
+ * 与云词书导入口径一致，逐条拆开存入 meanings，卡片背面再 join('；') 还原。
+ */
+function splitMeanings(text: string | undefined): string[] {
+  if (text === undefined) {
+    return [];
+  }
+  return text
+    .split(/[；;]/)
+    .map((s: string): string => s.trim())
+    .filter((s: string): boolean => s.length > 0);
+}
+
 /** 梗句词本名：中文前 10 字 + …，重名时追加序号 */
 function uniqueMemeBookName(data: AppData, chinese: string): string {
   const base: string = chinese.trim().length > 10 ? chinese.trim().slice(0, 10) + '…' : chinese.trim();
@@ -262,32 +306,59 @@ export function createMemeImport(data: AppData, input: MemeImportInput, now: num
   const newWords: Word[] = [];
   const newRecords: StudyRecord[] = [];
   const newSchedules: ReviewSchedule[] = [];
+  // 已有词但词库里释义为空的（老版本梗句导入的遗留数据）：查到释义就顺手补上，不覆盖用户手填
+  const backfill: Map<string, MemeCandidate> = new Map<string, MemeCandidate>();
   for (const c of input.candidates) {
     let wordId: string = c.existingWordId;
     if (wordId === '') {
       wordId = genId('memeword');
+      const meanings: string[] = splitMeanings(c.meaning);
       newWords.push({
         id: wordId,
         bookId,
         english: c.token,
-        phonetic: '',
-        meanings: [],
+        phonetic: (c.phonetic ?? '').trim(),
+        meanings,
         source: 'MEME',
-        missingMeaning: true,
+        missingMeaning: meanings.length === 0,
         diySupplement: false,
         createdAt: now,
       });
       newRecords.push(newStudyRecord(wordId));
       newSchedules.push(newImportedSchedule(wordId));
+    } else if (splitMeanings(c.meaning).length > 0) {
+      backfill.set(wordId, c);
     }
     allTokenIds.push(wordId);
     if (c.selected) {
       sessionWordIds.push(wordId);
     }
   }
+  let mergedWords: Word[] = [...next.words, ...newWords];
+  if (backfill.size > 0) {
+    mergedWords = mergedWords.map((w: Word): Word => {
+      if (w.meanings.length > 0) {
+        return w;
+      }
+      const c: MemeCandidate | undefined = backfill.get(w.id);
+      if (c === undefined) {
+        return w;
+      }
+      const meanings: string[] = splitMeanings(c.meaning);
+      if (meanings.length === 0) {
+        return w;
+      }
+      return {
+        ...w,
+        phonetic: w.phonetic.length > 0 ? w.phonetic : (c.phonetic ?? '').trim(),
+        meanings,
+        missingMeaning: false,
+      };
+    });
+  }
   next = {
     ...next,
-    words: [...next.words, ...newWords],
+    words: mergedWords,
     records: [...next.records, ...newRecords],
     schedules: [...next.schedules, ...newSchedules],
   };

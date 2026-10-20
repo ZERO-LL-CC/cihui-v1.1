@@ -14,6 +14,8 @@ import { TtsService } from '../../service/TtsService';
 import type { TtsState } from '../../service/TtsService';
 import { MemeCardService } from '../../service/MemeCardService';
 import type { MemeCardSpec } from '../../service/MemeCardService';
+import { LocalDictService } from '../../service/LocalDictService';
+import type { DictHit } from '../../service/LocalDictService';
 import { ShareService } from '../../service/ShareService';
 import { dayKeyFromTs } from '../../model/SchedulerCore';
 import { RouteName } from '../../common/RouteNames';
@@ -29,13 +31,27 @@ class MemeCard {
   english: string;
   phonetic: string;
   meanings: string[];
+  /** 释义来自哪个原形（shattered ← shatter）；空串=直接命中 */
+  lemmaHint: string = '';
+  /** 所属梗句的中文原句：词典没收录这个词时，卡片背面直接给语境，不留空白 */
+  sourceZh: string = '';
   @Trace flipped: boolean = false;
 
-  constructor(word: Word) {
+  constructor(word: Word, sourceZh: string) {
     this.wordId = word.id;
     this.english = word.english;
     this.phonetic = word.phonetic;
     this.meanings = word.meanings;
+    this.sourceZh = sourceZh;
+  }
+
+  /** 词典查到释义后回填（老数据修复 / 换用新版词典后自动补全） */
+  fillFrom(phonetic: string, meanings: string[], lemma: string): void {
+    if (this.phonetic.length === 0) {
+      this.phonetic = phonetic;
+    }
+    this.meanings = meanings;
+    this.lemmaHint = lemma;
   }
 }
 
@@ -171,6 +187,7 @@ export struct MemeReviewPage {
 
   private loadSession(session: StudySession): void {
     this.sessionId = session.id;
+    const zh: string = this.meme !== null ? this.meme.chinese : '';
     const cards: MemeCard[] = [];
     session.items.forEach((it): void => {
       if (it.state === 'reviewed') {
@@ -179,7 +196,7 @@ export struct MemeReviewPage {
       const w: Word | undefined =
         DataStore.INSTANCE.words.find((x: Word): boolean => x.id === it.wordId);
       if (w !== undefined) {
-        cards.push(new MemeCard(w));
+        cards.push(new MemeCard(w, zh));
       }
     });
     this.queue = cards;
@@ -187,6 +204,57 @@ export struct MemeReviewPage {
     this.knownCount = session.items.filter((it): boolean => it.verdict === 'KNOWN').length;
     this.vagueCount = session.items.filter((it): boolean => it.verdict === 'VAGUE').length;
     this.unknownCount = session.items.filter((it): boolean => it.verdict === 'UNKNOWN').length;
+    // 老版本导入的梗句词释义是空的：加载词典后自动补齐并落库，卡片背面立刻有中文
+    this.healMissingMeanings();
+  }
+
+  /**
+   * 用离线词典补齐当前队列里没释义的卡片（含 shattered→shatter 词形索引）。
+   * 只补内存展示、不回写词库：背诵页在渲染/翻面动画期间落库会触发整份数据重写，
+   * 真机上曾出现「翻面即被系统收进程」，得不偿失。新导入的词在导入事务里已经带上释义，
+   * 老数据下次重新导入或手动补录即可。
+   */
+  private healMissingMeanings(): void {
+    const need: number = this.queue.filter((c: MemeCard): boolean => c.meanings.length === 0).length;
+    if (need === 0) {
+      return;
+    }
+    let task: Promise<void>;
+    try {
+      const ctx: common.Context = getContext(this) as common.UIAbilityContext;
+      task = LocalDictService.ensureLoaded(ctx);
+    } catch (e) {
+      console.warn(`[MemeReview] dict ctx: ${(e as Error)?.message ?? e}`);
+      return;
+    }
+    task.then((): void => {
+      let changed: boolean = false;
+      for (const card of this.queue) {
+        if (card.meanings.length > 0) {
+          continue;
+        }
+        const hit: DictHit | null = LocalDictService.lookupDetail(card.english);
+        if (hit === null) {
+          continue;
+        }
+        const meanings: string[] = hit.meaning
+          .split(/[；;]/)
+          .map((s: string): string => s.trim())
+          .filter((s: string): boolean => s.length > 0);
+        if (meanings.length === 0) {
+          continue;
+        }
+        const lemma: string = hit.viaLemma && hit.matchedWord !== card.english ? hit.matchedWord : '';
+        card.fillFrom(hit.phonetic, meanings, lemma);
+        changed = true;
+      }
+      if (changed) {
+        // 重新赋值触发重渲染（MemeCard 的 meanings 不是 @Trace）
+        this.queue = this.queue.slice();
+      }
+    }).catch((e: Error): void => {
+      console.warn(`[MemeReview] dict load: ${(e as Error)?.message ?? e}`);
+    });
   }
 
   private animateCovered(covered: boolean): void {
@@ -662,13 +730,22 @@ export struct MemeReviewPage {
         Divider().color(Colors.DIVIDER).width('70%').margin({ top: 16, bottom: 18 })
         if (card.meanings.length > 0) {
           Text(card.meanings.join('；'))
-            .fontSize(24).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
+            .fontSize(card.meanings.join('；').length > 24 ? 20 : 24)
+            .fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
             .textAlign(TextAlign.Center).maxLines(6).width('84%')
+          if (card.lemmaHint.length > 0) {
+            Text(`变形自 ${card.lemmaHint}`)
+              .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_WEAK).margin({ top: 12 })
+          }
         } else {
-          Text('（本词暂无释义，结合原句语境理解）')
-            .fontSize(17).fontColor(Colors.TEXT_SUB)
-            .textAlign(TextAlign.Center).maxLines(4).width('80%')
-          Button('看原句')
+          // 词典真没收录：不留白，直接把梗句中文原句端出来当语境
+          Text('这个词词典未收录，看它在原句里的意思')
+            .fontSize(13).fontColor(Colors.TEXT_WEAK)
+            .textAlign(TextAlign.Center).maxLines(2).width('80%')
+          Text(card.sourceZh.length > 0 ? card.sourceZh : '（本词暂无释义）')
+            .fontSize(20).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
+            .textAlign(TextAlign.Center).maxLines(4).width('84%').margin({ top: 14 })
+          Button('看中英对照')
             .fontSize(13).fontColor(Colors.BRAND).backgroundColor(Colors.BRAND_SOFT)
             .borderRadius(Radius.CONTROL).height(34).margin({ top: 16 })
             .onClick(() => {
@@ -718,8 +795,14 @@ export struct MemeReviewPage {
       }
       Column() {
         Stack() {
-          this.CardFace(this.queue[0], false)
-          this.CardFace(this.queue[0], true)
+          // 用 ForEach + wordId 做 key：@Builder 的参数是值传递，直接写
+          // this.CardFace(this.queue[0], x) 在判词出队后不会重建，卡片会一直停在
+          // 上一个词（真机：第 2/4 词仍显示 shattered）。key 变化强制重建节点。
+          // 这里必须直接读 this.queue（不能包成方法），否则 ArkUI 不跟踪状态变化。
+          ForEach(this.queue.slice(0, 1), (card: MemeCard) => {
+            this.CardFace(card, false)
+            this.CardFace(card, true)
+          }, (card: MemeCard) => card.wordId)
         }
         .width('100%').height('100%')
         .gesture(TapGesture().onAction(() => this.toggleFlip()))

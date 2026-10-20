@@ -190,7 +190,7 @@ export interface MemeSentence {
   id: string;
   /** 中文原句 */
   chinese: string;
-  /** 英文句子（AI 翻译或用户手填） */
+  /** 英文句子（离线翻译或用户手填） */
   english: string;
   /** 对应梗句词本 id（F5 列表带「梗句」标签） */
   bookId: string;

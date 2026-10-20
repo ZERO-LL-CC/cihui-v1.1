@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>词慧 · 打卡页重设计 — 任务驱动</title>
+<style>
+:root{
+  --brand:#0A59F7; --brand-deep:#0846C0; --brand-soft:#E3EDFF;
+  --orange:#EC6A0F; --orange-soft:#FFF1E5;
+  --green:#34A853; --green-soft:#E6F4EA;
+  --red:#E14B4B;
+  --ink:#17202E; --ink2:#5A6575; --ink3:#98A2B2;
+  --page:#F4F5F8; --card:#FFFFFF; --line:#E7EAF1;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:"MiSans","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--page); color:var(--ink); padding:40px 20px 90px;
+}
+.wrap{max-width:1280px;margin:0 auto;}
+.hero h1{font-size:clamp(24px,3.4vw,36px);font-weight:900;letter-spacing:-.02em;}
+.hero h1 em{font-style:normal;color:var(--brand);}
+.hero p{margin-top:10px;font-size:14px;color:var(--ink2);line-height:1.75;max-width:72ch;}
+/* ---------- 状态机 ---------- */
+.flow{display:flex;align-items:stretch;gap:0;margin:26px 0 8px;overflow-x:auto;padding:4px 2px;}
+.node{
+  flex:0 0 auto;background:#fff;border:1.5px solid var(--line);border-radius:14px;
+  padding:12px 16px;min-width:168px;
+}
+.node b{font-size:13.5px;display:block;}
+.node span{font-size:11.5px;color:var(--ink3);line-height:1.5;display:block;margin-top:3px;}
+.node.hot{border-color:var(--brand);box-shadow:0 6px 18px rgba(10,89,247,.10);}
+.arrow{flex:0 0 auto;display:flex;align-items:center;padding:0 10px;color:var(--ink3);font-weight:900;font-size:16px;}
+/* ---------- 手机排布 ---------- */
+.row{display:flex;flex-wrap:wrap;gap:26px;margin-top:22px;justify-content:center;}
+.shot{display:flex;flex-direction:column;gap:10px;align-items:center;}
+.shot .cap b{font-size:14.5px;font-weight:900;}
+.shot .cap span{font-size:12px;color:var(--ink3);display:block;margin-top:2px;max-width:34ch;text-align:center;line-height:1.55;}
+.phone{
+  width:296px;height:620px;background:var(--card);border-radius:34px;
+  border:1px solid #DDE1EA;box-shadow:0 24px 48px rgba(23,32,46,.14);
+  padding:20px 18px 18px;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;
+}
+.phone .stat{position:absolute;top:10px;left:22px;font-size:10.5px;font-weight:700;color:var(--ink);}
+.phone .statr{position:absolute;top:10px;right:22px;font-size:10.5px;color:var(--ink);}
+/* 页头 */
+.p-head{margin-top:16px;}
+.p-head h2{font-size:27px;font-weight:900;letter-spacing:-.02em;}
+.p-head p{font-size:11.5px;color:var(--ink3);margin-top:3px;}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:var(--brand);
+  background:var(--brand-soft);border-radius:999px;padding:4px 10px;margin-top:8px;}
+/* 待机空卡 */
+.idle{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;}
+.idle .ring{
+  width:132px;height:132px;border-radius:50%;
+  background:conic-gradient(var(--brand) 0deg, var(--brand) 0deg, #EDF0F6 0deg);
+  display:flex;align-items:center;justify-content:center;position:relative;
+}
+.idle .ring::before{content:"";position:absolute;inset:9px;border-radius:50%;background:#fff;}
+.idle .ring em{font-style:normal;position:relative;font-size:22px;font-weight:900;color:var(--ink3);}
+.idle h3{font-size:17px;font-weight:900;margin-top:16px;}
+.idle p{font-size:11.5px;color:var(--ink3);line-height:1.7;max-width:22ch;}
+.cta{
+  margin-top:18px;width:100%;padding:15px 0;border-radius:16px;text-align:center;
+  background:linear-gradient(150deg,#3D7BFF,var(--brand-deep));color:#fff;
+  font-size:14.5px;font-weight:800;box-shadow:0 10px 22px rgba(10,89,247,.28);
+}
+.cta.ghost{background:#fff;color:var(--brand);border:1.5px solid var(--brand-soft);box-shadow:none;margin-top:10px;}
+/* 任务主卡 */
+.taskcard{background:#fff;border:1px solid var(--line);border-radius:22px;padding:18px;margin-top:16px;
+  box-shadow:0 8px 20px rgba(23,32,46,.06);}
+.taskcard .total{display:flex;align-items:baseline;gap:6px;}
+.taskcard .total b{font-size:44px;font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+.taskcard .total span{font-size:12px;color:var(--ink3);font-weight:700;}
+.taskcard .sub{font-size:11px;color:var(--ink3);margin-top:2px;}
+.trow{display:flex;align-items:center;gap:12px;padding:13px 0 12px;border-top:1px dashed var(--line);margin-top:12px;}
+.trow:first-of-type{border-top:none;margin-top:0;padding-top:14px;}
+.dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+.trow .meta{flex:1;min-width:0;}
+.trow .meta b{font-size:13.5px;font-weight:800;display:block;}
+.trow .meta span{font-size:10.5px;color:var(--ink3);display:block;margin-top:2px;}
+.bar{height:5px;border-radius:3px;background:#EEF1F6;margin-top:7px;overflow:hidden;}
+.bar i{display:block;height:100%;border-radius:3px;}
+.trow .num{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;flex:0 0 auto;}
+.trow .num small{font-size:10.5px;color:var(--ink3);font-weight:700;}
+.go{flex:0 0 auto;width:26px;height:26px;border-radius:9px;background:#F2F5FA;color:var(--ink2);
+  display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;}
+/* 欠卡行 */
+.debt{display:flex;align-items:center;gap:10px;background:#FDF0F0;border:1px solid #F6D7D7;
+  border-radius:14px;padding:11px 13px;margin-top:14px;}
+.debt b{font-size:12px;color:var(--red);font-weight:800;}
+.debt span{font-size:10.5px;color:#B96A6A;margin-left:auto;font-weight:700;}
+/* 打卡按钮 */
+.check{margin-top:auto;padding-top:14px;}
+.check .btn{border-radius:17px;padding:15px 0;text-align:center;font-size:15px;font-weight:900;}
+.btn.off{background:#EEF1F6;color:var(--ink3);}
+.btn.on{background:linear-gradient(150deg,#3D7BFF,var(--brand-deep));color:#fff;box-shadow:0 10px 22px rgba(10,89,247,.28);}
+.btn.done{background:var(--green-soft);color:var(--green);}
+.tomorrow{display:flex;align-items:center;gap:9px;margin-top:11px;background:#F7F8FB;border-radius:13px;padding:10px 13px;}
+.tomorrow b{font-size:11px;color:var(--ink2);font-weight:800;}
+.tomorrow span{font-size:11px;color:var(--ink3);margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;}
+/* 已打卡头部 */
+.donecard{text-align:center;margin-top:20px;padding:8px 0 2px;}
+.donecard .seal{width:74px;height:74px;border-radius:50%;background:var(--green);margin:0 auto;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 12px 26px rgba(52,168,83,.32);}
+.donecard h3{font-size:19px;font-weight:900;margin-top:14px;}
+.donecard p{font-size:11.5px;color:var(--ink3);margin-top:3px;}
+.streak{display:inline-flex;align-items:gap:6px;margin-top:11px;background:var(--orange-soft);border-radius:999px;
+  padding:6px 14px;font-size:12px;font-weight:900;color:var(--orange);gap:6px;}
+/* 底部tab */
+.tabbar{display:flex;justify-content:space-around;border-top:1px solid var(--line);padding-top:11px;margin-top:12px;}
+.tab{font-size:10px;color:var(--ink3);text-align:center;font-weight:700;}
+.tab.on{color:var(--brand);}
+.tab i{display:block;font-style:normal;font-size:16px;margin-bottom:2px;}
+/* ---------- 规则表 ---------- */
+.rule{background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:22px 24px;margin-top:26px;}
+.rule h2{font-size:19px;font-weight:900;letter-spacing:-.01em;}
+.rule h2 em{font-style:normal;color:var(--orange);}
+.rule table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;}
+.rule th{text-align:left;color:var(--ink3);font-weight:800;font-size:11px;letter-spacing:.04em;padding:8px 10px;border-bottom:1.5px solid var(--line);}
+.rule td{padding:10px;border-bottom:1px dashed var(--line);vertical-align:top;line-height:1.6;}
+.rule td:first-child{font-weight:900;white-space:nowrap;}
+.rule .v{font-weight:900;color:var(--brand);font-variant-numeric:tabular-nums;}
+.rule .tag{display:inline-block;background:var(--orange-soft);color:var(--orange);border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:800;}
+.foot{margin-top:34px;text-align:center;font-size:12px;color:var(--ink3);line-height:1.8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>打卡页重设计 · <em>任务驱动</em>（待机即今日任务）</h1>
+    <p>砍掉前置条件卡、迷你月历、补卡规则三件套——打卡页只回答一个问题：<b>今天要背多少、复习多少</b>。
+       未导入词本时只有一张待机空卡；导入后任务 = 复习 X（艾宾浩斯到期）+ 新学 Y（每日新词量），每天都是变量，完成即打卡。</p>
+  </header>
+
+  <!-- 状态机 -->
+  <div class="flow">
+    <div class="node"><b>① 待机态</b><span>无词本：空环 + 「先导入词表」引导，页面到此为止</span></div>
+    <div class="arrow">→</div>
+    <div class="node hot"><b>② 今日任务</b><span>复习 X · 新学 Y · 共 Z，点行直达学习流</span></div>
+    <div class="arrow">→</div>
+    <div class="node"><b>③ 进行中</b><span>两条进度条实时走，打卡按钮置灰「还差 N 词」</span></div>
+    <div class="arrow">→</div>
+    <div class="node"><b>④ 已打卡</b><span>绿章 + 连击 + 明日预告（明天复习多少·新学多少）</span></div>
+  </div>
+
+  <!-- 4 屏 -->
+  <div class="row">
+    <!-- ① 待机 -->
+    <div class="shot">
+      <div class="phone">
+        <span class="stat">18:52</span><span class="statr">📶 100%</span>
+        <div class="p-head">
+          <h2>今日任务</h2>
+          <p>10 月 20 日 · 周二</p>
+        </div>
+        <div class="idle">
+          <div class="ring"><em>0</em></div>
+          <h3>还没有任务</h3>
+          <p>导入一本词表后，任务会按你的节奏每天自动生成</p>
+        </div>
+        <div class="check">
+          <div class="cta">拍照导入词表</div>
+          <div class="cta ghost">从词库选一本</div>
+        </div>
+        <div class="tabbar">
+          <div class="tab"><i>⌂</i>首页</div>
+          <div class="tab on"><i>▣</i>打卡</div>
+          <div class="tab"><i>◉</i>我的</div>
+        </div>
+      </div>
+      <div class="cap"><b>① 待机态</b><span>整页只有一张空卡 + 一个入口，不再出现前置条件/月历/规则说明</span></div>
+    </div>
+
+    <!-- ② 今日任务 -->
+    <div class="shot">
+      <div class="phone">
+        <span class="stat">18:52</span><span class="statr">📶 100%</span>
+        <div class="p-head">
+          <h2>今日任务</h2>
+          <p>10 月 20 日 · 周二 · 每日新词量 100</p>
+        </div>
+        <div class="taskcard">
+          <div class="total"><b>200</b><span>词 · 今日</span></div>
+          <div class="sub">复习 100 + 新学 100 · 预计 25 分钟</div>
+          <div class="trow">
+            <span class="dot" style="background:var(--brand)"></span>
+            <div class="meta">
+              <b>到期复习</b><span>艾宾浩斯 R1 节点 · 昨日新学到期</span>
+              <div class="bar"><i style="width:0%;background:var(--brand)"></i></div>
+            </div>
+            <span class="num">0<small>/100</small></span>
+            <span class="go">›</span>
+          </div>
+          <div class="trow">
+            <span class="dot" style="background:var(--orange)"></span>
+            <div class="meta">
+              <b>新学单词</b><span>按每日新词量排队</span>
+              <div class="bar"><i style="width:0%;background:var(--orange)"></i></div>
+            </div>
+            <span class="num">0<small>/100</small></span>
+            <span class="go">›</span>
+          </div>
+        </div>
+        <div class="check">
+          <div class="btn off">完成全部任务后打卡</div>
+        </div>
+        <div class="tabbar">
+          <div class="tab"><i>⌂</i>首页</div>
+          <div class="tab on"><i>▣</i>打卡</div>
+          <div class="tab"><i>◉</i>我的</div>
+        </div>
+      </div>
+      <div class="cap"><b>② 今日任务</b><span>大数字总任务 + 复习/新学两行变量分解，点行 1 次直达</span></div>
+    </div>
+
+    <!-- ③ 进行中 + 欠卡 -->
+    <div class="shot">
+      <div class="phone">
+        <span class="stat">18:52</span><span class="statr">📶 100%</span>
+        <div class="p-head">
+          <h2>今日任务</h2>
+          <p>10 月 20 日 · 周二 · 每日新词量 100</p>
+        </div>
+        <div class="taskcard">
+          <div class="total"><b>200</b><span>词 · 今日</span></div>
+          <div class="sub">已完成 100 · 还差 100 词</div>
+          <div class="trow">
+            <span class="dot" style="background:var(--brand)"></span>
+            <div class="meta">
+              <b>到期复习</b><span>全部过完（含模糊重考）</span>
+              <div class="bar"><i style="width:100%;background:var(--brand)"></i></div>
+            </div>
+            <span class="num" style="color:var(--green)">✓</span>
+          </div>
+          <div class="trow">
+            <span class="dot" style="background:var(--orange)"></span>
+            <div class="meta">
+              <b>新学单词</b><span>还剩 100 个待学</span>
+              <div class="bar"><i style="width:0%;background:var(--orange)"></i></div>
+            </div>
+            <span class="num">0<small>/100</small></span>
+            <span class="go">›</span>
+          </div>
+          <div class="debt"><b>昨日欠卡 · 60 词</b><span>去补卡 ›</span></div>
+        </div>
+        <div class="check">
+          <div class="btn off">还差 100 词 · 继续加油</div>
+        </div>
+        <div class="tabbar">
+          <div class="tab"><i>⌂</i>首页</div>
+          <div class="tab on"><i>▣</i>打卡</div>
+          <div class="tab"><i>◉</i>我的</div>
+        </div>
+      </div>
+      <div class="cap"><b>③ 进行中</b><span>进度实时走；欠卡降级为一条红色提示行，不再占整张卡</span></div>
+    </div>
+
+    <!-- ④ 已打卡 -->
+    <div class="shot">
+      <div class="phone">
+        <span class="stat">18:52</span><span class="statr">📶 100%</span>
+        <div class="p-head">
+          <h2>今日任务</h2>
+          <p>10 月 20 日 · 周二</p>
+        </div>
+        <div class="donecard">
+          <div class="seal">
+            <svg width="34" height="34" viewBox="0 0 24 24"><path d="M4.5 12.5 L10 18 L19.5 7" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>今日已打卡</h3>
+          <p>200 词全部完成 · 用时 24 分钟</p>
+          <div class="streak">
+            <svg width="13" height="13" viewBox="0 0 24 24"><path d="M12 2c1 4-4 5.5-4 10a4 4 0 0 0 8 0c0-1.8-.8-3-1.6-4-.3 1.4-1.2 2-2.4 2.4C13.4 8 14.6 5 12 2z" fill="#EC6A0F"/></svg>
+            连续打卡 3 天
+          </div>
+        </div>
+        <div class="taskcard" style="margin-top:18px">
+          <div class="sub" style="font-weight:800;color:var(--ink2);font-size:12px">明日预告</div>
+          <div class="trow" style="border:none;margin-top:6px;padding-bottom:4px">
+            <span class="dot" style="background:var(--brand)"></span>
+            <div class="meta"><b>到期复习</b><span>今日新学 100 词到达 R1 节点</span></div>
+            <span class="num">100<small> 词</small></span>
+          </div>
+          <div class="trow" style="border-top:1px dashed var(--line)">
+            <span class="dot" style="background:var(--orange)"></span>
+            <div class="meta"><b>新学单词</b><span>按每日新词量 100 排队</span></div>
+            <span class="num">100<small> 词</small></span>
+          </div>
+        </div>
+        <div class="check">
+          <div class="btn done">今日已打卡</div>
+        </div>
+        <div class="tabbar">
+          <div class="tab"><i>⌂</i>首页</div>
+          <div class="tab on"><i>▣</i>打卡</div>
+          <div class="tab"><i>◉</i>我的</div>
+        </div>
+      </div>
+      <div class="cap"><b>④ 已打卡</b><span>绿章 + 连击 + 明日预告：对明天的量有预期</span></div>
+    </div>
+  </div>
+
+  <!-- 任务变量规则 -->
+  <div class="rule">
+    <h2>任务生成规则 · 以「背 <em>100</em> 词」为例</h2>
+    <table>
+      <tr><th>日期</th><th>到期复习 X</th><th>新学 Y</th><th>任务卡显示</th></tr>
+      <tr>
+        <td>D0 导入日</td><td>0（无历史）</td><td class="v">100</td>
+        <td><span class="v">共 100</span> 词 · 新学 100</td>
+      </tr>
+      <tr>
+        <td>D1（隔天）</td><td class="v">100 <span class="tag">R1</span></td><td class="v">100</td>
+        <td><span class="v">共 200</span> 词 · 复习 100 + 新学 100</td>
+      </tr>
+      <tr>
+        <td>D2</td><td class="v">100 <span class="tag">R2</span></td><td class="v">100</td>
+        <td><span class="v">共 200</span> 词 · 复习 100 + 新学 100</td>
+      </tr>
+      <tr>
+        <td>D4 起叠加</td><td class="v">D0/D1 词按 R4 再到期，与 R7/R15 重叠日自动合并去重</td><td class="v">100</td>
+        <td>复习量随节点浮动，<b>每一天都是变量</b>，任务卡实时显示当日真实值</td>
+      </tr>
+      <tr>
+        <td>排空日</td><td>仅剩余到期复习</td><td class="v">0</td>
+        <td><span class="v">共 X</span> 词 · 只显示复习行</td>
+      </tr>
+    </table>
+    <p style="font-size:12px;color:var(--ink3);margin-top:12px;line-height:1.7">
+      全部复用现有调度：X = todayReviewWordList()，Y = todayNewWordList()，门槛 = X+Y 全部完成；
+      打卡幂等沿用 isCheckedInToday()。迷你月历留在计划表页，打卡页不再重复。</p>
+  </div>
+
+  <footer class="foot">
+    设计方向：任务驱动的编辑级极简 —— 白底 + 品牌蓝主色 + 橙色新学强调，大数字 tabular-nums 防抖动。<br>
+    确认后我直接重写 CheckInPage.ets（复用现有调度与打卡幂等，无新数据表）并出真机构建。
+  </footer>
+</div>
+</body>
+</html>

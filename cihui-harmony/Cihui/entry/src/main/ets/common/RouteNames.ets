@@ -44,7 +44,7 @@ export enum RouteName {
   ACCOUNT = 'AccountPage',
   /** F14 单字段二级编辑页 */
   FIELD_EDIT = 'FieldEditPage',
-  /** F17 梗句导入（中文输入/AI 翻译/拆词确认两态同页） */
+  /** F17 梗句导入（中文输入/离线翻译/拆词确认两态同页） */
   MEME_IMPORT = 'MemeImportPage',
   /** F17 梗句背诵闪卡（复用 F9 三档手势 + 会话可恢复 + 看原句） */
   MEME_REVIEW = 'MemeReviewPage',
