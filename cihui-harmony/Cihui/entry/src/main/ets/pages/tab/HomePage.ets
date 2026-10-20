@@ -14,7 +14,7 @@ import { AuthStore } from '../../viewmodel/AuthStore';
 import { dayKeyFromTs, type HomeStats } from '../../model/SchedulerCore';
 import type { Word, StudySession } from '../../model/Types';
 import type { CameraRouteParam, MemeReviewRouteParam, ReviewRouteParam } from '../../common/RouteNames';
-import { openTodayNewWords } from '../../viewmodel/StudyEntry';
+import { openTodayNewWords, entryLabelFor, isTodayBatchBrowsed, browseResumeAt } from '../../viewmodel/StudyEntry';
 import { MIN_WORDS_FOR_SENTENCE } from '../../model/SentenceCore';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 
@@ -50,6 +50,10 @@ export struct HomePage {
   @Local memeDotOpacity: number = 0;
   /** 动态QA：显式刷新版本号，导航/数据事件到达且本 Tab 可见时自增强制重绘（BUG-02） */
   @Local viewTick: number = 0;
+  /** 今日新词浏览断点（在刷新点算一次并缓存，构建期不读文件） */
+  @Local resumeAt: number = 0;
+  @Local resumeTotal: number = 0;
+  @Local batchBrowsed: boolean = false;
   /** 上一次例句是否已解锁、蓝点是否已出现，用于捕捉"状态翻转瞬间" */
   private lastSentenceReady: boolean = false;
   private lastMemeInProgress: boolean = false;
@@ -58,8 +62,29 @@ export struct HomePage {
     if (this.active) {
       this.viewTick++;
       this.syncFunStates(false);
+      this.syncResume();
     }
   };
+
+  /** 刷新浏览断点缓存：只在 Tab 可见/数据变化时读一次草稿文件 */
+  private syncResume(): void {
+    const words: Word[] = DataStore.INSTANCE.todayNewWordList();
+    this.resumeTotal = words.length;
+    this.batchBrowsed = isTodayBatchBrowsed(words);
+    this.resumeAt = browseResumeAt();
+  }
+
+  /** 今日任务主卡副标题 */
+  private taskSubLabel(): string {
+    const s: HomeStats = this.stats();
+    if (!s.hasWords) {
+      return '还没有要背的单词';
+    }
+    if (this.resumeAt > 0 && this.resumeTotal > 0) {
+      return `新词看到第 ${this.resumeAt} / ${this.resumeTotal} 个 · 接着继续`;
+    }
+    return `还剩 ${s.remaining} 个词 · 预计约 ${Math.max(1, Math.ceil(s.remaining * 12 / 60))} 分钟`;
+  }
 
   @Monitor('active')
   onActiveChange(): void {
@@ -67,12 +92,14 @@ export struct HomePage {
       this.viewTick++;
       // 从其他 Tab/二级页回到首页时，捕捉例句解锁、续背会话出现的状态翻转
       this.syncFunStates(false);
+      this.syncResume();
     }
   }
 
   aboutToAppear(): void {
     REFRESH_BUS.onNav(this.refreshWhenActive);
     REFRESH_BUS.onData(this.refreshWhenActive);
+    this.syncResume();
     // 首次进入只记录初始状态，不播"解锁脉冲/蓝点淡入"（脉冲只属于状态翻转瞬间）
     this.lastSentenceReady = this.sentenceReady();
     this.lastMemeInProgress = DataStore.INSTANCE.hasMemeInProgress();
@@ -206,7 +233,7 @@ export struct HomePage {
         .fontSize(16).fontWeight(FontWeight.Medium)
         .onClick(() => NavStore.INSTANCE.goTab(1));
     } else if (s.newAssigned - s.newDone > 0) {
-      Button(`开始今日学习（剩 ${s.newAssigned - s.newDone} 个新词）`)
+      Button(entryLabelFor(this.resumeAt, this.resumeTotal, this.batchBrowsed, s.newAssigned - s.newDone))
         .width('100%').height(46).borderRadius(Radius.BUTTON)
         .backgroundColor(Colors.WHITE).fontColor(Colors.BRAND)
         .fontSize(16).fontWeight(FontWeight.Medium)
@@ -529,9 +556,7 @@ export struct HomePage {
             Row() {
               Column() {
                 Text('今日任务').fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.WHITE)
-                Text(this.stats().hasWords
-                  ? `还剩 ${this.stats().remaining} 个词 · 预计约 ${Math.max(1, Math.ceil(this.stats().remaining * 12 / 60))} 分钟`
-                  : '还没有要背的单词')
+                Text(this.taskSubLabel())
                   .fontSize(12).fontColor('#D6E3FF').margin({ top: 6 })
               }
               .alignItems(HorizontalAlign.Start).layoutWeight(1)

@@ -39,6 +39,8 @@ export struct NewWordsPage {
   @Local ttsState: TtsState = 'idle';
   /** 是否已浏览到最后一张（整批浏览完成的唯一凭据） */
   @Local reachedEnd: boolean = false;
+  /** 本次是从断点续上的：onShown 后给一次轻提示（此前的静默续位让人以为没存） */
+  @Local pendingResumeTip: boolean = false;
   private swiperController: SwiperController = new SwiperController();
   private studiedMarked: boolean = false;
   private speakTimer: number = -1;
@@ -72,6 +74,9 @@ export struct NewWordsPage {
       return;
     }
     this.index = draft.index;
+    if (draft.index > 0) {
+      this.pendingResumeTip = true;
+    }
     if (draft.reachedEnd) {
       // 已浏览完：整批 firstStudyAt 可能已落库，标记为已到头，CTA 直接可用
       this.reachedEnd = true;
@@ -81,6 +86,9 @@ export struct NewWordsPage {
 
   /** 落盘浏览位置：离开/杀进程后回到这张 */
   private saveBrowse(): void {
+    if (this.words.length === 0) {
+      return;
+    }
     const ids: string[] = this.words.map((w: Word): string => w.id);
     const draft: BrowseDraft = {
       day: RoundDraftStore.today(),
@@ -92,9 +100,56 @@ export struct NewWordsPage {
     RoundDraftStore.saveBrowse(draft);
   }
 
+  /** 本页是否已有值得保留的浏览进度（第 1 张 + 未到头 = 没进度，不必打扰） */
+  private hasProgress(): boolean {
+    return this.index > 0 || this.reachedEnd;
+  }
+
+  /** 顶栏返回 / 系统返回统一入口：先存进度（退出不丢），再给一次防误触确认 */
+  private confirmExit(): void {
+    this.saveBrowse();
+    if (!this.hasProgress()) {
+      NavStore.INSTANCE.back();
+      return;
+    }
+    const total: number = this.words.length;
+    const message: string = this.reachedEnd
+      ? `本批 ${total} 个词已浏览完，进度已保存，下次进入可直接开始语音测试。`
+      : `已浏览到第 ${this.index + 1} / ${total} 个词，进度已保存，下次进入从这里继续。`;
+    try {
+      promptAction.showDialog({
+        title: '退出首学？',
+        message: message,
+        buttons: [
+          { text: '继续浏览', color: Colors.BRAND },
+          { text: '退出', color: Colors.TEXT_SUB },
+        ],
+      }, (err: Error, result: promptAction.ShowDialogSuccessResponse) => {
+        if (!err && result.index === 1) {
+          this.saveBrowse();
+          NavStore.INSTANCE.back();
+        }
+      });
+    } catch (e) {
+      console.warn(`[NewWords] confirmExit dialog failed: ${(e as Error)?.message ?? e}`);
+      NavStore.INSTANCE.back();
+    }
+  }
+
+  /** 系统返回键：有浏览进度则拦下并二次确认（返回 true 消费事件） */
+  private handleBackPressed(): boolean {
+    if (!this.hasProgress()) {
+      return false;
+    }
+    this.confirmExit();
+    return true;
+  }
+
   aboutToDisappear(): void {
     REFRESH_BUS.offNav(this.refreshWhenTop);
     REFRESH_BUS.offData(this.refreshWhenTop);
+    // 兜底：无论走哪条路离开，都留一份当前位置（幂等，仅百余字节）
+    this.saveBrowse();
     if (this.speakTimer !== -1) {
       clearTimeout(this.speakTimer);
       this.speakTimer = -1;
@@ -206,7 +261,7 @@ export struct NewWordsPage {
         Image($r('app.media.ic_back')).width(26).height(26)
       }
       .type(ButtonType.Normal).width(44).height(44).backgroundColor(Color.Transparent)
-      .onClick(() => NavStore.INSTANCE.back())
+      .onClick(() => this.confirmExit())
 
       Text('新词首学')
         .fontSize(TypeScale.CARD_TITLE).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
@@ -374,11 +429,18 @@ export struct NewWordsPage {
       .width('100%').height('100%').backgroundColor(Colors.PAGE_BG)
     }
     .hideTitleBar(true)
+    .onBackPressed((): boolean => this.handleBackPressed())
     .translate({ x: this.sheetX })
     .opacity(this.sheetOpacity + this.showTick * 0)
     .onShown(() => {
       this.animateCovered(true);
       this.showTick++;
+      if (this.pendingResumeTip) {
+        this.pendingResumeTip = false;
+        this.toast(this.reachedEnd
+          ? '已恢复上次进度，本批已浏览完，可直接开始语音测试'
+          : `已恢复上次进度，从第 ${this.index + 1} 个词继续`);
+      }
     })
     .onHidden(() => this.animateCovered(false))
     .customTransition((operation: NavigationOperation, isEnter: boolean): NavDestinationTransition[] | undefined => {

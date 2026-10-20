@@ -43,6 +43,33 @@ export function isTodayBatchBrowsed(words: Word[]): boolean {
   return sameBatch(browse, words);
 }
 
+/** 待续浏览位置（1 基）；0 表示没有可续的进度 */
+export function browseResumeAt(): number {
+  const words: Word[] = DataStore.INSTANCE.todayNewWordList();
+  if (words.length === 0) {
+    return 0;
+  }
+  const browse: BrowseDraft | null = RoundDraftStore.loadBrowse();
+  if (browse === null || !sameBatch(browse, words)) {
+    return 0;
+  }
+  if (browse.index <= 0) {
+    return 0;
+  }
+  return Math.min(browse.index + 1, words.length);
+}
+
+/** 首页入口文案（纯计算，调用方传入已缓存的断点值，避免在 build 里读文件） */
+export function entryLabelFor(at: number, total: number, browsed: boolean, remaining: number): string {
+  if (browsed) {
+    return '继续今日学习（做语音测试）';
+  }
+  if (at > 0 && total > 0) {
+    return `继续今日学习（第 ${at} / ${total} 个）`;
+  }
+  return `开始今日学习（剩 ${remaining} 个新词）`;
+}
+
 /**
  * 打开今日新词学习：已浏览完本批 → 直接回 F8（草稿会自动续到上次那个词）；
  * 否则进 F7 从上次看到的那张继续浏览。
