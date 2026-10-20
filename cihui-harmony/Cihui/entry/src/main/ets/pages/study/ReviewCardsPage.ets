@@ -13,6 +13,8 @@
  * - 屏幕左缘 22vp 内起手的横移交给系统返回手势，本页 PanGesture 直接忽略，不劫持系统热区。
  * - 三个手势都有底部等价按钮；每张卡判定实时写 F2 调度（DataStore.applyJudge）。
  * - 一轮必须全部过完（含模糊重考）才显示完成页，P2/P3 达标状态与首页、打卡页同源刷新。
+ * - 中途退出不丢：每过一张即时写断点草稿（剩余队列 + 重排顺序），重进接着这张继续，
+ *   全部过完才清草稿；跨天草稿自动作废。
  *
  * 说明：本期数据模型无例句库（PRD 明确不做例句），翻面仅展示中文释义。
  */
@@ -25,6 +27,8 @@ import type { TtsState } from '../../service/TtsService';
 import { RouteName } from '../../common/RouteNames';
 import type { ReviewRouteParam } from '../../common/RouteNames';
 import { promptAction } from '@kit.ArkUI';
+import { RoundDraftStore } from '../../service/RoundDraftStore';
+import type { RoundDraft } from '../../service/RoundDraftStore';
 import { vibrator } from '@kit.SensorServiceKit';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 
@@ -65,6 +69,8 @@ export struct ReviewCardsPage {
   @Local queue: ReviewCard[] = [];
   @Local finished: boolean = false;
   @Local ttsState: TtsState = 'idle';
+  /** 本次进入是从上次中断处续上的：onShown 后提示一次 */
+  @Local pendingResumeTip: boolean = false;
 
   // 顶部进度统计
   private total: number = 0;
@@ -103,6 +109,8 @@ export struct ReviewCardsPage {
     });
     this.queue = cards;
     this.total = cards.length;
+    // 断点续做：上次退出时还没过完的队列（含「模糊」重排顺序），跨天自动作废
+    this.pendingResumeTip = this.restoreDraft();
     const rate: number = DataStore.INSTANCE.settings.ttsRate;
     TtsService.init(rate).then((state: TtsState): void => {
       this.ttsState = state;
@@ -231,6 +239,71 @@ export struct ReviewCardsPage {
     );
   }
 
+  /**
+   * 从草稿续上本轮：用上次剩下的队列（含「模糊」重排顺序）替换起始队列。
+   * 只有同一天、同一模式、且确实判过词（剩余 < 总数）时才续。
+   */
+  private restoreDraft(): boolean {
+    const draft: RoundDraft | null = RoundDraftStore.load(RoundDraftStore.REVIEW);
+    if (draft === null || draft.mode !== this.param.mode) {
+      return false;
+    }
+    const total: number = draft.total > 0 ? draft.total : this.total;
+    if (draft.wordIds.length >= total) {
+      return false;
+    }
+    const remain: ReviewCard[] = [];
+    draft.wordIds.forEach((id: string): void => {
+      const w: Word | undefined = DataStore.INSTANCE.words.find((x: Word): boolean => x.id === id);
+      if (w !== undefined) {
+        remain.push(new ReviewCard(w));
+      }
+    });
+    if (remain.length === 0) {
+      RoundDraftStore.clear(RoundDraftStore.REVIEW);
+      return false;
+    }
+    this.queue = remain;
+    this.total = total;
+    this.knownCount = draft.knownCount;
+    this.vagueCount = draft.vagueCount;
+    this.unknownCount = draft.unknownCount;
+    return true;
+  }
+
+  /** 保存剩余队列：每过一张存一次，退出/杀进程后从这张继续 */
+  private saveDraftOf(next: ReviewCard[]): void {
+    if (this.finished || this.total === 0 || next.length >= this.total) {
+      // 没判过任何词时不写草稿，避免「续上」其实是从头开始
+      return;
+    }
+    const ids: string[] = next.map((c: ReviewCard): string => c.wordId);
+    const draft: RoundDraft = {
+      kind: RoundDraftStore.REVIEW,
+      mode: this.param.mode,
+      day: RoundDraftStore.today(),
+      wordIds: ids,
+      index: this.total - next.length,
+      phase: 'round',
+      entries: [],
+      total: this.total,
+      knownCount: this.knownCount,
+      vagueCount: this.vagueCount,
+      unknownCount: this.unknownCount,
+      savedAt: Date.now(),
+    };
+    RoundDraftStore.save(draft);
+  }
+
+  /** 下一张队列：认识/不认识移除队首；模糊移到最后重考（纯计算，不改卡片状态） */
+  private planNext(card: ReviewCard, verdict: Verdict): ReviewCard[] {
+    const next: ReviewCard[] = this.queue.slice(1);
+    if (verdict === 'VAGUE') {
+      next.push(card);
+    }
+    return next;
+  }
+
   /** 判定落库：实时写 F2 调度（复习轮 phase='REVIEW'，错词强化同样走这里，
    *  judge 对 status=WRONG 的词判认识会按「重新首过」推进到 R1） */
   private applyVerdict(wordId: string, verdict: Verdict): void {
@@ -301,6 +374,8 @@ export struct ReviewCardsPage {
     );
 
     this.applyVerdict(card.wordId, verdict);
+    // 判定已落调度：立刻存「预期剩余队列」，避免动画这 300ms 内退出导致同一张卡被重判
+    this.saveDraftOf(this.planNext(card, verdict));
 
     this.advanceTimer = setTimeout(() => {
       this.advanceTimer = -1;
@@ -310,10 +385,9 @@ export struct ReviewCardsPage {
 
   /** 动画结束后推进队列：模糊卡从底部重新入队并重置翻面，其余移除 */
   private advance(card: ReviewCard, verdict: Verdict): void {
-    const next: ReviewCard[] = this.queue.slice(1);
+    const next: ReviewCard[] = this.planNext(card, verdict);
     if (verdict === 'VAGUE') {
       card.flipped = false;
-      next.push(card);
     }
     this.queue = next;
     this.dragX = 0;
@@ -325,8 +399,10 @@ export struct ReviewCardsPage {
     this.flying = false;
     if (next.length === 0) {
       this.finished = true;
+      RoundDraftStore.clear(RoundDraftStore.REVIEW);
       TtsService.stop();
     } else {
+      this.saveDraftOf(next);
       this.scheduleSpeak(320);
     }
   }
@@ -661,6 +737,10 @@ export struct ReviewCardsPage {
     .onShown(() => {
       this.animateCovered(true);
       this.showTick++;
+      if (this.pendingResumeTip) {
+        this.pendingResumeTip = false;
+        this.toast(`已恢复上次进度，还剩 ${this.queue.length} 张`);
+      }
     })
     .onHidden(() => this.animateCovered(false))
     .customTransition((operation: NavigationOperation, isEnter: boolean): NavDestinationTransition[] | undefined => {

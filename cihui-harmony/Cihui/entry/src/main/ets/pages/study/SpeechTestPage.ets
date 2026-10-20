@@ -6,7 +6,9 @@
  *   最终结果走 SpeechMatch 按 settings.asrStrictness 三档匹配；
  * - 命中核心义项：绿闪 + 约 1s 自动过词；静音/没说对不自动过，可用底部三档手动判定；
  * - 红色麦克风暂停/继续；一键切手动；权限拒绝给「去设置 / 手动模式」，进度不丢；
- * - 一轮结束进复核清单，可逐词改判，确认后一次性落 FIRST 判定并回首页。
+ * - 一轮结束进复核清单，可逐词改判，确认后一次性落 FIRST 判定并回首页；
+ * - 中途退出不丢：每次判定/推进即时写断点草稿（RoundDraftStore），
+ *   重进按 wordId 回填判定并从上次那个词继续，确认后才清草稿。
  *
  * TODO(待真机核验)：TTS 播报与麦克风采集的音频焦点/回声；识别引擎可用性与中文识别率。
  */
@@ -23,6 +25,8 @@ import { PermissionUtil } from '../../service/PermissionUtil';
 import { matchSpoken } from '../../model/SpeechMatch';
 import type { Strictness } from '../../model/SpeechMatch';
 import type { RoundVerdict, Verdict, Word } from '../../model/Types';
+import { RoundDraftStore } from '../../service/RoundDraftStore';
+import type { RoundDraft, RoundDraftEntry } from '../../service/RoundDraftStore';
 import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import type { Permissions } from '@kit.AbilityKit';
@@ -73,6 +77,8 @@ export struct SpeechTestPage {
   @Local flashLabel: string = '';
   @Local permDenied: boolean = false;
   @Local cursorVisible: boolean = true;
+  /** 本次进入是从上次中断处续上的：onShown 后提示一次 */
+  @Local pendingResumeTip: boolean = false;
 
   private service: HmsSpeechService = new HmsSpeechService();
   private listener: AsrListener = new SpeechPageAsrListener(this);
@@ -117,6 +123,11 @@ export struct SpeechTestPage {
       .filter((w: Word | undefined): boolean => w !== undefined)
       .map((w: Word | undefined): Word => w as Word);
     this.items = words.map((w: Word): RoundItem => new RoundItem(w));
+    // 断点续做：上次退出时存的判定与位置（跨天/换批自动作废）
+    const resumed: boolean = this.restoreDraft();
+    if (resumed) {
+      this.pendingResumeTip = true;
+    }
 
     this.cursorTimer = setInterval(() => {
       this.cursorVisible = !this.cursorVisible;
@@ -126,7 +137,12 @@ export struct SpeechTestPage {
     TtsService.init(DataStore.INSTANCE.settings.ttsRate);
 
     if (this.items.length > 0) {
-      this.bootAsr();
+      if (this.phase === 'review') {
+        // 续上的是复核态：不申请麦克风，判定都还在草稿里，等用户确认
+        this.micPaused = true;
+      } else {
+        this.bootAsr();
+      }
     }
   }
 
@@ -152,6 +168,101 @@ export struct SpeechTestPage {
       clearInterval(this.cursorTimer);
       this.cursorTimer = -1;
     }
+  }
+
+  /**
+   * 从草稿续上本轮：按 wordId 回填判定，定位到第一个未判定的词；
+   * 全部判完则直接进复核态。跨天或一个判定都没有时从头开始。
+   * @returns 是否真的续上了进度
+   */
+  private restoreDraft(): boolean {
+    if (this.items.length === 0) {
+      return false;
+    }
+    const draft: RoundDraft | null = RoundDraftStore.load(RoundDraftStore.SPEECH);
+    if (draft === null) {
+      return false;
+    }
+    const byId: Map<string, RoundDraftEntry> = new Map();
+    draft.entries.forEach((e: RoundDraftEntry): void => {
+      byId.set(e.wordId, e);
+    });
+    let restored: number = 0;
+    this.items.forEach((it: RoundItem): void => {
+      const e: RoundDraftEntry | undefined = byId.get(it.wordId);
+      if (e === undefined) {
+        return;
+      }
+      if (e.heard.length > 0) {
+        it.heard = e.heard;
+      }
+      if (e.verdict === 'KNOWN') {
+        it.verdict = 'KNOWN';
+        restored += 1;
+      } else if (e.verdict === 'VAGUE') {
+        it.verdict = 'VAGUE';
+        restored += 1;
+      } else if (e.verdict === 'UNKNOWN') {
+        it.verdict = 'UNKNOWN';
+        restored += 1;
+      }
+    });
+    if (restored === 0) {
+      return false;
+    }
+    let next: number = -1;
+    for (let i: number = 0; i < this.items.length; i++) {
+      if (this.items[i].verdict === null) {
+        next = i;
+        break;
+      }
+    }
+    if (next < 0) {
+      this.index = this.items.length - 1;
+      this.phase = 'review';
+      this.micPaused = true;
+    } else {
+      this.index = next;
+      this.phase = 'round';
+    }
+    return true;
+  }
+
+  /** 保存本轮草稿：每次判定/推进后调用，退出与杀进程都不丢（确认后才清） */
+  private saveDraft(): void {
+    if (this.items.length === 0) {
+      return;
+    }
+    const entries: RoundDraftEntry[] = this.items.map((it: RoundItem): RoundDraftEntry => {
+      const e: RoundDraftEntry = {
+        wordId: it.wordId,
+        verdict: it.verdict === null ? '' : it.verdict,
+        heard: it.heard,
+      };
+      return e;
+    });
+    const judged: number = entries.filter((e: RoundDraftEntry): boolean => e.verdict.length > 0).length;
+    if (judged === 0) {
+      // 一个词都没判过：不留空草稿，重进本来也是从头开始
+      RoundDraftStore.clear(RoundDraftStore.SPEECH);
+      return;
+    }
+    const ids: string[] = this.items.map((it: RoundItem): string => it.wordId);
+    const draft: RoundDraft = {
+      kind: RoundDraftStore.SPEECH,
+      mode: 'NEW',
+      day: RoundDraftStore.today(),
+      wordIds: ids,
+      index: this.index,
+      phase: this.phase,
+      entries: entries,
+      total: this.items.length,
+      knownCount: 0,
+      vagueCount: 0,
+      unknownCount: 0,
+      savedAt: Date.now(),
+    };
+    RoundDraftStore.save(draft);
   }
 
   private toast(msg: string): void {
@@ -241,6 +352,7 @@ export struct SpeechTestPage {
       this.flash = 'green';
       this.flashLabel = `认识：${r.matched}`;
       this.service.endWord();
+      this.saveDraft();
       this.autoTimer = setTimeout(() => {
         this.autoTimer = -1;
         this.advance();
@@ -268,6 +380,7 @@ export struct SpeechTestPage {
       this.flashLabel = '不认识';
     }
     this.service.endWord();
+    this.saveDraft();
     this.autoTimer = setTimeout(() => {
       this.autoTimer = -1;
       this.advance();
@@ -277,6 +390,7 @@ export struct SpeechTestPage {
   private advance(): void {
     if (this.index < this.items.length - 1) {
       this.index += 1;
+      this.saveDraft();
       this.startWord();
     } else {
       this.enterReview();
@@ -287,6 +401,7 @@ export struct SpeechTestPage {
     this.service.endWord();
     this.phase = 'review';
     this.micPaused = true;
+    this.saveDraft();
   }
 
   private toggleMic(): void {
@@ -339,6 +454,7 @@ export struct SpeechTestPage {
 
   private setReviewVerdict(item: RoundItem, verdict: Verdict): void {
     item.verdict = verdict;
+    this.saveDraft();
   }
 
   private allJudged(): boolean {
@@ -354,12 +470,13 @@ export struct SpeechTestPage {
       return { wordId: it.wordId, verdict: it.verdict, heard: it.heard };
     });
     DataStore.INSTANCE.applyFirstRound(verdicts);
+    // 本轮已确认落调度，断点草稿使命结束（再次进入即全新一轮）
+    RoundDraftStore.clear(RoundDraftStore.SPEECH);
     this.clearTimers();
     this.service.release();
     TtsService.stop();
     // F-C 统一入口：新学完成后若当天还有到期复习词，提示并直接切换复习模式（通知式，不强制额外操作）。
-    // 注意：本轮判定在点「确认」前只存页面内存（见 DataStore.applyFirstRound 注释），
-    // 中途退出不会落盘，需重新走一遍才生效；返回时由 confirmExit() 二次确认，避免误退丢进度。
+    // 中途退出不丢：每次判定/推进都写断点草稿（RoundDraftStore），重进从上次那个词继续。
     const remain: Word[] = DataStore.INSTANCE.todayReviewWordList();
     if (remain.length > 0) {
       this.toast(`新学完成，进入复习模式（${remain.length} 个待复习）`);
@@ -378,22 +495,28 @@ export struct SpeechTestPage {
     return (this.phase === 'round' && this.index > 0) || this.phase === 'review';
   }
 
-  /** 顶栏返回 / 系统返回统一入口：有未提交进度先弹二次确认，避免误退丢本轮 */
+  /** 顶栏返回 / 系统返回统一入口：先存草稿（退出不丢），再给一次防误触确认 */
   private confirmExit(): void {
+    this.saveDraft();
     if (!this.hasUncommitted()) {
       NavStore.INSTANCE.back();
       return;
     }
+    const total: number = this.items.length;
+    const message: string = this.phase === 'review'
+      ? `本轮 ${total} 个词已判定完，进度已保存，下次进入直接回到复核清单。`
+      : `已背到第 ${this.index + 1} / ${total} 个词，进度已保存，下次进入从这里继续。`;
     try {
       promptAction.showDialog({
         title: '退出本轮？',
-        message: '本轮判定尚未确认，退出后不会保存，需要重新走一遍。',
+        message: message,
         buttons: [
           { text: '继续本轮', color: Colors.BRAND },
-          { text: '退出', color: Colors.UNKNOWN_RED },
+          { text: '退出', color: Colors.TEXT_SUB },
         ],
       }, (err: Error, result: promptAction.ShowDialogSuccessResponse) => {
         if (!err && result.index === 1) {
+          this.saveDraft();
           NavStore.INSTANCE.back();
         }
       });
@@ -681,6 +804,12 @@ export struct SpeechTestPage {
     .onShown(() => {
       this.animateCovered(true);
       this.showTick++;
+      if (this.pendingResumeTip) {
+        this.pendingResumeTip = false;
+        this.toast(this.phase === 'review'
+          ? '已恢复上次进度，直接回到复核清单'
+          : `已恢复上次进度，从第 ${this.index + 1} 个词继续`);
+      }
     })
     .onHidden(() => this.animateCovered(false))
     .customTransition((operation: NavigationOperation, isEnter: boolean): NavDestinationTransition[] | undefined => {
