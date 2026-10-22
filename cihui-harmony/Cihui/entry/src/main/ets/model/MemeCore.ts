@@ -25,6 +25,7 @@ import type { AppData } from './RepoCore';
 import {
   activeScopeWordIds,
   applyJudgeToData,
+  exceptionWordIds,
   genId,
 } from './RepoCore';
 import { newImportedSchedule, newStudyRecord, planNewWords } from './SchedulerCore';
@@ -367,7 +368,7 @@ export function createMemeImport(data: AppData, input: MemeImportInput, now: num
   next = {
     ...next,
     // F-D：梗句词本属例外词本，但重排口径须与全局一致（scope 外暂停词不排期）
-    schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next)),
+    schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next), exceptionWordIds(next)),
   };
 
   // 4) 梗句记录

@@ -36,6 +36,7 @@ import {
   setDailyNewCount,
   switchActiveBookData,
   activeScopeWordIds,
+  exceptionWordIds,
   emptyData,
 } from '../entry/src/main/ets/model/RepoCore.ts';
 import { DEFAULT_SETTINGS } from '../entry/src/main/ets/model/Types.ts';
@@ -85,9 +86,12 @@ const TODAY = dayKeyFromTs(NOW);
 function planNewWordsLegacy(schedules, now, dailyNewCount) {
   const quota = clampDailyNew(dailyNewCount);
   const result = schedules.map((s) => ({ ...s }));
-  let cursorDay = dayKeyFromTs(now);
-  const remaining = () =>
-    result.filter((s) => s.stage === 'NEW' && s.dueDay === cursorDay).length;
+  const today = dayKeyFromTs(now);
+  let cursorDay = today;
+  // 逾期未学的新词算作今日占用（与生产实现同口径；否则昨天欠 20 个今天又发 20 个）
+  const bucketOf = (d) => (d < today ? today : d);
+  const remaining = () => result.filter((s) => s.stage === 'NEW' && s.dueDay !== ''
+    && s.intake !== 'TODAY' && bucketOf(s.dueDay) === cursorDay).length;
   for (let i = 0; i < result.length; i++) {
     const s = result[i];
     if (s.stage !== 'NEW' || s.dueDay !== '') {
@@ -716,6 +720,158 @@ console.log('[I] 逾期打散');
     check(over.settings.dailyNewCount === 1000, 'J6: 超上限夹取 1000');
   }
 }
+
+
+/* ================= K. 四路来源统一队列（梗句 / 拍照 / 词本 / 切书） ================= */
+function testFourSources() {
+  console.log('[K] 四路来源统一队列');
+  const mkBook = (id, name, source) => ({ id, name, source, createdAt: NOW });
+  const mkWord = (id, bookId, source) => ({
+    id, bookId, english: id, phonetic: '', meanings: ['释义'], source: source ?? 'CLOUD',
+    missingMeaning: false, diySupplement: false, createdAt: NOW,
+  });
+  const state = (schedules, dailyNewCount) => ({
+    schedules,
+    records: [],
+    settings: { ...DEFAULT_SETTINGS, dailyNewCount },
+  });
+
+  // K1 昨天没学完的新词不撑爆今天的计划：20 逾期 + 20 今日到期 → 今日只放 20，顺延 20
+  {
+    const sched = [];
+    for (let i = 0; i < 20; i++) {
+      sched.push({ ...newImportedSchedule('a' + i), dueDay: addDays(TODAY, -1) });
+      sched.push({ ...newImportedSchedule('b' + i), dueDay: TODAY });
+    }
+    const plan = buildDayPlan(state(sched, 20), TODAY);
+    check(plan.newWords.length === 20, 'K1: 今日新词被额度截断为 20（不膨胀成 40）');
+    check(plan.newDeferred === 20, 'K1: 剩余 20 个顺延到明天');
+    check(plan.newWords[0] === 'a0' && plan.newWords[19] === 'a19',
+      'K1: 逾期词优先（先补昨天欠的，今天新排的顺延）');
+  }
+
+  // K2 「加入当天计划」词插队且不占额度
+  {
+    const sched = [];
+    for (let i = 0; i < 20; i++) {
+      sched.push({ ...newImportedSchedule('x' + i), dueDay: TODAY });
+    }
+    sched.push({ ...newImportedSchedule('photo1'), dueDay: TODAY, intake: 'TODAY' });
+    const plan = buildDayPlan(state(sched, 20), TODAY);
+    check(plan.newWords.length === 21, 'K2: 今日插队词不占额度（20 + 1）');
+    check(plan.newWords[0] === 'photo1', 'K2: 插队词排最前，进第一组就看得到');
+    check(plan.newDeferred === 0, 'K2: 没有顺延');
+  }
+
+  // K3 今天已学掉的词消耗额度，不会重复发新词
+  {
+    const sched = [];
+    for (let i = 0; i < 30; i++) {
+      sched.push({ ...newImportedSchedule('r' + i), dueDay: TODAY });
+    }
+    const st = state(sched, 20);
+    st.records = [];
+    for (let i = 0; i < 5; i++) {
+      st.records.push({ ...newStudyRecord('r' + i), firstPassedAt: NOW });
+      st.schedules[i] = { ...st.schedules[i], stage: 'R1', firstLearnDay: TODAY, dueDay: addDays(TODAY, 1) };
+    }
+    const plan = buildDayPlan(st, TODAY);
+    check(plan.newWords.length === 15, 'K3: 已学 5 个后今日只剩 15 个新词额度');
+  }
+
+  // K4 例外词本优先排期：主书几千词不会把拍照/梗句词挤到几个月后
+  {
+    const data = emptyData();
+    data.books = [mkBook('MAIN', '四级', 'CLOUD'), mkBook('PHOTO', '拍照词本', 'DIY_PHOTO'),
+      mkBook('MEME', '梗句词本', 'MEME')];
+    data.settings.activeBookId = 'MAIN';
+    data.settings.dailyNewCount = 10;
+    const sched = [];
+    const words = [];
+    for (let i = 0; i < 300; i++) {
+      words.push(mkWord('m' + i, 'MAIN'));
+      sched.push(newImportedSchedule('m' + i));
+    }
+    for (let i = 0; i < 3; i++) {
+      words.push(mkWord('p' + i, 'PHOTO', 'OCR'));
+      sched.push(newImportedSchedule('p' + i));
+      words.push(mkWord('g' + i, 'MEME', 'MEME'));
+      sched.push(newImportedSchedule('g' + i));
+    }
+    data.words = words;
+    data.schedules = sched;
+    const planned = planNewWords(data.schedules, NOW, 10, activeScopeWordIds(data), exceptionWordIds(data));
+    const out = { ...data, schedules: planned };
+    const plan = buildDayPlan({ schedules: out.schedules, records: [], settings: out.settings }, TODAY);
+    const todaySet = new Set(plan.newWords);
+    const photoToday = ['p0', 'p1', 'p2', 'g0', 'g1', 'g2'].filter((id) => todaySet.has(id));
+    check(photoToday.length === 6, 'K4: 拍照 + 梗句 6 个词全部排进今天，不被主书挤走');
+    const mainToday = plan.newWords.filter((id) => id.startsWith('m')).length;
+    check(mainToday === 4, 'K4: 主书只补剩余额度（4 个），总量仍是 10');
+  }
+
+  // K6 昨天欠的 20 个没学完：数据层不再给今天排 20 个，计划量稳定在 20
+  {
+    const sched = [];
+    for (let i = 0; i < 20; i++) {
+      sched.push({ ...newImportedSchedule('old' + i), dueDay: addDays(TODAY, -1) });
+    }
+    for (let i = 0; i < 20; i++) {
+      sched.push(newImportedSchedule('new' + i));
+    }
+    const planned = planNewWords(sched, NOW, 20);
+    // 今日占用 = 逾期（dueDay 早于今天）+ 今天到期，两者合计不得超额度
+    const todayCount = planned.filter((s) => s.stage === 'NEW' && s.dueDay !== ''
+      && diffDays(s.dueDay, TODAY) >= 0).length;
+    const plan = buildDayPlan({ schedules: planned, records: [], settings: { ...DEFAULT_SETTINGS, dailyNewCount: 20 } }, TODAY);
+    check(todayCount === 20, 'K6: 数据层今日占用仍是 20 个（逾期占满额度，不再追加）');
+    check(plan.newWords.length === 20, 'K6: 视图层今日计划 20 个，与数据层一致');
+    check(plan.newDeferred === 0, 'K6: 没有额外顺延（明天照常发下一批）');
+  }
+
+  // K7 插队词学完不扣额度：25 个计划（20 普通 + 5 插队），学掉 5 个插队后总数仍是 20
+  {
+    const sched = [];
+    for (let i = 0; i < 20; i++) {
+      sched.push({ ...newImportedSchedule('n' + i), dueDay: TODAY });
+    }
+    for (let i = 0; i < 5; i++) {
+      sched.push({ ...newImportedSchedule('f' + i), dueDay: TODAY, intake: 'TODAY' });
+    }
+    const st = { schedules: sched, records: [], settings: { ...DEFAULT_SETTINGS, dailyNewCount: 20 } };
+    const before = buildDayPlan(st, TODAY);
+    check(before.newWords.length === 25, 'K7: 初始计划 25（20 普通 + 5 插队）');
+    // 判掉 5 个插队词（认识 → R1）
+    for (let i = 0; i < 5; i++) {
+      st.records.push({ ...newStudyRecord('f' + i), firstPassedAt: NOW });
+      const idx = st.schedules.findIndex((s) => s.wordId === 'f' + i);
+      st.schedules[idx] = { ...st.schedules[idx], stage: 'R1', firstLearnDay: TODAY, dueDay: addDays(TODAY, 1) };
+    }
+    const after = buildDayPlan(st, TODAY);
+    check(after.newWords.length === 20, 'K7: 学完插队词后计划仍是 20（不缩水成 15）');
+  }
+
+  // K5 切书：旧书未学暂停、新书恢复、例外词本不受影响
+  {
+    const data = emptyData();
+    data.books = [mkBook('A', '四级', 'CLOUD'), mkBook('B', '高考', 'CLOUD'),
+      mkBook('P', '拍照词本', 'DIY_PHOTO')];
+    data.settings.activeBookId = 'A';
+    data.settings.dailyNewCount = 10;
+    data.words = [mkWord('a1', 'A'), mkWord('b1', 'B'), mkWord('p1', 'P', 'OCR')];
+    data.schedules = [
+      newImportedSchedule('a1'), newImportedSchedule('b1'), newImportedSchedule('p1'),
+    ];
+    const planned = planNewWords(data.schedules, NOW, 10, activeScopeWordIds(data), exceptionWordIds(data));
+    const cur = { ...data, schedules: planned };
+    const after = switchActiveBookData(cur, 'B', NOW);
+    const byId = new Map(after.schedules.map((s) => [s.wordId, s]));
+    check(byId.get('b1').dueDay === TODAY, 'K5: 切到高考后新书词立刻排进今天');
+    check(byId.get('p1').dueDay === TODAY, 'K5: 拍照例外词本不受切书影响');
+    check(after.settings.activeBookId === 'B', 'K5: 背诵中词本已切换');
+  }
+}
+testFourSources();
 
 /* ================= 汇总 ================= */
 summary('词慧调度器测试');

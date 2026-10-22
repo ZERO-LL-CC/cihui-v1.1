@@ -44,6 +44,7 @@ import {
   importCloudBook,
   importTransaction,
   activeScopeWordIds,
+  exceptionWordIds,
   removeWrongFromData,
   renameBook,
   setDailyNewCount,
@@ -601,7 +602,7 @@ export class DataStore {
       records: this.data.records,
       settings: this.data.settings,
     };
-    return previewDailyNew(state, n, Date.now(), activeScopeWordIds(this.data));
+    return previewDailyNew(state, n, Date.now(), activeScopeWordIds(this.data), exceptionWordIds(this.data));
   }
 
   /** F12 确定每日新词量：重置当日完成态、重排未来新词，历史不篡改 */

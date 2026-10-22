@@ -49,7 +49,7 @@ export interface JudgeResult {
 
 /** 当日学习桶（首页六桶 + 新词桶 + 错词桶的数据源） */
 export interface DayPlan {
-  /** 今日新词（含逾期未首学的新词） */
+  /** 今日新词（含逾期未首学的新词；按「今日插队 → 逾期 → 正常到期」排好序） */
   newWords: string[];
   /** 各长期复习桶到期单词 */
   reviewBuckets: Record<string, string[]>;
@@ -57,6 +57,8 @@ export interface DayPlan {
   overdue: string[];
   /** 错词强化单词 */
   wrongWords: string[];
+  /** 因今日新词额度已满而顺延到明天的候选数（首页提示用，不影响数据） */
+  newDeferred?: number;
 }
 
 export function defaultState(): SchedulerState {
@@ -341,35 +343,30 @@ export function clampDailyNew(n: number): number {
  * undefined = 全部参与（旧数据 / 未设置背诵词本时向后兼容）。
  */
 export function planNewWords(schedules: ReviewSchedule[], now: number, dailyNewCount: number,
-  scopeWordIds?: Set<string>): ReviewSchedule[] {
+  scopeWordIds?: Set<string>, priorityWordIds?: Set<string>): ReviewSchedule[] {
   const quota: number = clampDailyNew(dailyNewCount);
   const result: ReviewSchedule[] = schedules.map((s: ReviewSchedule) => ({ ...s }));
 
   // 预扫描：已排期 NEW 词按 dueDay 分布（这些词占用每日配额，但不会被重排）。
   // F-A：intake='TODAY'（拍照导入·加入当天计划）的词不占每日新词配额。
+  // 逾期未学的新词算作「今天的占用」：否则昨天欠 20 个没学，今天又发 20 个，
+  // 数据层计划翻倍（视图层虽有硬上限挡住，但两边数字会对不上）。
+  const todayKey: string = dayKeyFromTs(now);
   const countByDay: Map<string, number> = new Map();
   for (const s of result) {
     if (s.stage === 'NEW' && s.dueDay !== '' && s.intake !== 'TODAY') {
-      countByDay.set(s.dueDay, (countByDay.get(s.dueDay) ?? 0) + 1);
+      const bucket: string = diffDays(s.dueDay, todayKey) > 0 ? todayKey : s.dueDay;
+      countByDay.set(bucket, (countByDay.get(bucket) ?? 0) + 1);
     }
   }
 
-  let cursorDay: string = dayKeyFromTs(now);
+  let cursorDay: string = todayKey;
   let cursorCount: number = countByDay.get(cursorDay) ?? 0;
 
-  for (let i = 0; i < result.length; i++) {
-    const s: ReviewSchedule = result[i];
-    if (s.stage !== 'NEW' || s.dueDay !== '') {
-      continue;
-    }
-    // 今天判「模糊」待重考的词：本轮先留白（dueDay=''），不占今明两天配额。
-    // 只对「今天判的」生效，跨天后自动回到正常排期，避免词汇永远悬空。
-    if (s.roundRequeue && s.lastVerdictAt > 0 && dayKeyFromTs(s.lastVerdictAt) === dayKeyFromTs(now)) {
-      continue;
-    }
-    if (scopeWordIds !== undefined && !scopeWordIds.has(s.wordId)) {
-      continue;
-    }
+  // 两趟：先排「例外词本」（拍照 / 梗句）未排期的词，再排其余。
+  // 原因：主词书动辄几千词，若按导入顺序排，拍照导入的词会被排到几个月后，
+  // 用户以为「导入了却没进计划」。例外词本量小、是用户主动新建的，理应插到最近几天。
+  const assign = (s: ReviewSchedule): void => {
     while (cursorCount >= quota) {
       cursorDay = addDays(cursorDay, 1);
       cursorCount = countByDay.get(cursorDay) ?? 0;
@@ -377,6 +374,37 @@ export function planNewWords(schedules: ReviewSchedule[], now: number, dailyNewC
     s.dueDay = cursorDay;
     cursorCount += 1;
     countByDay.set(cursorDay, cursorCount);
+  };
+  const eligible = (s: ReviewSchedule, wantPriority: boolean): boolean => {
+    if (s.stage !== 'NEW' || s.dueDay !== '') {
+      return false;
+    }
+    // 今天判「模糊」待重考的词：本轮先留白（dueDay=''），不占今明两天配额。
+    // 只对「今天判的」生效，跨天后自动回到正常排期，避免词汇永远悬空。
+    if (s.roundRequeue && s.lastVerdictAt > 0 && dayKeyFromTs(s.lastVerdictAt) === dayKeyFromTs(now)) {
+      return false;
+    }
+    if (scopeWordIds !== undefined && !scopeWordIds.has(s.wordId)) {
+      return false;
+    }
+    if (priorityWordIds === undefined) {
+      return !wantPriority;
+    }
+    const isPriority: boolean = priorityWordIds.has(s.wordId);
+    return wantPriority ? isPriority : !isPriority;
+  };
+
+  if (priorityWordIds !== undefined) {
+    for (const s of result) {
+      if (eligible(s, true)) {
+        assign(s);
+      }
+    }
+  }
+  for (const s of result) {
+    if (eligible(s, false)) {
+      assign(s);
+    }
   }
   return result;
 }
@@ -398,6 +426,13 @@ interface OverdueItem {
   dueDay: string;
 }
 
+/** 今日新词候选（限流排序用）：rank 0=今日插队 1=逾期 2=正常到期；seq=入列顺序 */
+interface NewCandidate {
+  wordId: string;
+  rank: number;
+  seq: number;
+}
+
 export function buildDayPlan(state: SchedulerState, day: string): DayPlan {
   const newWords: string[] = [];
   const wrongWords: string[] = [];
@@ -405,14 +440,52 @@ export function buildDayPlan(state: SchedulerState, day: string): DayPlan {
   // F-B：逾期项与今日到期项分开收集；overdue 数组保持全量（首页积压条/补卡页口径不变）
   const overdueEntries: OverdueItem[] = [];
   const dueEntries: OverdueItem[] = [];
+  // 今日新词候选：三档优先级 0=今天明确要学(intake=TODAY) 1=逾期没学完 2=今天正常到期
+  // 四类来源（梗句拆分 / 拍照导入 / 背诵中词本 / 切换前的词本）在池内一视同仁，
+  // 只由入列时间(schedules 顺序)决定先后——用户看到的是「一条计划」，不是四份计划。
+  const newCandidates: NewCandidate[] = [];
 
+  // 今日已消耗的新词额度（首过 / 判不认识清零 / 已首学都算，避免重复占用）。
+  // intake='TODAY'（「加入当天计划」插队词）不占额度，学完了也不该扣额度，
+  // 否则学完这批插队词后今日计划总数会缩水（25 → 20），看着像「越学越少」。
+  const freeTodayIds: Set<string> = new Set();
   for (const s of state.schedules) {
+    if (s.intake === 'TODAY') {
+      freeTodayIds.add(s.wordId);
+    }
+  }
+  const learnedTodayIds: Set<string> = new Set();
+  for (const r of state.records) {
+    if (r.firstPassedAt > 0 && dayKeyFromTs(r.firstPassedAt) === day && !freeTodayIds.has(r.wordId)) {
+      learnedTodayIds.add(r.wordId);
+    }
+  }
+  for (const s of state.schedules) {
+    if (freeTodayIds.has(s.wordId)) {
+      continue;
+    }
+    if (s.firstLearnDay === day) {
+      learnedTodayIds.add(s.wordId);
+    }
+    if (s.status === 'WRONG' && s.lastVerdictAt > 0 && dayKeyFromTs(s.lastVerdictAt) === day) {
+      learnedTodayIds.add(s.wordId);
+    }
+  }
+
+  for (let i = 0; i < state.schedules.length; i++) {
+    const s: ReviewSchedule = state.schedules[i];
     if (s.status === 'WRONG') {
       wrongWords.push(s.wordId);
     }
     // 到期判定：diffDays(dueDay, day) = day - dueDay，>=0 表示到期日不晚于今天
     if (s.stage === 'NEW' && s.status === 'LEARNING' && s.dueDay !== '' && diffDays(s.dueDay, day) >= 0) {
-      newWords.push(s.wordId);
+      let rank = 2;
+      if (s.intake === 'TODAY') {
+        rank = 0;
+      } else if (diffDays(s.dueDay, day) > 0) {
+        rank = 1;
+      }
+      newCandidates.push({ wordId: s.wordId, rank, seq: i });
     }
     if (s.status === 'LEARNING' && REVIEW_STAGES.indexOf(s.stage) >= 0 && s.dueDay !== ''
       && diffDays(s.dueDay, day) >= 0) {
@@ -421,6 +494,29 @@ export function buildDayPlan(state: SchedulerState, day: string): DayPlan {
       } else {
         dueEntries.push({ wordId: s.wordId, stage: s.stage, dueDay: s.dueDay });
       }
+    }
+  }
+
+  // 每日新词硬上限：额度 - 今天已消耗，TODAY 词额外插队且不占额度。
+  // 目的：昨天没学完的新词不会把今天的计划撑成 2 倍，计划量每天稳定在设定值。
+  const quota: number = clampDailyNew(state.settings.dailyNewCount);
+  let remainingQuota: number = quota - learnedTodayIds.size;
+  if (remainingQuota < 0) {
+    remainingQuota = 0;
+  }
+  newCandidates.sort((a: NewCandidate, b: NewCandidate): number =>
+    a.rank !== b.rank ? a.rank - b.rank : a.seq - b.seq);
+  let deferred = 0;
+  for (const c of newCandidates) {
+    if (c.rank === 0) {
+      newWords.push(c.wordId);
+      continue;
+    }
+    if (remainingQuota > 0) {
+      newWords.push(c.wordId);
+      remainingQuota -= 1;
+    } else {
+      deferred += 1;
     }
   }
 
@@ -442,7 +538,7 @@ export function buildDayPlan(state: SchedulerState, day: string): DayPlan {
   for (const e of dueEntries) {
     buckets[e.stage].push(e.wordId);
   }
-  return { newWords, reviewBuckets: buckets, overdue, wrongWords };
+  return { newWords, reviewBuckets: buckets, overdue, wrongWords, newDeferred: deferred };
 }
 
 /* ================= 错词本（F10） ================= */
@@ -991,7 +1087,7 @@ export const REVIEW_WORD_SECONDS: number = 15;
 
 /** 每日新词量调整预览（F-D：scopeWordIds 与 planNewWords 口径一致，由调用方按当前背诵词本计算） */
 export function previewDailyNew(state: SchedulerState, n: number, now: number,
-  scopeWordIds?: Set<string>): DailyNewPreview {
+  scopeWordIds?: Set<string>, priorityWordIds?: Set<string>): DailyNewPreview {
   const day: string = dayKeyFromTs(now);
   const quota: number = clampDailyNew(n);
 
@@ -1015,7 +1111,7 @@ export function previewDailyNew(state: SchedulerState, n: number, now: number,
     }
     return { ...s };
   });
-  const planned: ReviewSchedule[] = planNewWords(hypot, now, quota, scopeWordIds);
+  const planned: ReviewSchedule[] = planNewWords(hypot, now, quota, scopeWordIds, priorityWordIds);
   const plan: DayPlan = buildDayPlan(
     { schedules: planned, records: state.records, settings: withDailyNew(state.settings, quota) },
     day,

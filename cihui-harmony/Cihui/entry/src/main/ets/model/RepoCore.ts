@@ -229,7 +229,7 @@ export function addWord(data: AppData, draft: WordDraft, now: number, intake: In
   // F-D：scope 限制 = 背诵中词本 + 拍照/梗句例外词本
   return {
     ...next,
-    schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next)),
+    schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next), exceptionWordIds(next)),
   };
 }
 
@@ -317,7 +317,7 @@ export function importTransaction(data: AppData, drafts: WordDraft[], now: numbe
   // F-D：scope 限制 = 背诵中词本 + 拍照/梗句例外词本。
   return {
     ...next,
-    schedules: planNewWords(schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next)),
+    schedules: planNewWords(schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next), exceptionWordIds(next)),
   };
 }
 
@@ -351,7 +351,28 @@ export function activeScopeWordIds(data: AppData): Set<string> | undefined {
 }
 
 /**
- * F-D 切换背诵词本：
+ * 例外词本（拍照 / 梗句）的词 id 集合。
+ * 两种用途：① 不受「一次只背一本」限制；② 排期时优先插到最近几天，
+ * 避免主词书几千词把用户刚导入/刚拆出来的词挤到几个月后。
+ */
+export function exceptionWordIds(data: AppData): Set<string> {
+  const freeBooks: Set<string> = new Set();
+  for (const b of data.books) {
+    if (b.source === 'DIY_PHOTO' || b.source === 'MEME') {
+      freeBooks.add(b.id);
+    }
+  }
+  const out: Set<string> = new Set();
+  for (const w of data.words) {
+    if (freeBooks.has(w.bookId)) {
+      out.add(w.id);
+    }
+  }
+  return out;
+}
+
+/**
+ * 切换背诵词本：
  * - 旧背诵词本中「未首学」的新词清空排期（暂停，切回来时再排）；
  * - 已首学的词（R1–R15 复习义务）不动，继续按节点复习；
  * - 设置 activeBookId = 新词本，并立刻为新词本里此前被暂停（dueDay 为空）的新词重排，
@@ -390,7 +411,7 @@ export function switchActiveBookData(data: AppData, newBookId: string, now: numb
   // 切回时恢复该词本被暂停的新词排期（scope 已指向新词本，旧词本词保持暂停）
   return {
     ...next,
-    schedules: planNewWords(schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next)),
+    schedules: planNewWords(schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next), exceptionWordIds(next)),
   };
 }
 
@@ -762,7 +783,7 @@ export function applyDailyNewCount(data: AppData, n: number, now: number): AppDa
   const checkins: CheckInRecord[] = data.checkins.filter((c: CheckInRecord): boolean => c.day !== today);
 
   const replanned: ReviewSchedule[] =
-    planNewWords(schedules, now, quota, activeScopeWordIds(data));
+    planNewWords(schedules, now, quota, activeScopeWordIds(data), exceptionWordIds(data));
 
   return {
     ...data,
@@ -796,6 +817,6 @@ export function setDailyNewCount(data: AppData, n: number, now: number): AppData
     return s;
   });
   const replanned: ReviewSchedule[] =
-    planNewWords(schedules, now, quota, activeScopeWordIds(data));
+    planNewWords(schedules, now, quota, activeScopeWordIds(data), exceptionWordIds(data));
   return { ...data, schedules: replanned, settings: withDailyNew(data.settings, quota) };
 }
