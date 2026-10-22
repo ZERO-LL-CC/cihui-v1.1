@@ -1,10 +1,17 @@
 /**
  * F17 梗句导入页（同页两步）
- * 步骤一：中文多行输入 +「离线翻译」（端侧梗味引擎，零网络零密钥；未命中不阻断，可手填英文）
+ * 步骤一：中文多行输入 + 自动英译（三级链路：端侧神经网络真翻译 → 离线整句/梗词库兜底）
  *        + 梗味命中建议（点一行把英文俚语插到英文框末尾）+ 英文多行框；
  * 步骤二：拆词确认——逐词三态标签（已掌握绿/学习中黄/新词蓝）、勾选、左滑删除、顶部汇总；
  *        有效词 <2 拦截；全部已掌握给「再背一遍强化」。
  * 「导入并开始背诵」单次事务落库后，回「我的词本」Tab 并压入梗句背诵页。
+ *
+ * 端侧翻译（F19）三条铁律：
+ * 1. 模型只在**本页**存活：aboutToAppear 预热 + 挂载隐藏 Web 宿主，aboutToDisappear 卸载。
+ *    真机实测读模型峰值 727MB、稳态 565MB，离开页面必须让渲染进程整体退出；
+ * 2. 模型没好也不许卡用户：LOADING 期间点按钮立刻走离线库，且提示语明说「先用离线库」；
+ * 3. 来源必须诚实：端侧模型译出的标「端侧翻译」，查表来的标「离线库匹配 / 相近说法」，
+ *    绝不把查表结果冒充成翻译结果。
  */
 import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
@@ -20,7 +27,13 @@ import type { MemeCandidate, MemeCandidateKind } from '../../model/MemeCore';
 import { summarizeCandidates } from '../../model/MemeCore';
 import type { MemeHit, TranslateResult } from '../../model/OfflineTranslateCore';
 import { appendEnglish, PLACEHOLDER, primarySlang } from '../../model/OfflineTranslateCore';
+import type { NmtResult, NmtState } from '../../model/NmtEngine';
+import { nmtEngine } from '../../model/NmtEngine';
+import { NmtHost } from '../../components/NmtHost';
 import type { Word } from '../../model/Types';
+
+/** 英文框内容的来源标注：端侧模型 / 离线整句 / 离线相近 / 离线梗词脚手架 */
+type EnglishSource = '' | 'MODEL' | 'BANK' | 'NEAR' | 'SCAFFOLD';
 
 /** 确认页一行候选（offsetX 承担左滑删除手势） */
 @ObservedV2
@@ -45,17 +58,51 @@ export struct MemeImportPage {
   @Local translating: boolean = false;
   /** 上一次离线翻译命中的梗词（用于「梗味命中」建议区） */
   @Local hits: MemeHit[] = [];
+  /** 离线库没命中时推荐的相近说法（点一条填入英文） */
+  @Local suggestions: string[] = [];
   @Local rows: CandidateRow[] = [];
   /** 步骤切换横向位移（320ms 右滑感） */
   @Local stepShift: number = 40;
   @Local stepOpacity: number = 0;
   /** 正在加载离线词典并匹配中文释义 */
   @Local preparing: boolean = false;
+  /** 端侧翻译引擎状态镜像（按钮文案与提示条全部由它驱动） */
+  @Local nmtState: NmtState = 'IDLE';
+  /** 是否挂载隐藏的 Web 宿主：false = 渲染进程退出，565MB 归还系统 */
+  @Local showNmt: boolean = false;
+  /** 英文框当前内容来源（结果区必须诚实标注） */
+  @Local englishSource: EnglishSource = '';
 
   aboutToAppear(): void {
     this.playStepEnter();
     // 提前把 3.5MB 词典读进内存：进确认页时已就绪，用户点「拆词」不卡
     this.ensureDict();
+    // 预热端侧翻译：用户正在敲这行中文的几秒钟，正好覆盖 3.2s 的模型加载
+    this.startNmt();
+  }
+
+  aboutToDisappear(): void {
+    // 卸载 Web 宿主 → 渲染进程销毁 → 读模型的 727MB / 稳态 565MB 全部释放
+    this.showNmt = false;
+    nmtEngine.dispose();
+  }
+
+  /**
+   * 启动端侧翻译：先挂宿主再 load()。
+   * 顺序有讲究——引擎的 load() 是幂等的，宿主挂载后 attach() 会补发 start()，
+   * 所以谁先谁后都不会漏加载；但先挂载能让页面加载与状态订阅并行，省 200ms 左右。
+   */
+  private startNmt(): void {
+    this.nmtState = nmtEngine.getState();
+    nmtEngine.onStateChange((s: NmtState): void => {
+      this.nmtState = s;
+      // 模型彻底起不来（加载超时 / 脚本缺失）：立刻撤掉宿主，别白占内存
+      if (s === 'FAILED') {
+        this.showNmt = false;
+      }
+    });
+    this.showNmt = true;
+    nmtEngine.load();
   }
 
   /** 加载离线词典（失败不阻断：拆词/导入仍可用，只是没释义） */
@@ -135,37 +182,219 @@ export struct MemeImportPage {
   }
 
   /**
-   * 离线翻译：调端侧梗味引擎，同步返回（仍用 Promise 链保持原交互与 loading 态）。
-   * - 有英文（整句命中 / 梗词脚手架）→ 填入英文框，按 level 区分提示；
-   * - 无英文（未识别梗词）→ 不覆盖用户已写内容，只提示 result.message。
+   * 自动英译（三级链路，顺序不可乱）：
+   *   1. 端侧模型 READY  → 真翻译（神经网络，任意中文都能译）；
+   *   2. 仍在 LOADING/IDLE → 不阻塞，先用离线库匹配，并明说「模型准备中」；
+   *   3. FAILED / 超时 / 端侧翻译失败 → 离线库兜底，并标注「离线库匹配」。
+   * 任何一档都会给出可读结果，用户永远不会看到一个转不完的圈。
    */
   private doTranslate(): void {
     if (this.translating) {
       return;
     }
-    if (this.chinese.trim().length === 0) {
+    const zh: string = this.chinese.trim();
+    if (zh.length === 0) {
       this.toast('请先输入中文句子');
       return;
     }
+    const st: NmtState = nmtEngine.getState();
+    if (st === 'RUNNING') {
+      this.toast('端侧翻译正在进行，请稍候几秒');
+      return;
+    }
+    if (st === 'READY') {
+      this.translateByModel(zh);
+      return;
+    }
+    // 模型没就绪：立刻降级，绝不让用户干等
+    if (st === 'FAILED') {
+      this.toast('端侧模型没起来，这次用离线库匹配');
+    } else {
+      this.toast('端侧模型准备中，先用离线库给你匹配');
+    }
+    this.translateByBank();
+  }
+
+  /**
+   * 一级：端侧神经翻译。
+   * 失败（含超时 / 页面报错）时**立刻**转二级离线库，用户无感。
+   */
+  private translateByModel(zh: string): void {
+    this.translating = true;
+    nmtEngine.translate(zh)
+      .then((r: NmtResult): void => {
+        this.translating = false;
+        if (r.ok && r.english.trim().length > 0) {
+          this.english = r.english.trim();
+          this.englishSource = 'MODEL';
+          // 端侧模型不查句库，「相近说法」必然过期；但梗词命中仍有参考价值，只刷新 hits
+          this.suggestions = [];
+          this.refreshHitsOnly(zh);
+          this.toast(`端侧翻译完成 · ${r.costMs}ms`);
+          return;
+        }
+        this.toast(r.message.length > 0 ? r.message : '端侧翻译失败，改用离线库匹配');
+        this.translateByBank();
+      })
+      .catch((e: Error): void => {
+        this.translating = false;
+        this.toast((e as Error)?.message ?? '端侧翻译失败，改用离线库匹配');
+        this.translateByBank();
+      });
+  }
+
+  /**
+   * 二级 / 三级：离线库（原 F18 行为，一字未改）。
+   * - 命中整句 → 直接填英文，标「离线库匹配」（近似命中标「离线库相近」）；
+   * - 命中梗词 → 填脚手架，标「离线库脚手架」，并给「梗味命中」建议区；
+   * - 全未命中 → 不填英文（不编造），只给相近说法。
+   */
+  private translateByBank(): void {
     this.translating = true;
     TranslateService.translateDetail(this.chinese, 'MEME')
       .then((result: TranslateResult): void => {
         this.translating = false;
         this.hits = result.hits;
+        this.suggestions = result.suggestions !== undefined ? result.suggestions : [];
         if (result.english.length > 0) {
           this.english = result.english;
           if (result.level === 'SENTENCE') {
-            this.toast('整句已命中，可直接使用或手动润色');
+            this.englishSource = result.matchKind === 'near' ? 'NEAR' : 'BANK';
           } else {
-            this.toast(`识别到 ${result.hits.length} 个梗词，已生成英文架子，请手动润色`);
+            this.englishSource = 'SCAFFOLD';
           }
+          // 精确 / 近似 / 梗词脚手架三种口径由引擎给文案，页面不再自己猜
+          this.toast(result.message.length > 0 ? result.message : '已填入英文，可手动润色');
         } else {
-          this.toast(result.message.length > 0 ? result.message : '未识别到梗词，请手动填写英文');
+          this.englishSource = '';
+          this.toast(result.message.length > 0 ? result.message : '没有匹配到现成英文，请手动填写');
         }
       })
       .catch((e: Error): void => {
         this.translating = false;
-        this.toast((e as Error)?.message ?? '离线翻译失败，请手动填写英文');
+        this.toast((e as Error)?.message ?? '匹配失败，请手动填写英文');
+      });
+  }
+
+  /**
+   * 端侧翻译成功后补一份「梗味命中」。
+   * 只为保留 F18 的「点一行追加俚语」能力；中文已改过就丢弃，避免串到上一句。
+   */
+  private refreshHitsOnly(zh: string): void {
+    TranslateService.translateDetail(zh, 'MEME')
+      .then((r: TranslateResult): void => {
+        if (this.chinese.trim() !== zh) {
+          return;
+        }
+        this.hits = r.hits;
+      })
+      .catch((): void => {
+        this.hits = [];
+      });
+  }
+
+
+  /* ================= 端侧翻译的展示口径（按钮 / 提示条 / 来源标签） ================= */
+
+  /**
+   * 按钮文案随状态变：就绪 = 「翻译」；进行中 = 「翻译中…」/「匹配中…」；
+   * 加载中与失败时仍写「匹配英文」——加载期这条链路照样可用，不能把入口藏了。
+   */
+  private translateButtonLabel(): string {
+    if (this.translating) {
+      return this.nmtState === 'RUNNING' ? '翻译中…' : '匹配中…';
+    }
+    if (this.nmtState === 'READY') {
+      return '翻译';
+    }
+    return '匹配英文';
+  }
+
+  /** 状态提示条文案（永远非空：让用户知道现在走的是哪条链路） */
+  private nmtHint(): string {
+    if (this.nmtState === 'READY') {
+      return '端侧翻译已就绪，点「翻译」出真英文';
+    }
+    if (this.nmtState === 'RUNNING') {
+      return '端侧翻译进行中，长句约 6 秒';
+    }
+    if (this.nmtState === 'FAILED') {
+      return '端侧模型没起来，本次用离线库匹配（不影响导入）';
+    }
+    return '端侧翻译模型准备中（约 3 秒），这期间先用离线库给你匹配';
+  }
+
+  private nmtHintColor(): string {
+    if (this.nmtState === 'READY') {
+      return Colors.KNOW_GREEN;
+    }
+    if (this.nmtState === 'FAILED') {
+      return Colors.FUZZY_ORANGE;
+    }
+    return Colors.TEXT_SUB;
+  }
+
+  private nmtHintBg(): string {
+    if (this.nmtState === 'READY') {
+      return Colors.KNOW_GREEN_SOFT;
+    }
+    if (this.nmtState === 'FAILED') {
+      return Colors.FUZZY_ORANGE_SOFT;
+    }
+    return Colors.PAGE_BG;
+  }
+
+  /** 英文框来源标签：端侧模型 / 离线整句 / 离线相近 / 离线脚手架，四者绝不混用 */
+  private sourceTagText(): string {
+    if (this.englishSource === 'MODEL') {
+      return '端侧翻译';
+    }
+    if (this.englishSource === 'BANK') {
+      return '离线库匹配';
+    }
+    if (this.englishSource === 'NEAR') {
+      return '离线库相近说法';
+    }
+    if (this.englishSource === 'SCAFFOLD') {
+      return '离线库脚手架';
+    }
+    return '';
+  }
+
+  private sourceTagColor(): string {
+    if (this.englishSource === 'MODEL') {
+      return Colors.KNOW_GREEN;
+    }
+    if (this.englishSource === 'SCAFFOLD') {
+      return Colors.FUZZY_ORANGE;
+    }
+    return Colors.BRAND;
+  }
+
+  private sourceTagBg(): string {
+    if (this.englishSource === 'MODEL') {
+      return Colors.KNOW_GREEN_SOFT;
+    }
+    if (this.englishSource === 'SCAFFOLD') {
+      return Colors.FUZZY_ORANGE_SOFT;
+    }
+    return Colors.BRAND_SOFT;
+  }
+
+  /** 点选「相近说法」：查该中文的现成英文，追加进英文框（不覆盖用户已写内容） */
+  private insertSuggestion(zh: string): void {
+    TranslateService.translateDetail(zh, 'MEME')
+      .then((r: TranslateResult): void => {
+        if (r.english.length === 0) {
+          this.toast('这条也没有现成英文');
+          return;
+        }
+        this.english = appendEnglish(this.english, r.english);
+        this.suggestions = [];
+        this.toast('已填入，按你的原意改一改');
+      })
+      .catch((): void => {
+        this.toast('填入失败，请手动填写');
       });
   }
 
@@ -211,7 +440,7 @@ export struct MemeImportPage {
       // 英文框为空（用户清空了自动填入的脚手架）：引导去点命中区或手填
       this.toast(this.hits.length > 0
         ? '请先参考「梗味命中」把英文句子写完整'
-        : '请先填写英文句子（可点离线翻译）');
+        : '请先填写英文句子（可点上方按钮自动生成）');
       return;
     }
     // 脚手架里的 [...] 是「这里还缺英文」的占位，别让它混进梗句词本
@@ -473,13 +702,23 @@ export struct MemeImportPage {
           Text('中文原句').fontSize(TypeScale.CARD_TITLE).fontWeight(FontWeight.Medium)
             .fontColor(Colors.TEXT_MAIN)
           Blank()
-          Button(this.translating ? '翻译中…' : '离线翻译')
+          Button(this.translateButtonLabel())
             .fontSize(13).fontColor(this.translating ? Colors.TEXT_WEAK : Colors.BRAND)
             .backgroundColor(Colors.BRAND_SOFT).borderRadius(Radius.CONTROL)
             .height(34).enabled(!this.translating)
             .onClick(() => this.doTranslate())
         }
-        .width('100%').margin({ bottom: 10 })
+        .width('100%').margin({ bottom: 8 })
+
+        // 状态提示条：模型准备中 / 已就绪 / 已失败，让用户随时知道走的是哪条链路
+        Row() {
+          Text(this.nmtHint())
+            .fontSize(TypeScale.CAPTION).fontColor(this.nmtHintColor())
+            .layoutWeight(1)
+        }
+        .width('100%').padding({ left: 10, right: 10, top: 6, bottom: 6 })
+        .backgroundColor(this.nmtHintBg()).borderRadius(Radius.CONTROL)
+        .margin({ bottom: 8 })
 
         TextArea({
           placeholder: '输入一个句子或梗，比如：同学这里不能拉屎',
@@ -490,20 +729,30 @@ export struct MemeImportPage {
           .placeholderColor(Colors.TEXT_WEAK).placeholderFont({ size: 15 })
           .onChange((v: string) => {
             this.chinese = v;
-            // 中文一改，上一轮的梗味命中就作废：否则点一行会把上一句的俚语塞进英文框
+            // 中文一改，上一轮的梗味命中和相近说法都作废：
+            // 否则点一行会把上一句的俚语塞进英文框
             this.hits = [];
+            this.suggestions = [];
           })
 
         // 英文输入
         Row() {
           Text('英文句子').fontSize(TypeScale.CARD_TITLE).fontWeight(FontWeight.Medium)
             .fontColor(Colors.TEXT_MAIN).margin({ top: 18 })
+          // 来源标签：端侧模型译出的写「端侧翻译」，查表来的写「离线库…」，绝不模糊
+          if (this.sourceTagText().length > 0) {
+            Text(this.sourceTagText())
+              .fontSize(11).fontColor(this.sourceTagColor())
+              .backgroundColor(this.sourceTagBg()).borderRadius(8)
+              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+              .margin({ left: 8, top: 18 })
+          }
           Blank()
         }
         .width('100%').margin({ bottom: 10 })
 
         TextArea({
-          placeholder: '点上方离线翻译自动填入，也可以自己手动输入英文',
+          placeholder: '点上方按钮自动生成英文，也可以自己手动输入',
           text: this.english,
         })
           .width('100%').height(128).fontSize(16).fontColor(Colors.TEXT_MAIN)
@@ -511,6 +760,10 @@ export struct MemeImportPage {
           .placeholderColor(Colors.TEXT_WEAK).placeholderFont({ size: 14 })
           .onChange((v: string) => {
             this.english = v;
+            // 用户把英文框清空了，来源标注就失效，跟着一起清（不让标签撒谎）
+            if (v.trim().length === 0) {
+              this.englishSource = '';
+            }
           })
 
         // 梗味命中建议：只列「还没进英文框」的梗，点一行追加到英文框末尾
@@ -535,6 +788,30 @@ export struct MemeImportPage {
           }
           .width('100%').padding(12).margin({ top: 12 })
           .backgroundColor(Colors.BRAND_SOFT).borderRadius(Radius.CARD)
+          .alignItems(HorizontalAlign.Start)
+        }
+
+        // 离线库完全没有命中：给几条相近说法，点一条直接填英文（不再只弹一句「请手填」）
+        if (this.suggestions.length > 0) {
+          Column() {
+            Text('离线库没有这句，相近的说法有：')
+              .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_SUB)
+              .width('100%').margin({ bottom: 8 })
+            ForEach(this.suggestions, (zh: string, idx: number) => {
+              Row() {
+                Text(zh)
+                  .fontSize(14).fontColor(Colors.TEXT_MAIN).layoutWeight(1)
+                Text('用这句')
+                  .fontSize(12).fontColor(Colors.BRAND)
+              }
+              .width('100%').padding({ left: 10, right: 10, top: 10, bottom: 10 })
+              .margin({ bottom: 8 })
+              .backgroundColor(Colors.WHITE).borderRadius(Radius.CONTROL)
+              .onClick(() => this.insertSuggestion(zh))
+            }, (zh: string, idx: number): string => `sug-${idx}-${zh}`)
+          }
+          .width('100%').padding(12).margin({ top: 12 })
+          .backgroundColor(Colors.PAGE_BG).borderRadius(Radius.CARD)
           .alignItems(HorizontalAlign.Start)
         }
 
@@ -627,19 +904,29 @@ export struct MemeImportPage {
 
   build() {
     NavDestination() {
-      Column() {
-        this.TopBar(this.step === 1 ? '梗句背单词' : '确认要背的词')
-        if (this.step === 1) {
-          Column() {
-            this.InputStep()
+      // 用 Stack 托着页面内容 + 隐藏的端侧翻译宿主：
+      // showNmt 变 false 时 Web 组件离树，渲染进程整体退出，565MB 归还系统
+      Stack({ alignContent: Alignment.BottomStart }) {
+        Column() {
+          this.TopBar(this.step === 1 ? '梗句背单词' : '确认要背的词')
+          if (this.step === 1) {
+            Column() {
+              this.InputStep()
+            }
+            .layoutWeight(1).width('100%')
+            .translate({ x: this.stepShift }).opacity(this.stepOpacity)
+          } else {
+            this.ConfirmStep()
           }
-          .layoutWeight(1).width('100%')
-          .translate({ x: this.stepShift }).opacity(this.stepOpacity)
-        } else {
-          this.ConfirmStep()
+        }
+        .width('100%').height('100%')
+        .backgroundColor(Colors.PAGE_BG)
+
+        if (this.showNmt) {
+          NmtHost()
         }
       }
-      .width('100%').height('100%').backgroundColor(Colors.PAGE_BG)
+      .width('100%').height('100%')
     }
     .hideTitleBar(true)
     .translate({ x: this.sheetX })

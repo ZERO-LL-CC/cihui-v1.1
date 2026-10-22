@@ -49,7 +49,13 @@ function termsOf(hits) {
 /* ============ A. 表结构 ============ */
 console.log('[A] 表结构');
 eq(MEME_TABLE.length, 32, 'MEME_TABLE 应为 32 条');
-eq(PHRASE_BANK.length, 10, 'PHRASE_BANK 应为 10 条');
+// 整句库从 10 条扩到约 245 条（V1.2 止血：原库太小，自由输入必落空），
+// 这里锁下限而不是精确值，后续继续补句不该让测试红。
+check(PHRASE_BANK.length >= 200, `PHRASE_BANK 应 ≥200 条（实际 ${PHRASE_BANK.length}）`);
+check(new Set(PHRASE_BANK.map((p) => p.zh)).size === PHRASE_BANK.length, 'PHRASE_BANK 中文不重复');
+check(PHRASE_BANK.every((p) => p.zh.trim().length > 0 && p.en.trim().length > 0),
+  'PHRASE_BANK 每条中英都非空');
+check(PHRASE_BANK.every((p) => /[.?!]$/.test(p.en.trim())), 'PHRASE_BANK 英文都以标点收尾');
 for (const e of MEME_TABLE) {
   check(e.term.length > 0 && e.standard.length > 0 && e.slang.length > 0,
     `梗词条目字段完整：${e.term}`);

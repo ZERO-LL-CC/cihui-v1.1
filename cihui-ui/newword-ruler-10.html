@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>刻度尺 10 变体 | 单词首学 · 词慧</title>
+<style>
+:root{
+  --brand:#0A59F7; --brand-deep:#0846C0; --brand-soft:#E9F0FE;
+  --ink:#17202E; --sub:#5A6575; --weak:#98A2B2;
+  --line:#E7EAF1; --page:#EDF0F6; --paper:#FFFFFF;
+  --green:#179C5B; --orange:#EC8A12; --orange-soft:#FDF1DE;
+  --sans:"HarmonyOS Sans SC",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  --serif:Georgia,"Songti SC","Noto Serif SC",serif;
+  --mono:"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{
+  font-family:var(--sans);color:var(--ink);background:#F7F8FB;
+  background-image:
+    radial-gradient(1000px 500px at 10% -6%, rgba(10,89,247,.08), transparent 62%),
+    radial-gradient(700px 400px at 94% 2%, rgba(236,138,18,.07), transparent 60%),
+    linear-gradient(to right, rgba(23,32,46,.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23,32,46,.03) 1px, transparent 1px);
+  background-size:auto,auto,56px 56px,56px 56px;
+  line-height:1.6;
+}
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px}
+.hero{padding:70px 0 34px}
+.kicker{display:inline-flex;align-items:center;gap:9px;font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--brand);font-weight:700}
+.kicker::before{content:"";width:26px;height:1.5px;background:var(--brand)}
+h1{margin-top:18px;font-size:clamp(36px,4.4vw,58px);line-height:1.03;letter-spacing:-.035em;font-weight:800}
+h1 em{font-style:normal;font-family:var(--serif);font-weight:600;letter-spacing:-.02em;color:var(--brand)}
+.lede{margin-top:18px;max-width:680px;font-size:15.5px;color:var(--sub)}
+.lede b{color:var(--ink);font-weight:700}
+.hero-meta{margin-top:22px;display:flex;flex-wrap:wrap;gap:9px}
+.chip{font-size:12px;padding:6px 12px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--sub)}
+.chip b{color:var(--ink)}
+
+.section-head{margin:44px 0 22px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.section-head h2{font-size:26px;letter-spacing:-.03em;font-weight:800}
+.section-head p{font-size:13px;color:var(--sub);max-width:560px}
+
+.g-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+@media (max-width:1240px){.g-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:860px){.g-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:600px){.g-grid{grid-template-columns:1fr}}
+
+.v-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .3s var(--ease-out),transform .3s var(--ease-out)}
+.v-card:hover{transform:translateY(-3px);box-shadow:0 24px 44px -34px rgba(23,32,46,.5)}
+.v-top{padding:15px 14px 9px}
+.v-no{font-family:var(--mono);font-size:10.5px;color:var(--weak);letter-spacing:.1em}
+.v-name{font-size:15px;font-weight:800;letter-spacing:-.01em;margin-top:2px}
+.v-tag{font-size:11px;color:var(--sub);margin-top:2px}
+.stage{height:452px;background:#F3F5F9;position:relative;overflow:hidden;cursor:zoom-in}
+.phone{position:absolute;top:8px;left:50%;width:375px;height:700px;transform:translateX(-50%) scale(.62);transform-origin:top center;background:var(--paper);overflow:hidden}
+.v-foot{padding:12px 14px 16px;border-top:1px solid var(--line);margin-top:auto}
+.v-foot dl{display:block;font-size:11px}
+.v-foot dt{color:var(--weak);font-weight:700;margin-top:8px;font-size:10px;letter-spacing:.06em}
+.v-foot dt:first-child{margin-top:0}
+.v-foot dd{color:var(--sub);line-height:1.45}
+.v-foot .cost{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line);font-size:10.5px;color:var(--brand);font-weight:700}
+
+/* ---------- phone base ---------- */
+.statusbar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;font-weight:600}
+.statusbar .r{display:flex;gap:5px;color:var(--weak)}
+.topbar{height:52px;display:flex;align-items:center;padding:0 8px}
+.back{width:44px;height:44px;display:grid;place-items:center;font-size:19px;color:var(--ink)}
+.topbar .t{flex:1;text-align:center;font-size:15px;font-weight:600}
+.topbar .sp{width:44px}
+.card{margin:0 16px;background:#fff;border-radius:26px;box-shadow:0 20px 44px -34px rgba(23,32,46,.6),0 0 0 1px rgba(23,32,46,.045);display:flex;flex-direction:column;align-items:center;padding:30px 20px 24px;position:relative;overflow:hidden}
+.en{font-size:36px;font-weight:800;letter-spacing:-.025em;line-height:1.1;text-align:center;word-break:break-word}
+.ph{margin-top:11px;display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12.5px;color:var(--sub)}
+.speaker{width:32px;height:32px;border-radius:999px;background:var(--brand-soft);display:grid;place-items:center;color:var(--brand);font-size:12px}
+.rule{width:44%;height:1px;background:var(--line);margin:18px 0}
+.mean{font-size:17.5px;text-align:center;line-height:1.55;max-width:260px}
+.hint{font-size:10px;color:var(--weak);text-align:center;margin-top:auto;padding-top:16px;line-height:1.5}
+.actions{position:absolute;left:0;right:0;bottom:0;padding:0 16px 24px;display:flex;gap:11px}
+.btn{flex:1;height:48px;border-radius:999px;display:grid;place-items:center;font-size:14.5px;font-weight:600;border:none;font-family:inherit;cursor:pointer;transition:transform .18s var(--ease-out)}
+.btn:active{transform:scale(.965)}
+.btn.ghost{background:#fff;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
+.btn.primary{background:var(--brand);color:#fff;box-shadow:0 12px 22px -14px rgba(10,89,247,.75)}
+
+/* 通用大数字 */
+.big-num{font-size:34px;font-weight:800;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
+.denom{font-size:11.5px;color:var(--weak);font-family:var(--mono);letter-spacing:.04em}
+
+/* ---------- R1 胶片齿孔 ---------- */
+.r1{}
+.r1 .strip{margin:4px 16px 0;background:#17202E;border-radius:12px;padding:9px 12px;display:flex;align-items:center;gap:10px}
+.r1 .holes{display:flex;gap:3px;flex:1;align-items:center}
+.r1 .hole{flex:0 0 8px;width:8px;height:13px;border-radius:2px;background:#3A4557;transition:background .3s var(--ease-out),transform .3s var(--ease-spring)}
+.r1 .hole.done{background:#fff}
+.r1 .hole.cur{background:var(--orange);transform:scale(1.18);box-shadow:0 0 10px rgba(236,138,18,.8)}
+.r1 .strip-meta{display:flex;align-items:baseline;gap:4px;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap}
+.r1 .strip-meta b{font-size:17px;font-weight:800;letter-spacing:-.03em}
+.r1 .strip-meta span{font-size:9.5px;color:#96A2B6;font-family:var(--mono)}
+
+/* ---------- R2 竖尺 ---------- */
+.r2 .vrail{position:absolute;right:0;top:96px;bottom:100px;width:30px;display:flex;justify-content:flex-end;padding-right:7px;z-index:6}
+.r2 .vrail-lines{width:13px;height:100%;background:repeating-linear-gradient(to bottom,#C9D2E0 0 1px,transparent 1px 7px);opacity:.8}
+.r2 .vrail-ptr{position:absolute;right:5px;width:18px;height:1.5px;background:var(--brand);transition:top .45s var(--ease-out)}
+.r2 .vrail-ptr::after{content:"";position:absolute;right:-3px;top:-3px;width:7px;height:7px;border-radius:999px;background:var(--brand);box-shadow:0 0 0 2px #fff}
+.r2 .vrail-num{position:absolute;right:26px;transform:translateY(-50%);font-size:9px;font-family:var(--mono);color:var(--brand);font-weight:700;background:#fff;padding:1px 3px;border-radius:3px;box-shadow:0 1px 3px rgba(23,32,46,.12);transition:top .45s var(--ease-out)}
+
+/* ---------- R3 弧表盘 ---------- */
+.r3 .dial{position:relative;margin-top:0;height:120px;display:flex;justify-content:center}
+.r3 svg{width:250px;height:118px}
+.r3 .dial-read{position:absolute;bottom:4px;left:0;right:0;text-align:center;display:flex;align-items:baseline;justify-content:center;gap:4px}
+.r3 .dial-read b{font-size:30px;font-weight:800;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
+.r3 .dial-cap{position:absolute;top:6px;left:0;right:0;text-align:center;font-size:9px;letter-spacing:.2em;color:var(--weak);text-transform:uppercase}
+
+/* ---------- R4 表冠环 ---------- */
+.r4 .crown{display:flex;align-items:center;justify-content:space-between;margin:2px 20px 0;height:34px}
+.r4 .crown-l{font-size:9.5px;letter-spacing:.16em;color:var(--weak);transition:text-decoration .2s}
+.r4 .ring{--p:7;width:42px;height:42px;border-radius:999px;background:conic-gradient(var(--brand) calc(var(--p)*1%),#E7EAF1 0);display:grid;place-items:center;position:relative}
+.r4 .ring::after{content:"";position:absolute;inset:4px;border-radius:999px;background:#fff}
+.r4 .ring b{position:relative;z-index:1;font-size:10.5px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--brand)}
+.r4 .card-edge{position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--brand) var(--p,7%),#E7EAF1 0)}
+
+/* ---------- R5 对焦 ---------- */
+.r5 .focus{margin:6px 20px 0;height:64px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent)}
+.r5 .focus-ticks{display:flex;align-items:center;gap:5px}
+.r5 .ft{width:1px;height:7px;background:#CBD4E2;transition:height .35s var(--ease-spring),background .35s,opacity .35s;opacity:.7}
+.r5 .ft.near{height:19px;background:#8B97A9;opacity:1}
+.r5 .ft.near2{height:13px;background:#AEB9C8;opacity:.95}
+.r5 .ft.done{background:var(--brand);opacity:.75}
+.r5 .ft.cur{height:32px;width:2.5px;background:var(--orange);opacity:1;box-shadow:0 0 10px rgba(236,138,18,.7)}
+.r5 .focus-ptr{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:5px solid var(--orange)}
+.r5 .focus-read{position:absolute;left:50%;top:-2px;transform:translateX(-50%);font-size:9px;font-family:var(--mono);color:var(--orange);letter-spacing:.1em;font-weight:700}
+
+/* ---------- R6 电梯井 ---------- */
+.r6 .shaft{position:absolute;left:0;top:96px;width:48px;bottom:100px;display:flex;flex-direction:column;justify-content:space-between;padding:4px 0 4px 10px}
+.r6 .floor{display:flex;align-items:center;gap:5px;height:20px;opacity:.45;transition:.3s var(--ease-out)}
+.r6 .floor i{width:7px;height:7px;border-radius:1.5px;border:1px solid #B9C3D2;background:#fff}
+.r6 .floor em{font-style:normal;font-size:8.5px;font-family:var(--mono);color:var(--weak)}
+.r6 .floor.on{opacity:1}
+.r6 .floor.on i{background:var(--brand);border-color:var(--brand)}
+.r6 .floor.on em{color:var(--brand);font-weight:700}
+.r6 .floor.past i{background:#DCE3EE;border-color:#DCE3EE}
+.r6 .cage{position:absolute;left:34px;width:9px;height:24px;border-radius:4px;background:var(--orange);box-shadow:0 0 0 2px rgba(236,138,18,.18),0 6px 14px -6px rgba(236,138,18,.8);transition:top .5s var(--ease-out);z-index:2}
+.r6 .cage::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:3px;height:3px;border-radius:999px;background:#fff}
+
+/* ---------- R7 波形 ---------- */
+.r7 .wave{margin:6px 16px 0;height:58px;display:flex;align-items:center;gap:1px;position:relative}
+.r7 .bar{flex:1;background:#DDE3EE;border-radius:1px;transition:background .3s,height .3s var(--ease-out)}
+.r7 .bar.done{background:var(--brand);opacity:.75}
+.r7 .bar.cur{background:var(--orange);box-shadow:0 0 8px rgba(236,138,18,.7)}
+.r7 .wave-meta{display:flex;justify-content:space-between;padding:5px 16px 0;font-size:9px;font-family:var(--mono);color:var(--weak);letter-spacing:.08em}
+.r7 .wave-meta b{color:var(--orange);font-weight:700}
+
+/* ---------- R8 书脊 ---------- */
+.r8 .spine{position:absolute;left:0;top:96px;bottom:100px;width:52px;display:flex;flex-direction:column;gap:3px;padding:2px 0 2px 8px}
+.r8 .chap{flex:1;background:#EEF2F8;border-radius:3px;position:relative;overflow:hidden;display:flex;align-items:flex-start;justify-content:center;padding-top:4px}
+.r8 .chap i{position:absolute;left:0;right:0;bottom:0;background:var(--brand);opacity:.72;transition:height .4s var(--ease-out)}
+.r8 .chap.on i{background:var(--orange);opacity:1}
+.r8 .chap em{position:relative;font-style:normal;font-size:8.5px;font-family:var(--mono);color:#8B95A6;letter-spacing:.05em}
+.r8 .chap.on em{color:var(--orange);font-weight:700}
+.r8 .spine-title{position:absolute;left:8px;top:70px;font-size:8px;letter-spacing:.18em;color:var(--weak);transform:rotate(-90deg);transform-origin:left top}
+
+/* ---------- R9 地图比例尺 ---------- */
+.r9 .mapscale{margin:6px 18px 0}
+.r9 .ms-blocks{display:flex;height:11px;border-radius:2px;overflow:hidden;box-shadow:inset 0 0 0 1px #D5DCE8}
+.r9 .msb{flex:1;transition:background .3s}
+.r9 .msb.k{background:#2A3444}
+.r9 .msb.w{background:#fff}
+.r9 .msb.on{background:var(--brand)}
+.r9 .ms-numbers{display:flex;justify-content:space-between;margin-top:4px;font-size:8.5px;font-family:var(--mono);color:var(--weak)}
+.r9 .ms-numbers .now{color:var(--orange);font-weight:700}
+.r9 .cursor9{position:absolute;top:4px;width:1.5px;height:20px;background:var(--orange);transition:left .45s var(--ease-out);box-shadow:0 0 8px rgba(236,138,18,.6)}
+.r9 .ms-wrap{position:relative}
+
+/* ---------- R10 分段块 ---------- */
+.r10 .segs{margin:6px 18px 0;display:flex;gap:3px}
+.r10 .seg{flex:1;height:11px;border-radius:2.5px;background:#E4E9F2;position:relative;overflow:hidden;transition:background .3s}
+.r10 .seg i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--brand);border-radius:2px;transition:width .4s var(--ease-out)}
+.r10 .seg.full i{width:100%}
+.r10 .seg.on{background:#EFF3FA}
+.r10 .seg.on i{background:var(--orange)}
+.r10 .seg-meta{display:flex;justify-content:space-between;padding:5px 18px 0;font-size:9px;font-family:var(--mono);color:var(--weak);letter-spacing:.06em}
+.r10 .seg-meta b{color:var(--ink);font-weight:700}
+
+/* ---------- modal ---------- */
+.modal{position:fixed;inset:0;background:rgba(15,20,29,.72);backdrop-filter:blur(6px);z-index:50;display:none;align-items:center;justify-content:center;padding:24px}
+.modal.on{display:flex;animation:fadeIn .24s var(--ease-out)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-inner{position:relative;width:375px;max-height:92vh;border-radius:34px;overflow:hidden;box-shadow:0 40px 80px -30px rgba(0,0,0,.6);animation:popIn .34s var(--ease-out)}
+@keyframes popIn{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+.modal-close{position:absolute;top:-14px;right:-14px;width:36px;height:36px;border-radius:999px;background:#fff;border:none;font-size:15px;cursor:pointer;z-index:2;box-shadow:0 6px 16px -6px rgba(0,0,0,.4)}
+
+footer{padding:52px 0 68px;font-size:12px;color:var(--weak);text-align:center;letter-spacing:.04em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Ruler Studies · 10 Variations</div>
+    <h1>刻度尺<br><em>十种走法</em></h1>
+    <p class="lede">
+      你说刻度尺方向好看，那就把这一条母题拆开做透：<b>横向 / 竖向 / 弧形 / 环形</b>四种朝向，
+      加上<b>胶片、波形、楼层、书脊、比例尺</b>五种隐喻，最后收一个最稳的分段块。
+      全部按 100 词设计，没有一个会溢出。
+    </p>
+    <div class="hero-meta">
+      <div class="chip">全部按 <b>100 词</b> 校验</div>
+      <div class="chip">最大占用 <b>300 / 343 px</b></div>
+      <div class="chip">点击手机放大 · 点「下一个」看动效</div>
+    </div>
+  </header>
+
+  <div class="section-head">
+    <div>
+      <h2>十版对照</h2>
+      <p>同一页信息骨架（词 / 音标 / 释义 / 两按钮），只换进度语言，方便你只挑一个维度。</p>
+    </div>
+  </div>
+
+  <div class="g-grid">
+
+    <!-- R1 胶片齿孔 -->
+    <article class="v-card">
+      <div class="v-top"><div class="v-no">R1 / 10</div><div class="v-name">胶片齿孔</div><div class="v-tag">横向 · 深色走带</div></div>
+      <div class="stage" data-open="r1">
+        <div class="phone r1">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="strip">
+            <div class="holes" data-id="r1holes"></div>
+            <div class="strip-meta"><b data-id="r1n">07</b><span>/100</span></div>
+          </div>
+          <div class="card" style="margin-top:10px;height:448px">
+            <div class="en" data-id="r1en">abandon</div>
+            <div class="ph"><span data-id="r1ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" data-id="r1mean">放弃；抛弃</div>
+            <div class="hint">每 5 个词走一格胶片<br>走完整卷就该测了</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="r1">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl><dt>隐喻</dt><dd>胶片走带，当前帧被曝光</dd><dt>为什么稳</dt><dd>固定 20 格，每格 5 词，100 词恰好走完</dd><dt>动效</dt><dd>齿孔逐个点亮 + 当前格轻微放大</dd></dl>
+        <div class="cost">落地 低 · Row + 20 个方块</div>
+      </div>
+    </article>
+
+    <!-- R2 竖尺 -->
+    <article class="v-card">
+      <div class="v-top"><div class="v-no">R2 / 10</div><div class="v-name">侧缘竖尺</div><div class="v-tag">竖向 · 不占版面</div></div>
+      <div class="stage" data-open="r2">
+        <div class="phone r2">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="vrail"><div class="vrail-lines"></div><div class="vrail-ptr" data-id="r2ptr"></div><div class="vrail-num" data-id="r2num">7</div></div>
+          <div class="card" style="margin-top:10px;height:506px;margin-right:26px">
+            <div class="en" data-id="r2en">abandon</div>
+            <div class="ph"><span data-id="r2ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" data-id="r2mean">放弃；抛弃</div>
+            <div class="hint">刻度贴在屏幕右缘<br>一根竖线走完全程</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="r2">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl><dt>隐喻</dt><dd>量尺 / 音量条，竖向走</dd><dt>为什么稳</dt><dd>纵向长度固定，词数只改变刻度密度</dd><dt>动效</dt><dd>指针带高光缓行，数字跟着跳</dd></dl>
+        <div class="cost">落地 低 · 一条 repeating-gradient</div>
+      </div>
+    </article>
+
+    <!-- R3 弧表盘 -->
+    <article class="v-card">
+      <div class="v-top"><div class="v-no">R3 / 10</div><div class="v-name">弧表盘</div><div class="v-tag">弧形 · 仪表感最强</div></div>
+      <div class="stage" data-open="r3">
+        <div class="phone r3">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="dial">
+            <svg viewBox="0 0 250 118">
+              <path d="M25,104 A100,100 0 0,1 225,104" stroke="#E9EDF4" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <path d="M25,104 A100,100 0 0,1 225,104" stroke="#0A59F7" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="314.16" data-id="r3arc"/>
+              <g data-id="r3ticks"></g>
+              <circle cx="25" cy="104" r="0" fill="#EC8A12" data-id="r3dot"/>
+            </svg>
+            <div class="dial-read"><b data-id="r3n">07</b><span class="denom">/ 100</span></div>
+          </div>
+          <div class="card" style="margin-top:6px;height:396px">
+            <div class="en" data-id="r3en">abandon</div>
+            <div class="ph"><span data-id="r3ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" data-id="r3mean">放弃；抛弃</div>
+            <div class="hint">表针扫过 180°，一圈不回头</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="r3">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl><dt>隐喻</dt><dd>测速表 / 仪表盘</dd><dt>为什么稳</dt><dd>弧长恒定，进度只改填充比例</dd><dt>动效</dt><dd>指针弹性扫动，端点亮点跟随</dd></dl>
+        <div class="cost">落地 中 · SVG 弧 + 三角函数定位</div>
+      </div>
+    </article>
+
+    <!-- R4 表冠环 -->
+    <article class="v-card">
+      <div class="v-top"><div class="v-no">R4 / 10</div><div class="v-name">表冠环</div><div class="v-tag">环形 · 最轻量</div></div>
+      <div class="stage" data-open="r4">
+        <div class="phone r4">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="crown">
+            <div class="crown-l">BATCH 01 · 100 WORDS</div>
+            <div class="ring" data-id="r4ring"><b data-id="r4p">7%</b></div>
+          </div>
+          <div class="card" style="margin-top:8px;height:472px">
+            <div class="card-edge" data-id="r4edge"></div>
+            <div class="en" data-id="r4en">abandon</div>
+            <div class="ph"><span data-id="r4ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" data-id="r4mean">放弃；抛弃</div>
+            <div class="hint">卡片顶边随进度生长<br>环里只有百分比</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="r4">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl><dt>隐喻</dt><dd>表冠 + 卡边生长</dd><dt>为什么稳</dt><dd>百分比天然不随词数变化</dd><dt>动效</dt><dd>环用 conic 过渡，卡边同步推进</dd></dl>
+        <div class="cost">落地 低 · conic-gradient 或 Progress 环</div>
+      </div>
+    </article>
+
+    <!-- R5 对焦 -->
+    <article class="v-card">
+      <div class="v-top"><div class="v-no">R5 / 10</div><div class="v-name">对焦刻度</div><div class="v-tag">横向 · 景深压缩</div></div>
+      <div class="stage" data-open="r5">
+        <div class="phone r5">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="focus">
+            <div class="focus-read" data-id="r5read">07 / 100</div>
+            <div class="focus-ticks" data-id="r5ticks"></div>
+            <div class="focus-ptr"></div>
+          </div>
+          <div class="card" style="margin-top:8px;height:438px">
+            <div class="en" data-id="r5en">abandon</div>
+            <div class="ph"><span data-id="r5ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" data-id="r5mean">放弃；抛弃</div>
+            <div class="hint">中间清晰、两侧虚化<br>像镜头对焦到当前这个词</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="r5">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl><dt>隐喻</dt><dd>镜头对焦环 / 变焦</dd><dt>为什么稳</dt><dd>只渲染窗口内 21 根刻度</dd><dt>动效</dt><dd>焦点柱弹性拉伸，两侧依次降透明</dd></dl>
+        <div class="cost">落地 中 · 需窗口化渲染 21 根</div>
+      </div>
+    </article>
+
+    <!-- R6 电梯 -->
+    <article class="v-card">
+      <div class="v-top"><div class="v-no">R6 / 10</div><div class="v-name">电梯井</div><div class="v-tag">竖向 · 大词库专用</div></div>
+      <div class="stage" data-open="r6">
+        <div class="phone r6">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="shaft">
+            <div class="cage" data-id="r6cage"></div>
+            <div data-id="r6floors" style="display:contents"></div>
+          </div>
+          <div class="card" style="margin-top:10px;height:506px;margin-left:52px">
+            <div class="en" data-id="r6en">abandon</div>
+            <div class="ph"><span data-id="r6ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" data-id="r6mean">放弃；抛弃</div>
+            <div class="hint">每 10 词一层楼<br>1000 词就是 100 层，井还是这么宽</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="r6">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl><dt>隐喻</dt><dd>电梯楼层，一层十词</dd><dt>为什么稳</dt><dd>层数可折叠，1000 词也只占一列</dd><dt>动效</dt><dd>轿厢滑到当前层，到层轻微回弹</dd></dl>
+        <div class="cost">落地 中低 · Column + 绝对定位轿厢</div>
+      </div>
+    </article>
+
+    <!-- R7 波形 -->
+    <article class="v-card">
+      <div class="v-top"><div class="v-no">R7 / 10</div><div class="v-name">音轨波形</div><div class="v-tag">横向 · 100 词也放得下</div></div>
+      <div class="stage" data-open="r7">
+        <div class="phone r7">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="wave" data-id="r7wave"></div>
+          <div class="wave-meta"><span>START</span><b data-id="r7read">07 / 100</b><span>END</span></div>
+          <div class="card" style="margin-top:8px;height:432px">
+            <div class="en" data-id="r7en">abandon</div>
+            <div class="ph"><span data-id="r7ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" data-id="r7mean">放弃；抛弃</div>
+            <div class="hint">一个词一根柱，走过的柱连成声波</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="r7">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl><dt>隐喻</dt><dd>音频波形，呼应「听发音」</dd><dt>为什么稳</dt><dd>100 柱各 2px + 1px 间距 = 300px</dd><dt>动效</dt><dd>当前柱发光，播读音时整条轻微跳动</dd></dl>
+        <div class="cost">落地 低 · 100 个 2px 柱</div>
+      </div>
+    </article>
+
+    <!-- R8 书脊 -->
+    <article class="v-card">
+      <div class="v-top"><div class="v-no">R8 / 10</div><div class="v-name">书脊章节</div><div class="v-tag">竖向 · 分组感</div></div>
+      <div class="stage" data-open="r8">
+        <div class="phone r8">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="spine" data-id="r8spine"></div>
+          <div class="card" style="margin-top:10px;height:500px;margin-left:58px">
+            <div class="en" data-id="r8en">abandon</div>
+            <div class="ph"><span data-id="r8ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" data-id="r8mean">放弃；抛弃</div>
+            <div class="hint">书脊分三章，每章三十余词<br>看完三章刚好一整本</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="r8">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl><dt>隐喻</dt><dd>书脊上的章节块</dd><dt>为什么稳</dt><dd>章数固定，块内用百分比填充</dd><dt>动效</dt><dd>当前章换成橙色并向上充满</dd></dl>
+        <div class="cost">落地 中低 · 3 个弹性块 + 内部填充</div>
+      </div>
+    </article>
+
+    <!-- R9 比例尺 -->
+    <article class="v-card">
+      <div class="v-top"><div class="v-no">R9 / 10</div><div class="v-name">地图比例尺</div><div class="v-tag">横向 · 黑白硬朗</div></div>
+      <div class="stage" data-open="r9">
+        <div class="phone r9">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="mapscale">
+            <div class="ms-wrap">
+              <div class="ms-blocks" data-id="r9blocks"></div>
+              <div class="cursor9" data-id="r9cur"></div>
+            </div>
+            <div class="ms-numbers"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+          </div>
+          <div class="card" style="margin-top:10px;height:430px">
+            <div class="en" data-id="r9en">abandon</div>
+            <div class="ph"><span data-id="r9ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" data-id="r9mean">放弃；抛弃</div>
+            <div class="hint">像在地图上量距离<br>你走了多远、还剩多远</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="r9">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl><dt>隐喻</dt><dd>地图测距比例尺</dd><dt>为什么稳</dt><dd>20 个交替块 + 固定数字标注</dd><dt>动效</dt><dd>橙色游标滑过，块随进度变蓝</dd></dl>
+        <div class="cost">落地 低 · 20 个 flex 块 + 游标</div>
+      </div>
+    </article>
+
+    <!-- R10 分段块 -->
+    <article class="v-card">
+      <div class="v-top"><div class="v-no">R10 / 10</div><div class="v-name">分段电量</div><div class="v-tag">横向 · 最稳最省</div></div>
+      <div class="stage" data-open="r10">
+        <div class="phone r10">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="segs" data-id="r10segs"></div>
+          <div class="seg-meta"><span>第 <b data-id="r10n">7</b> 词</span><span data-id="r10read">07 / 100</span><span>剩 <b data-id="r10left">93</b></span></div>
+          <div class="card" style="margin-top:10px;height:438px">
+            <div class="en" data-id="r10en">abandon</div>
+            <div class="ph"><span data-id="r10ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" data-id="r10mean">放弃；抛弃</div>
+            <div class="hint">十格电量，一格十个词<br>装满就是满电</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="r10">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl><dt>隐喻</dt><dd>电池电量格</dd><dt>为什么稳</dt><dd>块数自适应，1000 词同样 10 格</dd><dt>动效</dt><dd>当前格内部填充，满格瞬间提亮</dd></dl>
+        <div class="cost">落地 最低 · 10 个 flex 块</div>
+      </div>
+    </article>
+
+  </div>
+
+  <footer>词慧 · 刻度尺十变体 · 100 / 1000 词均不溢出 · 点击手机可放大交互</footer>
+</div>
+
+<div class="modal" id="modal">
+  <div style="position:relative">
+    <button class="modal-close" id="modalClose">✕</button>
+    <div class="modal-inner" id="modalInner"></div>
+  </div>
+</div>
+
+<script>
+const WORDS = [
+  {en:'abandon', ph:'/əˈbændən/', mean:'放弃；抛弃'},
+  {en:'brilliant', ph:'/ˈbrɪliənt/', mean:'极好的；才华横溢的'},
+  {en:'cautious', ph:'/ˈkɔːʃəs/', mean:'谨慎的；小心的'},
+  {en:'diligent', ph:'/ˈdɪlɪdʒənt/', mean:'勤奋的；用功的'},
+  {en:'elegant', ph:'/ˈelɪɡənt/', mean:'优雅的；简洁的'},
+  {en:'fragile', ph:'/ˈfrædʒaɪl/', mean:'易碎的；脆弱的'},
+  {en:'genuine', ph:'/ˈdʒenjuɪn/', mean:'真正的；真诚的'},
+];
+const TOTAL = 100;
+const state = {r1:6,r2:6,r3:6,r4:6,r5:6,r6:6,r7:6,r8:6,r9:6,r10:6};
+
+/* ---------- 构建刻度 DOM ---------- */
+function buildAll(){
+  // R1 20 孔
+  const h = document.querySelector('[data-id="r1holes"]');
+  if (h && !h.children.length){
+    for (let k=0;k<20;k++){ const d=document.createElement('div'); d.className='hole'; h.appendChild(d); }
+  }
+  // R3 弧端点（12 根刻度）
+  const tg = document.querySelector('[data-id="r3ticks"]');
+  if (tg && !tg.children.length){
+    for (let k=0;k<=12;k++){
+      const ang = Math.PI - (k/12)*Math.PI;
+      const r1 = 100, r2 = 88;
+      const x1 = 125 + Math.cos(ang)*r1, y1 = 104 - Math.sin(ang)*r1;
+      const x2 = 125 + Math.cos(ang)*r2, y2 = 104 - Math.sin(ang)*r2;
+      const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+      l.setAttribute('x1',x1); l.setAttribute('y1',y1);
+      l.setAttribute('x2',x2); l.setAttribute('y2',y2);
+      l.setAttribute('stroke','#D7DFEC'); l.setAttribute('stroke-width','1.4');
+      l.setAttribute('stroke-linecap','round');
+      tg.appendChild(l);
+    }
+  }
+  // R5 41 根刻度（41 × 6px ≈ 246px，正好铺满）
+  const ft = document.querySelector('[data-id="r5ticks"]');
+  if (ft && !ft.children.length){
+    for (let k=0;k<41;k++){ const d=document.createElement('div'); d.className='ft'; ft.appendChild(d); }
+  }
+  // R6 10 层
+  const fl = document.querySelector('[data-id="r6floors"]');
+  if (fl && !fl.children.length){
+    for (let k=9;k>=0;k--){
+      const d = document.createElement('div');
+      d.className = 'floor';
+      d.innerHTML = '<i></i><em>' + String(k+1).padStart(2,'0') + 'F</em>';
+      fl.appendChild(d);
+    }
+  }
+  // R7 100 柱
+  const wv = document.querySelector('[data-id="r7wave"]');
+  if (wv && !wv.children.length){
+    for (let k=0;k<TOTAL;k++){
+      const d = document.createElement('div');
+      d.className = 'bar';
+      const h2 = 6 + Math.abs(Math.sin(k*0.9))*16 + Math.abs(Math.cos(k*0.37))*10;
+      d.style.height = h2.toFixed(1) + 'px';
+      wv.appendChild(d);
+    }
+  }
+  // R8 3 章
+  const sp = document.querySelector('[data-id="r8spine"]');
+  if (sp && sp.querySelectorAll('.chap').length === 0){
+    for (let k=0;k<3;k++){
+      const d = document.createElement('div');
+      d.className = 'chap';
+      d.innerHTML = '<i style="height:0%"></i><em>0' + (k+1) + '</em>';
+      sp.appendChild(d);
+    }
+  }
+  // R9 20 交替块
+  const bl = document.querySelector('[data-id="r9blocks"]');
+  if (bl && !bl.children.length){
+    for (let k=0;k<20;k++){
+      const d = document.createElement('div');
+      d.className = 'msb ' + (k%2===0 ? 'k' : 'w');
+      bl.appendChild(d);
+    }
+  }
+  // R10 10 段
+  const sg = document.querySelector('[data-id="r10segs"]');
+  if (sg && !sg.children.length){
+    for (let k=0;k<10;k++){
+      const d = document.createElement('div');
+      d.className = 'seg';
+      d.innerHTML = '<i></i>';
+      sg.appendChild(d);
+    }
+  }
+}
+
+/* ---------- 渲染（root 可为 document 或克隆体） ---------- */
+function q(root, id){ return root.querySelector('[data-id="'+id+'"]'); }
+
+function paintWord(root, v, i){
+  const w = WORDS[i % WORDS.length];
+  const en = q(root, v+'en'), ph = q(root, v+'ph'), mn = q(root, v+'mean');
+  if (en) en.textContent = w.en;
+  if (ph) ph.textContent = w.ph;
+  if (mn) mn.textContent = w.mean;
+}
+
+function render(v, root){
+  root = root || document;
+  const i = state[v];
+  const pct = (i + 1) / TOTAL;
+  paintWord(root, v, i);
+
+  if (v === 'r1'){
+    const holes = root.querySelectorAll('.hole');
+    holes.forEach((h,k)=>{
+      const reached = Math.floor(i / 5);
+      h.classList.toggle('done', k < reached);
+      h.classList.toggle('cur', k === reached);
+    });
+    const n = q(root,'r1n'); if (n) n.textContent = String(i+1).padStart(2,'0');
+  }
+
+  if (v === 'r2'){
+    const p = q(root,'r2ptr'), num = q(root,'r2num');
+    if (p){ p.style.top = (pct*100) + '%'; }
+    if (num){ num.style.top = (pct*100) + '%'; num.textContent = i+1; }
+  }
+
+  if (v === 'r3'){
+    const arc = q(root,'r3arc');
+    const LEN = 314.16;
+    if (arc) arc.setAttribute('stroke-dashoffset', (LEN*(1-pct)).toFixed(1));
+    const ang = Math.PI - pct*Math.PI;
+    const cx = 125 + Math.cos(ang)*100, cy = 104 - Math.sin(ang)*100;
+    const dot = q(root,'r3dot');
+    if (dot){ dot.setAttribute('cx', cx.toFixed(1)); dot.setAttribute('cy', cy.toFixed(1)); dot.setAttribute('r','4.5'); }
+    const n = q(root,'r3n'); if (n) n.textContent = String(i+1).padStart(2,'0');
+  }
+
+  if (v === 'r4'){
+    const p = Math.round(pct*100);
+    const ring = q(root,'r4ring');
+    if (ring) ring.style.setProperty('--p', p);
+    const pl = q(root,'r4p'); if (pl) pl.textContent = p + '%';
+    const edge = q(root,'r4edge');
+    if (edge) edge.style.setProperty('--p', p + '%');
+  }
+
+  if (v === 'r5'){
+    const ts = root.querySelectorAll('.ft');
+    const mid = Math.floor(ts.length / 2);
+    ts.forEach((t,k)=>{
+      t.classList.remove('near','near2','done','cur');
+      const d = Math.abs(k - mid);
+      if (d === 0) t.classList.add('cur');
+      else if (d === 1) t.classList.add('near');
+      else if (d === 2) t.classList.add('near2');
+      if (k < mid) t.classList.add('done');
+    });
+    const r = q(root,'r5read'); if (r) r.textContent = String(i+1).padStart(2,'0') + ' / ' + TOTAL;
+  }
+
+  if (v === 'r6'){
+    const floors = root.querySelectorAll('.floor');
+    const cur = Math.min(9, Math.floor(i/10));       // 0..9，从下往上
+    floors.forEach((f,k)=>{                          // DOM 顺序是 10F..01F
+      const idx = 9 - k;                             // 对应楼层 0..9
+      f.classList.toggle('on', idx === cur);
+      f.classList.toggle('past', idx < cur);
+    });
+    const cage = q(root,'r6cage');
+    if (cage) cage.style.top = (100 - ((cur+0.5)/10)*100) + '%';
+  }
+
+  if (v === 'r7'){
+    const bars = root.querySelectorAll('.bar');
+    bars.forEach((b,k)=>{
+      b.classList.toggle('done', k < i);
+      b.classList.toggle('cur', k === i);
+    });
+    const r = q(root,'r7read'); if (r) r.textContent = String(i+1).padStart(2,'0') + ' / ' + TOTAL;
+  }
+
+  if (v === 'r8'){
+    const chaps = root.querySelectorAll('.chap');
+    const per = Math.ceil(TOTAL/3);
+    chaps.forEach((c,k)=>{
+      const start = k*per, end = Math.min(TOTAL,(k+1)*per);
+      const filled = Math.max(0, Math.min(end-start, i+1-start));
+      const fill = c.querySelector('i');
+      if (fill) fill.style.height = ((filled/(end-start))*100).toFixed(1) + '%';
+      c.classList.toggle('on', i >= start && i < end);
+    });
+  }
+
+  if (v === 'r9'){
+    const blocks = root.querySelectorAll('.msb');
+    const reached = Math.round(pct*20);
+    blocks.forEach((b,k)=>{ b.classList.toggle('on', k < reached); });
+    const cur = q(root,'r9cur');
+    if (cur) cur.style.left = 'calc(' + (pct*100) + '% - 1px)';
+  }
+
+  if (v === 'r10'){
+    const segs = root.querySelectorAll('.seg');
+    const per = TOTAL/10;
+    segs.forEach((s,k)=>{
+      const start = k*per;
+      const filled = Math.max(0, Math.min(per, i+1-start));
+      const bar = s.querySelector('i');
+      if (bar) bar.style.width = ((filled/per)*100).toFixed(1) + '%';
+      s.classList.toggle('on', i >= start && i < start+per);
+      s.classList.toggle('full', filled >= per);
+    });
+    const n = q(root,'r10n'); if (n) n.textContent = i+1;
+    const r = q(root,'r10read'); if (r) r.textContent = String(i+1).padStart(2,'0') + ' / ' + TOTAL;
+    const l = q(root,'r10left'); if (l) l.textContent = TOTAL - i - 1;
+  }
+}
+
+/* ---------- 初始化 ---------- */
+buildAll();
+Object.keys(state).forEach(v=>render(v));
+
+/* ---------- 下一个 ---------- */
+document.querySelectorAll('[data-next]').forEach(btn=>{
+  btn.addEventListener('click', e=>{
+    e.stopPropagation();
+    const v = btn.dataset.next;
+    state[v] = (state[v] + 1) % TOTAL;
+    render(v);
+  });
+});
+
+/* ---------- 放大 ---------- */
+const modal = document.getElementById('modal');
+const inner = document.getElementById('modalInner');
+document.querySelectorAll('.stage').forEach(st=>{
+  st.addEventListener('click', ()=>{
+    const v = st.dataset.open;
+    const clone = st.querySelector('.phone').cloneNode(true);
+    clone.style.cssText = 'position:relative;top:0;left:0;transform:none;width:375px;height:700px;margin:0';
+    inner.innerHTML = '';
+    inner.appendChild(clone);
+    modal.classList.add('on');
+    render(v, clone);
+    clone.querySelectorAll('[data-next]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        const ver = btn.dataset.next;
+        state[ver] = (state[ver] + 1) % TOTAL;
+        render(ver, clone);
+      });
+    });
+  });
+});
+document.getElementById('modalClose').addEventListener('click', ()=>modal.classList.remove('on'));
+modal.addEventListener('click', e=>{ if(e.target === modal) modal.classList.remove('on'); });
+document.addEventListener('keydown', e=>{ if(e.key === 'Escape') modal.classList.remove('on'); });
+
+/* hash 直达 */
+(function(){
+  const h = location.hash.replace('#','');
+  if (!h) return;
+  const st = document.querySelector('.stage[data-open="'+h+'"]');
+  if (st) setTimeout(()=>st.click(), 60);
+})();
+</script>
+</body>
+</html>

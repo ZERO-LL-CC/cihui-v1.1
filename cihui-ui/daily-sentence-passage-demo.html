@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>词慧 · 每日例句整段生成 Demo</title>
+<style>
+  :root{
+    --brand:#0A59F7; --brand-pressed:#0846C0; --brand-soft:#E9F0FE;
+    --text-main:#17202E; --text-sub:#5A6575; --text-weak:#98A2B2;
+    --divider:#E7EAF1; --page-bg:#EDF0F6; --white:#FFFFFF;
+    --green:#179C5B; --green-soft:#E5F5EC;
+    --orange:#EC8A12; --orange-soft:#FDF1DE;
+    --red:#E14B4B; --red-soft:#FCEAEA;
+    --r-card:20px; --r-btn:16px; --r-ctrl:12px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0;padding:32px 16px 56px;background:#DDE3ED;
+    font-family:-apple-system,BlinkMacSystemFont,"HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+    display:flex;flex-direction:column;align-items:center;gap:20px;min-height:100vh;
+  }
+  /* ---------- 场景切换器 ---------- */
+  .scenes{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:420px;}
+  .scenes button{
+    border:1px solid #C8D2E0;background:#fff;color:#5A6575;
+    padding:7px 14px;border-radius:99px;font-size:12px;cursor:pointer;
+    font-family:inherit;transition:.16s;
+  }
+  .scenes button:hover{border-color:var(--brand);color:var(--brand);}
+  .scenes button.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600;}
+  /* ---------- 手机框 ---------- */
+  .phone{
+    width:390px;height:844px;background:var(--page-bg);border-radius:44px;
+    box-shadow:0 24px 60px rgba(23,32,46,.22),0 0 0 10px #1B2030,0 0 0 11px #333A4D;
+    position:relative;overflow:hidden;display:flex;flex-direction:column;
+  }
+  .statusbar{
+    height:50px;flex:0 0 50px;display:flex;align-items:flex-end;justify-content:space-between;
+    padding:0 26px 8px;font-size:13px;font-weight:600;color:var(--text-main);
+  }
+  .statusbar .icons{display:flex;gap:5px;align-items:center;font-size:11px;}
+  /* ---------- 导航栏 ---------- */
+  .navbar{
+    height:52px;flex:0 0 52px;display:flex;align-items:center;padding:0 12px;
+    gap:6px;background:var(--page-bg);
+  }
+  .back{
+    width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    cursor:pointer;transition:.14s;flex:0 0 36px;
+  }
+  .back:hover{background:rgba(10,89,247,.08);}
+  .back svg{width:20px;height:20px;stroke:var(--text-main);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+  .navtitle{font-size:17px;font-weight:600;color:var(--text-main);letter-spacing:.2px;}
+  .navsub{font-size:11px;color:var(--text-weak);margin-left:auto;padding-right:8px;}
+  /* ---------- 滚动区 ---------- */
+  .scroll{flex:1;overflow-y:auto;padding:4px 16px 24px;scrollbar-width:none;}
+  .scroll::-webkit-scrollbar{display:none;}
+  /* ---------- 批次条 ---------- */
+  .batchbar{
+    display:flex;align-items:center;gap:10px;margin:4px 0 12px;
+  }
+  .batchpill{
+    background:var(--white);border-radius:99px;padding:6px 12px;font-size:12px;
+    color:var(--text-sub);border:1px solid var(--divider);display:flex;align-items:center;gap:6px;
+  }
+  .batchpill b{color:var(--brand);font-weight:600;}
+  .batchdots{display:flex;gap:5px;margin-left:auto;}
+  .bdot{width:7px;height:7px;border-radius:50%;background:#C9D2E0;transition:.2s;}
+  .bdot.on{background:var(--brand);width:18px;border-radius:99px;}
+  /* ---------- 主卡片 ---------- */
+  /* 覆盖率卡提到段落之前：这是本功能的差异点，首屏必须看见 */
+  #mainArea{display:flex;flex-direction:column;}
+  #mainArea > .batchbar{order:-2;}
+  #covCard{order:-1;}
+  .card{
+    background:var(--white);border-radius:var(--r-card);padding:18px 18px 16px;
+    box-shadow:0 2px 10px rgba(23,32,46,.05);margin-bottom:14px;
+    animation:fadeUp .34s cubic-bezier(.22,.8,.3,1) both;
+  }
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+  .cardhead{display:flex;align-items:flex-start;gap:8px;margin-bottom:12px;}
+  .eyebrow{
+    font-size:11px;color:var(--brand);background:var(--brand-soft);
+    padding:3px 8px;border-radius:6px;font-weight:600;letter-spacing:.3px;flex:0 0 auto;
+  }
+  .eyebrow.gray{color:var(--text-sub);background:#F1F3F7;}
+  .eyebrow.warn{color:var(--orange);background:var(--orange-soft);}
+  .ptitle{font-size:16px;font-weight:600;color:var(--text-main);line-height:1.4;flex:1;}
+  /* 英文段落 */
+  .passage{
+    font-size:15px;line-height:1.82;color:var(--text-main);letter-spacing:.1px;
+    font-family:"Georgia","Times New Roman","HarmonyOS Sans SC",serif;
+  }
+  .hit{
+    color:var(--brand);font-weight:700;background:var(--brand-soft);
+    border-radius:3px;padding:1px 2px;box-decoration-break:clone;
+    -webkit-box-decoration-break:clone;transition:.3s;
+  }
+  .hit.pulse{animation:hitpulse .9s ease-out;}
+  @keyframes hitpulse{0%{background:#9DBEFA;}100%{background:var(--brand-soft);}}
+  /* 中文对照 */
+  .zh{
+    max-height:0;overflow:hidden;transition:max-height .34s cubic-bezier(.22,.8,.3,1),opacity .3s;
+    opacity:0;border-top:1px dashed transparent;margin-top:0;
+  }
+  .zh.open{max-height:900px;opacity:1;border-top-color:var(--divider);margin-top:14px;padding-top:12px;}
+  .zh p{font-size:13.5px;line-height:1.85;color:var(--text-sub);margin:0 0 8px;}
+  .zh p:last-child{margin-bottom:0;}
+  .zh-toggle{
+    display:flex;align-items:center;justify-content:center;gap:5px;margin-top:14px;
+    font-size:12px;color:var(--text-sub);cursor:pointer;user-select:none;
+    padding:8px 0 2px;border-top:1px solid var(--divider);
+  }
+  .zh-toggle svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;transition:.3s;}
+  .zh-toggle.open svg{transform:rotate(180deg);}
+  /* ---------- 覆盖率 ---------- */
+  .cov{background:var(--white);border-radius:var(--r-card);padding:16px 18px;margin-bottom:14px;
+       box-shadow:0 2px 10px rgba(23,32,46,.05);animation:fadeUp .34s .05s cubic-bezier(.22,.8,.3,1) both;}
+  .covtop{display:flex;align-items:baseline;gap:6px;margin-bottom:10px;}
+  .covlabel{font-size:12px;color:var(--text-sub);}
+  .covnum{font-size:19px;font-weight:700;color:var(--text-main);font-variant-numeric:tabular-nums;}
+  .covnum small{font-size:12px;font-weight:500;color:var(--text-weak);}
+  .covpct{margin-left:auto;font-size:12px;font-weight:600;color:var(--green);background:var(--green-soft);
+          padding:2px 8px;border-radius:6px;}
+  .covpct.mid{color:var(--orange);background:var(--orange-soft);}
+  .bar{height:7px;background:#EDF0F6;border-radius:99px;overflow:hidden;display:flex;}
+  .bar .fill{background:linear-gradient(90deg,#3D82FF,var(--brand));border-radius:99px;
+             transition:width .8s cubic-bezier(.22,.8,.3,1);height:100%;}
+  .miss{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+  .miss .lab{font-size:11px;color:var(--text-weak);margin-right:2px;}
+  .chip{font-size:12px;color:var(--text-sub);background:#F1F3F7;border-radius:8px;padding:4px 9px;
+        font-family:Georgia,serif;transition:.3s;}
+  .chip.done{background:var(--green-soft);color:var(--green);text-decoration:line-through;opacity:.65;}
+  .patchbtn{
+    margin-top:12px;width:100%;height:38px;border-radius:var(--r-ctrl);border:1px solid var(--brand);
+    background:var(--brand-soft);color:var(--brand);font-size:13px;font-weight:600;cursor:pointer;
+    font-family:inherit;transition:.16s;display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .patchbtn:hover{background:#DCE9FE;}
+  .patchbtn:active{transform:scale(.985);}
+  .patchbtn:disabled{opacity:.5;cursor:default;transform:none;}
+  /* ---------- 底部操作 ---------- */
+  .actions{
+    flex:0 0 auto;display:flex;gap:8px;padding:10px 16px 26px;background:var(--page-bg);
+    border-top:1px solid rgba(231,234,241,.8);
+  }
+  .act{
+    flex:1;height:44px;border-radius:var(--r-btn);border:none;cursor:pointer;
+    font-family:inherit;font-size:13px;font-weight:600;display:flex;align-items:center;
+    justify-content:center;gap:5px;transition:.14s;
+  }
+  .act svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .act.ghost{background:var(--white);color:var(--text-sub);box-shadow:0 1px 4px rgba(23,32,46,.06);}
+  .act.ghost:hover{color:var(--brand);}
+  .act.primary{background:var(--brand);color:#fff;flex:1.35;box-shadow:0 4px 12px rgba(10,89,247,.28);}
+  .act.primary:hover{background:var(--brand-pressed);}
+  .act:active{transform:scale(.97);}
+  /* ---------- 骨架 ---------- */
+  .sk{background:#EEF1F6;border-radius:8px;animation:breathe 1.4s ease-in-out infinite;}
+  @keyframes breathe{0%,100%{opacity:1;}50%{opacity:.45;}}
+  .skline{height:14px;margin-bottom:11px;}
+  .generating{
+    display:flex;align-items:center;gap:10px;padding:14px 0 6px;color:var(--text-sub);font-size:13px;
+  }
+  .spinner{
+    width:16px;height:16px;border:2px solid #D5DDEA;border-top-color:var(--brand);
+    border-radius:50%;animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  /* ---------- 空态 / 降级 ---------- */
+  .empty{text-align:center;padding:48px 20px;}
+  .empty .ic{font-size:38px;margin-bottom:14px;opacity:.85;}
+  .empty h3{font-size:16px;color:var(--text-main);margin:0 0 8px;font-weight:600;}
+  .empty p{font-size:13px;color:var(--text-sub);line-height:1.7;margin:0 0 18px;}
+  .empty .go{
+    display:inline-flex;align-items:center;gap:6px;height:42px;padding:0 22px;border-radius:var(--r-btn);
+    background:var(--brand);color:#fff;font-size:14px;font-weight:600;border:none;cursor:pointer;
+    font-family:inherit;box-shadow:0 4px 12px rgba(10,89,247,.28);
+  }
+  .fallback .row{
+    display:flex;align-items:baseline;gap:10px;padding:11px 0;border-bottom:1px solid var(--divider);
+  }
+  .fallback .row:last-child{border-bottom:none;}
+  .fallback .w{font-size:15px;font-weight:600;color:var(--text-main);font-family:Georgia,serif;min-width:110px;}
+  .fallback .m{font-size:13px;color:var(--text-sub);}
+  .banner{
+    display:flex;gap:8px;align-items:flex-start;background:var(--orange-soft);color:#8A5A05;
+    border-radius:var(--r-ctrl);padding:11px 13px;font-size:12.5px;line-height:1.6;margin-bottom:12px;
+  }
+  .banner svg{width:16px;height:16px;flex:0 0 16px;stroke:#B8730A;fill:none;stroke-width:2;margin-top:1px;}
+  .hidden{display:none !important;}
+  /* ---------- 说明区 ---------- */
+  .notes{
+    max-width:420px;background:#fff;border-radius:16px;padding:18px 20px;
+    font-size:12.5px;color:var(--text-sub);line-height:1.8;box-shadow:0 2px 12px rgba(23,32,46,.06);
+  }
+  .notes h4{margin:0 0 8px;font-size:13px;color:var(--text-main);}
+  .notes ul{margin:0;padding-left:18px;}
+  .notes li{margin-bottom:5px;}
+  .notes code{background:#F1F3F7;padding:1px 5px;border-radius:4px;font-size:11.5px;color:var(--brand);}
+</style>
+</head>
+<body>
+
+<div class="scenes">
+  <button class="on" data-scene="ok">① 生成成功</button>
+  <button data-scene="loading">② 生成中</button>
+  <button data-scene="patched">③ 补漏后 100%</button>
+  <button data-scene="fallback">④ 无网降级</button>
+  <button data-scene="empty">⑤ 词不足</button>
+</div>
+
+<div class="phone">
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="icons">▮▮▮ ⌁ ▰</span>
+  </div>
+
+  <div class="navbar">
+    <div class="back">
+      <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+    </div>
+    <div class="navtitle">今日例句</div>
+    <div class="navsub" id="navsub">今日 20 词</div>
+  </div>
+
+  <div class="scroll" id="scroll">
+
+    <!-- ===== 场景 ⑤ 词不足 ===== -->
+    <div class="empty hidden" id="sceneEmpty">
+      <div class="ic">🌱</div>
+      <h3>今天背了 2 个词</h3>
+      <p>再背 <b style="color:#0A59F7">1 个</b> 就能生成例句<br>用今天背的词写一段，读完就记住了</p>
+      <button class="go">去背单词 →</button>
+    </div>
+
+    <!-- ===== 正常区（成功 / 生成中 / 补漏后） ===== -->
+    <div id="mainArea">
+
+      <div class="batchbar">
+        <div class="batchpill">第 <b>1</b> 批 · 共 2 批</div>
+        <div class="batchdots">
+          <div class="bdot on"></div><div class="bdot"></div>
+        </div>
+      </div>
+
+      <!-- 生成中 -->
+      <div class="hidden" id="loadingCard">
+        <div class="card">
+          <div class="cardhead">
+            <span class="eyebrow">正在生成</span>
+          </div>
+          <div class="sk skline" style="width:62%"></div>
+          <div class="sk skline" style="width:100%"></div>
+          <div class="sk skline" style="width:96%"></div>
+          <div class="sk skline" style="width:99%"></div>
+          <div class="sk skline" style="width:88%"></div>
+          <div class="sk skline" style="width:94%"></div>
+          <div class="sk skline" style="width:41%;margin-bottom:0"></div>
+          <div class="generating">
+            <div class="spinner"></div>
+            <span>正在用今天的词写一段…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主卡片 -->
+      <div class="card" id="passageCard">
+        <div class="cardhead">
+          <span class="eyebrow">AI 生成 · 整段</span>
+        </div>
+        <div class="ptitle" id="ptitle">A Morning on Campus</div>
+
+        <div class="passage" id="passage"></div>
+
+        <div class="zh-toggle" id="zhToggle">
+          <span id="zhLabel">展开中文对照</span>
+          <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="zh" id="zhBox">
+          <p>开学第一天，我去<b>图书馆</b>查看新课表。一切看起来都很平常，但我心里有点紧张。</p>
+          <p>老师说这门课需要比以前下更多功夫，一开始我并不自信。</p>
+          <p>我试着安排好自己的时间，可截止日期总带来额外的压力。</p>
+          <p>为了在学习和休息之间保持平衡，我决定一次只专注于一件事。</p>
+          <p>我拒绝熬夜，我的习惯也慢慢改善了。渐渐地，我的写作变好了，结果让我自己都吃惊。</p>
+          <p>一个朋友鼓励我继续坚持，我开始相信自己能达到目标。</p>
+          <p>这段经历教会我一个简单的道理：小步走，也算数。</p>
+        </div>
+      </div>
+
+      <!-- 覆盖率 -->
+      <div class="cov" id="covCard">
+        <div class="covtop">
+          <span class="covlabel">本段覆盖</span>
+          <span class="covnum" id="covNum">18<small>/20 词</small></span>
+          <span class="covpct mid" id="covPct">90%</span>
+        </div>
+        <div class="bar"><div class="fill" id="covFill" style="width:90%"></div></div>
+        <div class="miss" id="missRow">
+          <span class="lab">还没用上</span>
+          <span class="chip" id="chip1">ordinary</span>
+          <span class="chip" id="chip2">opportunity</span>
+        </div>
+        <button class="patchbtn" id="patchBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          补漏一次，把剩下 2 个词写进去
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== 场景 ④ 降级 ===== -->
+    <div class="hidden" id="sceneFallback">
+      <div class="banner">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+        <div>当前无法生成例句，先看看这批单词的意思。网络恢复后点「重试」。</div>
+      </div>
+      <div class="card fallback">
+        <div class="row"><span class="w">campus</span><span class="m">n. 校园</span></div>
+        <div class="row"><span class="w">library</span><span class="m">n. 图书馆</span></div>
+        <div class="row"><span class="w">schedule</span><span class="m">n. 时间表；日程</span></div>
+        <div class="row"><span class="w">require</span><span class="m">v. 需要；要求</span></div>
+        <div class="row"><span class="w">confident</span><span class="m">adj. 自信的</span></div>
+        <div class="row"><span class="w">deadline</span><span class="m">n. 截止日期</span></div>
+        <div class="row"><span class="w">pressure</span><span class="m">n. 压力</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 底部操作 -->
+  <div class="actions" id="actions">
+    <button class="act ghost">
+      <svg viewBox="0 0 24 24"><path d="M3 10v4h3l4 3V7L6 10H3z"/><path d="M16 9a4 4 0 010 6"/></svg>
+      朗读
+    </button>
+    <button class="act ghost">
+      <svg viewBox="0 0 24 24"><path d="M12 17.3l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9L12 3l2.8 5.7 6.3.9-4.6 4.4 1.1 6.3z"/></svg>
+      收藏
+    </button>
+    <button class="act primary" id="refreshBtn">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0115.5-6.3M21 12a9 9 0 01-15.5 6.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>
+      换一批
+    </button>
+  </div>
+</div>
+
+<div class="notes">
+  <h4>这个 Demo 在验证什么</h4>
+  <ul>
+    <li><b>整段 vs 5 句</b>：这里是一段连贯短文，不是 5 个互不相干的句子。读起来才像语境。</li>
+    <li><b>覆盖率</b>：底部进度条告诉你「今天 20 个词用上了 18 个」。这是原来 5 句模式没有的。</li>
+    <li><b>补漏</b>：剩 2 个词没用上 → 点一下再补一轮，覆盖到 100%。</li>
+    <li><b>高亮</b>：句中今日词用的是 App 的品牌蓝 <code>#0A59F7</code>，跟现有例句页一致。</li>
+    <li><b>降级</b>：没网时不硬造句子，退回单词释义列表 + 重试。</li>
+    <li>数据是假的（真数据要等豆包 Key），但<b>段落文字是真写的</b>，你可以直接判断读起来顺不顺。</li>
+  </ul>
+</div>
+
+<script>
+// 段落数据：今日词全部来自四级高频，20 个词里故意留 2 个没用
+const WORDS = ['campus','library','schedule','ordinary','require','effort','confident',
+               'manage','deadline','pressure','balance','focus','refuse','habit','improve',
+               'gradually','result','encourage','achieve','opportunity'];
+
+// 首轮：18/20（缺 ordinary、opportunity）
+const SEG_A = [
+  ['On my first day on ', 'campus', ', I went to the ', 'library', ' to check my new ', 'schedule', '. '],
+  ['Everything seemed quiet, but I felt nervous. My teacher said the course would ', 'require', ' more ', 'effort', ' than before, and I was not ', 'confident', ' at first. '],
+  ['I tried to ', 'manage', ' my time, but a ', 'deadline', ' always brought extra ', 'pressure', '. '],
+  ['To keep a ', 'balance', ' between study and rest, I decided to ', 'focus', ' on one task at a time. '],
+  ['I ', 'refused', ' to stay up late, and my ', 'habit', ' slowly began to ', 'improve', '. '],
+  ['Over time my writing ', 'gradually', ' got better, and the ', 'result', ' surprised me. '],
+  ['A friend ', 'encouraged', ' me to keep going, and I began to believe I could ', 'achieve', ' my goal. '],
+  ['That week taught me something simple: small steps matter.']
+];
+
+// 补漏后：把 ordinary、opportunity 塞进去，追加两句
+const SEG_B_EXTRA = [
+  ['Looking back, it was an ', 'ordinary', ' week, yet it gave me an ', 'opportunity', ' to grow.']
+];
+
+function renderPassage(segments, extra){
+  const box = document.getElementById('passage');
+  let html = '';
+  segments.forEach(seg=>{
+    seg.forEach((t,i)=>{
+      if(i % 2 === 1) html += `<span class="hit">${t}</span>`;
+      else html += t;
+    });
+  });
+  if(extra){
+    extra.forEach(seg=>{
+      seg.forEach((t,i)=>{
+        if(i % 2 === 1) html += `<span class="hit">${t}</span>`;
+        else html += t;
+      });
+    });
+  }
+  box.innerHTML = html;
+}
+
+// ---- 交互：中文对照 ----
+const zhToggle = document.getElementById('zhToggle');
+const zhBox = document.getElementById('zhBox');
+// 补漏会往中文区追加一段；复位场景时要还原成首轮内容，否则重复累积
+const ZHO_ORIGINAL = zhBox.innerHTML;
+zhToggle.addEventListener('click', ()=>{
+  const open = zhBox.classList.toggle('open');
+  zhToggle.classList.toggle('open', open);
+  document.getElementById('zhLabel').textContent = open ? '收起中文对照' : '展开中文对照';
+});
+
+// ---- 交互：补漏 ----
+document.getElementById('patchBtn').addEventListener('click', ()=>{
+  const btn = document.getElementById('patchBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> 正在补写剩下 2 个词…';
+  setTimeout(()=>{
+    renderPassage(SEG_A, SEG_B_EXTRA);
+    // 覆盖率 UI 更新
+    document.getElementById('covNum').innerHTML = '20<small>/20 词</small>';
+    const pct = document.getElementById('covPct');
+    pct.textContent = '100%';
+    pct.className = 'covpct';
+    document.getElementById('covFill').style.width = '100%';
+    document.getElementById('chip1').classList.add('done');
+    document.getElementById('chip2').classList.add('done');
+    document.querySelector('#missRow .lab').textContent = '已全部用上';
+    btn.style.display = 'none';
+    // 新加的词闪一下
+    document.querySelectorAll('.hit').forEach(h=>h.classList.add('pulse'));
+    document.getElementById('zhBox').innerHTML = ZHO_ORIGINAL +
+      '<p>回头看，那是很平常的一周，却给了我一次成长的机会。</p>';
+    syncScene('patched');
+  }, 1200);
+});
+
+// ---- 交互：换一批 ----
+document.getElementById('refreshBtn').addEventListener('click', ()=>{
+  showScene('loading');
+  setTimeout(()=>{ showScene('ok'); }, 1600);
+});
+
+// ---- 场景切换 ----
+function syncScene(name){
+  document.querySelectorAll('.scenes button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.scene === name);
+  });
+}
+function showScene(name){
+  syncScene(name);
+  const main = document.getElementById('mainArea');
+  const empty = document.getElementById('sceneEmpty');
+  const fallback = document.getElementById('sceneFallback');
+  const loading = document.getElementById('loadingCard');
+  const passage = document.getElementById('passageCard');
+  const cov = document.getElementById('covCard');
+  const actions = document.getElementById('actions');
+  const navsub = document.getElementById('navsub');
+
+  main.classList.add('hidden'); empty.classList.add('hidden'); fallback.classList.add('hidden');
+  loading.classList.add('hidden'); passage.classList.remove('hidden'); cov.classList.remove('hidden');
+  actions.classList.remove('hidden');
+  navsub.textContent = '今日 20 词';
+
+  if(name === 'loading'){
+    main.classList.remove('hidden');
+    passage.classList.add('hidden'); cov.classList.add('hidden');
+  } else if(name === 'ok'){
+    main.classList.remove('hidden');
+    // 复位到 18/20
+    zhBox.innerHTML = ZHO_ORIGINAL;
+    renderPassage(SEG_A, null);
+    document.getElementById('covNum').innerHTML = '18<small>/20 词</small>';
+    const pct = document.getElementById('covPct');
+    pct.textContent = '90%'; pct.className = 'covpct mid';
+    document.getElementById('covFill').style.width = '90%';
+    document.getElementById('chip1').classList.remove('done');
+    document.getElementById('chip2').classList.remove('done');
+    document.querySelector('#missRow .lab').textContent = '还没用上';
+    const btn = document.getElementById('patchBtn');
+    btn.style.display = 'flex'; btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> 补漏一次，把剩下 2 个词写进去';
+    document.getElementById('zhBox').classList.remove('open');
+    document.getElementById('zhToggle').classList.remove('open');
+    document.getElementById('zhLabel').textContent = '展开中文对照';
+  } else if(name === 'patched'){
+    main.classList.remove('hidden');
+    renderPassage(SEG_A, SEG_B_EXTRA);
+    document.getElementById('covNum').innerHTML = '20<small>/20 词</small>';
+    const pct = document.getElementById('covPct');
+    pct.textContent = '100%'; pct.className = 'covpct';
+    document.getElementById('covFill').style.width = '100%';
+    document.getElementById('chip1').classList.add('done');
+    document.getElementById('chip2').classList.add('done');
+    document.querySelector('#missRow .lab').textContent = '已全部用上';
+    document.getElementById('patchBtn').style.display = 'none';
+  } else if(name === 'fallback'){
+    main.classList.add('hidden');
+    fallback.classList.remove('hidden');
+    actions.classList.remove('hidden');
+    navsub.textContent = '离线 · 今日 20 词';
+  } else if(name === 'empty'){
+    main.classList.add('hidden');
+    empty.classList.remove('hidden');
+    actions.classList.add('hidden');
+    navsub.textContent = '今日 2 词';
+  }
+}
+
+document.querySelectorAll('.scenes button').forEach(b=>{
+  b.addEventListener('click', ()=> showScene(b.dataset.scene));
+});
+
+// 初始化
+showScene('ok');
+</script>
+</body>
+</html>

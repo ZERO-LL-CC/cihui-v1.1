@@ -10,7 +10,15 @@ import { TtsService } from '../service/TtsService';
 
 const DOMAIN: number = 0x0000;
 
+/**
+ * 调试用：aa start 时带 --ps devPage pages/dev/MtProbePage 可直达指定页面。
+ * 不传则走默认首页，正常启动流程完全不受影响。
+ */
+const DEV_PAGE_KEY: string = 'devPage';
+
 export default class EntryAbility extends UIAbility {
+  private devPage: string = '';
+
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     // qa19 BUG-B：先接沙箱持久化并读回本机数据/登录态，再加载页面
     try {
@@ -39,6 +47,11 @@ export default class EntryAbility extends UIAbility {
         if (target !== undefined && (target as string) === TARGET_CHECKIN) {
           NavStore.INSTANCE.setLaunchTarget(TARGET_CHECKIN);
         }
+        const dev: Object | undefined = params[DEV_PAGE_KEY];
+        if (dev !== undefined && (dev as string).length > 0) {
+          this.devPage = dev as string;
+          hilog.info(DOMAIN, 'Cihui', 'devPage override: %{public}s', this.devPage);
+        }
       }
     } catch (err) {
       hilog.warn(DOMAIN, 'Cihui', 'applyLaunchWant failed: %{public}s', JSON.stringify(err));
@@ -62,12 +75,13 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
-    windowStage.loadContent('pages/Index', (err) => {
+    const page: string = this.devPage.length > 0 ? this.devPage : 'pages/Index';
+    windowStage.loadContent(page, (err) => {
       if (err.code) {
         hilog.error(DOMAIN, 'Cihui', 'loadContent failed: %{public}s', JSON.stringify(err));
         return;
       }
-      hilog.info(DOMAIN, 'Cihui', 'loadContent succeeded');
+      hilog.info(DOMAIN, 'Cihui', 'loadContent succeeded: %{public}s', page);
     });
   }
 

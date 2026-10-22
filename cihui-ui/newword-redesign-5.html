@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>单词首学 · 五版重设计 | 词慧</title>
+<style>
+:root{
+  --brand:#0A59F7; --brand-deep:#0846C0; --brand-soft:#E9F0FE;
+  --ink:#17202E; --sub:#5A6575; --weak:#98A2B2;
+  --line:#E7EAF1; --page:#EDF0F6; --paper:#FFFFFF;
+  --green:#179C5B; --green-soft:#E5F5EC; --orange:#EC8A12; --orange-soft:#FDF1DE;
+  --sans:"HarmonyOS Sans SC",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  --serif:Georgia,"Songti SC","Noto Serif SC",serif;
+  --mono:"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);
+  --ease-io:cubic-bezier(.65,0,.35,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{
+  font-family:var(--sans); color:var(--ink); background:#F7F8FB;
+  background-image:
+    radial-gradient(1100px 520px at 12% -8%, rgba(10,89,247,.09), transparent 62%),
+    radial-gradient(760px 420px at 92% 4%, rgba(236,138,18,.07), transparent 60%),
+    linear-gradient(to right, rgba(23,32,46,.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23,32,46,.035) 1px, transparent 1px);
+  background-size:auto,auto,56px 56px,56px 56px;
+  line-height:1.6;
+}
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px}
+
+/* ---------- hero ---------- */
+.hero{padding:76px 0 40px}
+.kicker{
+  display:inline-flex;align-items:center;gap:9px;
+  font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--brand);font-weight:700;
+}
+.kicker::before{content:"";width:26px;height:1.5px;background:var(--brand)}
+h1{
+  margin-top:18px;font-size:clamp(38px,4.6vw,62px);line-height:1.02;
+  letter-spacing:-.035em;font-weight:800;
+}
+h1 em{font-style:normal;font-family:var(--serif);font-weight:600;letter-spacing:-.02em;color:var(--brand)}
+.lede{margin-top:20px;max-width:660px;font-size:16px;color:var(--sub)}
+.lede b{color:var(--ink);font-weight:700}
+.hero-meta{margin-top:26px;display:flex;flex-wrap:wrap;gap:10px}
+.chip{
+  font-size:12px;padding:6px 12px;border-radius:999px;background:#fff;
+  border:1px solid var(--line);color:var(--sub)
+}
+.chip b{color:var(--ink)}
+
+/* ---------- diagnose ---------- */
+.diagnose{
+  margin:44px 0 8px;background:#fff;border:1px solid var(--line);border-radius:22px;
+  padding:30px 32px;box-shadow:0 18px 44px -30px rgba(23,32,46,.35);
+}
+.d-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.d-head h2{font-size:19px;letter-spacing:-.01em;font-weight:800}
+.d-head span{font-size:12.5px;color:var(--weak);font-family:var(--mono)}
+.track-demo{
+  margin-top:22px;position:relative;height:44px;background:#FAFBFD;border-radius:12px;
+  border:1px dashed #D9DFEA;display:flex;align-items:center;padding:0 12px;overflow:hidden;
+}
+.dots-100{display:flex;gap:6px;flex-wrap:nowrap}
+.dots-100 i{width:6px;height:6px;border-radius:3px;background:#CBD3E0;flex:0 0 6px}
+.dots-100 i.on{background:var(--brand)}
+.dots-100 i.cur{width:16px;background:var(--brand)}
+.overflow-flag{
+  position:absolute;right:-1px;top:0;bottom:0;width:120px;
+  background:linear-gradient(90deg,transparent,rgba(214,58,58,.9));
+  display:flex;align-items:center;justify-content:flex-end;padding-right:12px;
+  color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.04em;
+}
+.diag-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:22px}
+.diag-card{background:#FAFBFD;border-radius:14px;padding:16px 18px}
+.diag-card .k{font-size:11px;letter-spacing:.12em;color:var(--weak);text-transform:uppercase;font-weight:700}
+.diag-card .v{margin-top:6px;font-size:15px;font-weight:700}
+.diag-card .v.bad{color:#C2392E}
+.diag-card .v.good{color:var(--green)}
+.diag-card p{font-size:12.5px;color:var(--sub);margin-top:4px}
+
+/* ---------- versions ---------- */
+.section-head{margin:64px 0 26px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.section-head h2{font-size:30px;letter-spacing:-.03em;font-weight:800}
+.section-head p{font-size:13.5px;color:var(--sub);max-width:520px}
+
+.v-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:18px}
+@media (max-width:1240px){.v-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:860px){.v-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:600px){.v-grid{grid-template-columns:1fr}}
+
+.v-card{
+  background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;
+  display:flex;flex-direction:column;transition:box-shadow .3s var(--ease-out),transform .3s var(--ease-out);
+}
+.v-card:hover{transform:translateY(-3px);box-shadow:0 26px 48px -34px rgba(23,32,46,.5)}
+.v-top{padding:18px 16px 10px}
+.v-no{font-family:var(--mono);font-size:11px;color:var(--weak);letter-spacing:.1em}
+.v-name{font-size:16px;font-weight:800;letter-spacing:-.01em;margin-top:3px}
+.v-tag{font-size:11.5px;color:var(--sub);margin-top:3px}
+
+.stage{height:470px;background:#F3F5F9;position:relative;overflow:hidden;cursor:zoom-in}
+.phone{
+  position:absolute;top:10px;left:50%;width:375px;height:700px;
+  transform:translateX(-50%) scale(.64);transform-origin:top center;
+  background:var(--paper);overflow:hidden;
+}
+
+.v-foot{padding:14px 16px 18px;border-top:1px solid var(--line);margin-top:auto}
+.v-foot dl{display:block;font-size:11.5px}
+.v-foot dt{color:var(--weak);font-weight:700;margin-top:9px;font-size:10.5px;letter-spacing:.06em}
+.v-foot dt:first-child{margin-top:0}
+.v-foot dd{color:var(--sub);line-height:1.45;margin-top:1px}
+.v-foot .cost{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);font-size:11px;color:var(--brand);font-weight:700;letter-spacing:.02em}
+
+/* ---------- phone base ---------- */
+.statusbar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;font-weight:600;color:var(--ink);letter-spacing:.02em}
+.statusbar .r{display:flex;gap:5px;align-items:center;color:var(--weak)}
+.topbar{height:52px;display:flex;align-items:center;padding:0 8px}
+.back{width:44px;height:44px;display:grid;place-items:center;color:var(--ink);font-size:19px}
+.topbar .t{flex:1;text-align:center;font-size:15px;font-weight:600}
+.topbar .sp{width:44px}
+
+.card{
+  margin:12px 16px 0;background:#fff;border-radius:26px;
+  box-shadow:0 20px 44px -30px rgba(23,32,46,.5),0 0 0 1px rgba(23,32,46,.045);
+  display:flex;flex-direction:column;align-items:center;
+  padding:34px 22px 26px;position:relative;overflow:hidden;
+}
+.en{font-size:38px;font-weight:800;letter-spacing:-.025em;line-height:1.1;text-align:center;word-break:break-word}
+.ph{margin-top:12px;display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13px;color:var(--sub)}
+.speaker{width:34px;height:34px;border-radius:999px;background:var(--brand-soft);display:grid;place-items:center;color:var(--brand);font-size:13px}
+.rule{width:44%;height:1px;background:var(--line);margin:20px 0}
+.mean{font-size:18px;color:var(--ink);text-align:center;line-height:1.55;max-width:270px}
+.hint{font-size:10.5px;color:var(--weak);text-align:center;margin-top:auto;padding-top:18px;line-height:1.5}
+.actions{position:absolute;left:0;right:0;bottom:0;padding:0 16px 24px;display:flex;gap:11px}
+.btn{flex:1;height:48px;border-radius:999px;display:grid;place-items:center;font-size:14.5px;font-weight:600;border:none;font-family:inherit;cursor:pointer;transition:transform .18s var(--ease-out),box-shadow .18s}
+.btn:active{transform:scale(.965)}
+.btn.ghost{background:#fff;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
+.btn.primary{background:var(--brand);color:#fff;box-shadow:0 12px 22px -12px rgba(10,89,247,.75)}
+.btn.primary:active{box-shadow:0 6px 12px -10px rgba(10,89,247,.7)}
+
+/* digit roller */
+.num{display:inline-flex;overflow:hidden;height:1em;line-height:1;vertical-align:baseline;font-variant-numeric:tabular-nums;position:relative}
+.num span{display:block;transition:transform .38s var(--ease-out),opacity .3s}
+.num .old{position:absolute;left:0;top:0}
+
+/* ---------- V1 白瓷细线 ---------- */
+.v1{background:#FBFCFF}
+.v1 .prog-wrap{padding:2px 20px 0}
+.v1 .prog-meta{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:var(--weak);letter-spacing:.06em}
+.v1 .prog-meta b{font-size:12.5px;color:var(--ink);font-weight:700;letter-spacing:.04em}
+.v1 .rail{margin-top:9px;height:3px;border-radius:3px;background:#E7EAF1;overflow:hidden}
+.v1 .fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#3D7BFF,#0A59F7);width:7%;transition:width .5s var(--ease-out)}
+.v1 .cursor{position:absolute;top:-1.5px;width:6px;height:6px;border-radius:3px;background:var(--brand);box-shadow:0 0 0 2px #FBFCFF;transition:left .5s var(--ease-out)}
+.v1 .rail-holder{position:relative}
+
+/* ---------- V2 纸卡堆叠 ---------- */
+.v2{background:#F1F4F9}
+.v2 .stack-zone{position:relative;margin:6px 16px 0;height:452px}
+.v2 .ghost-card{position:absolute;background:#fff;border-radius:26px;box-shadow:0 10px 26px -24px rgba(23,32,46,.5)}
+.v2 .g2{left:9px;right:9px;top:12px;bottom:-12px;opacity:.8}
+.v2 .g3{left:18px;right:18px;top:26px;bottom:-24px;opacity:.5}
+.v2 .real{position:absolute;inset:0}
+.v2 .page-no{position:absolute;right:20px;top:16px;font-family:var(--mono);font-size:11px;color:var(--weak);letter-spacing:.08em}
+.v2 .watermark{position:absolute;right:-4px;top:44%;transform:translateY(-50%);font-family:var(--serif);font-size:118px;font-weight:700;color:rgba(23,32,46,.032);letter-spacing:-.06em;line-height:1;pointer-events:none}
+.v2 .flip{animation:flipIn .52s var(--ease-out)}
+@keyframes flipIn{
+  0%{transform:perspective(900px) rotateY(-16deg) translateX(34px) scale(.97);opacity:0}
+  100%{transform:perspective(900px) rotateY(0) translateX(0) scale(1);opacity:1}
+}
+
+/* ---------- V3 刻度尺 ---------- */
+.v3{background:#FBFCFE}
+.v3 .ruler-zone{margin-top:6px;padding:0 0 4px;position:relative}
+.v3 .ruler{position:relative;height:44px;overflow:hidden;
+  mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
+.v3 .ticks{position:absolute;top:0;left:50%;display:flex;align-items:flex-end;height:100%;transition:transform .45s var(--ease-out)}
+.v3 .tick{width:14px;display:flex;justify-content:center;align-items:flex-end;height:100%}
+.v3 .tick i{width:1px;height:7px;background:#D5DCE8;border-radius:1px}
+.v3 .tick.major i{height:14px;background:#9FAAB9;width:1.4px}
+.v3 .tick.done i{background:var(--brand);opacity:.55}
+.v3 .pointer{position:absolute;left:50%;top:0;transform:translateX(-50%);width:0;height:0;
+  border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--brand)}
+.v3 .readout{display:flex;align-items:baseline;justify-content:center;gap:4px;margin-top:2px}
+.v3 .readout .big{font-size:40px;font-weight:800;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
+.v3 .readout .sm{font-size:13px;color:var(--weak);font-family:var(--mono)}
+.v3 .scale-hint{text-align:center;font-size:10px;color:var(--weak);letter-spacing:.14em;margin-top:2px}
+
+/* ---------- V4 百格点阵 ---------- */
+.v4{background:#FBFCFE}
+.v4 .grid-zone{padding:8px 0 2px;display:flex;justify-content:center;flex-direction:column;align-items:center;gap:9px}
+.v4 .pixels{display:grid;grid-template-columns:repeat(20,1fr);gap:3px;width:298px}
+.v4 .px{aspect-ratio:1;border-radius:1.5px;background:#E4E9F1;transition:background .3s var(--ease-out),transform .3s var(--ease-spring)}
+.v4 .px.done{background:var(--brand);opacity:.85}
+.v4 .px.cur{background:var(--orange);transform:scale(1.45);box-shadow:0 0 0 2px rgba(236,138,18,.2);animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(236,138,18,.18)}50%{box-shadow:0 0 0 4px rgba(236,138,18,.06)}}
+.v4 .grid-label{font-size:10px;color:var(--weak);letter-spacing:.12em;font-variant-numeric:tabular-nums}
+.v4 .grid-label b{color:var(--orange);font-weight:700}
+
+/* ---------- V5 沉浸剧场 ---------- */
+.v5{background:#0E1116;color:#F2F5FA}
+.v5 .statusbar{color:#B9C2D0}
+.v5 .statusbar .r{color:#6C7787}
+.v5 .topbar{color:#F2F5FA}
+.v5 .topbar .t{font-size:13px;color:#8A94A4;letter-spacing:.14em;font-weight:600}
+.v5 .stage-light{
+  position:absolute;inset:0;
+  background:radial-gradient(420px 320px at 50% 38%,rgba(10,89,247,.22),transparent 68%);
+  pointer-events:none;
+}
+.v5 .content{position:relative;padding:64px 26px 0;text-align:center}
+.v5 .en{font-family:var(--serif);font-size:46px;font-weight:600;letter-spacing:-.02em;color:#fff;line-height:1.08}
+.v5 .ph{margin-top:16px;justify-content:center;color:#8A94A4;font-size:12.5px}
+.v5 .speaker{background:rgba(255,255,255,.09);color:#fff}
+.v5 .rule{background:rgba(255,255,255,.12);margin:26px auto}
+.v5 .mean{color:#D7DEEA;font-size:19px;max-width:270px;margin:0 auto}
+.v5 .hint{color:#5D6776}
+.v5 .actions{background:linear-gradient(to top,#0E1116 40%,transparent)}
+.v5 .btn.ghost{background:rgba(255,255,255,.07);color:#E6ECF5;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.v5 .btn.primary{background:#3D7BFF;box-shadow:0 14px 30px -14px rgba(61,123,255,.8)}
+.v5 .back{color:#F2F5FA}
+.v5 .prog-line{position:absolute;left:0;right:0;bottom:94px;padding:0 26px}
+.v5 .pl-rail{height:1px;background:rgba(255,255,255,.14)}
+.v5 .pl-fill{height:1px;background:#3D7BFF;width:7%;transition:width .5s var(--ease-out);box-shadow:0 0 12px rgba(61,123,255,.9)}
+.v5 .pl-meta{display:flex;justify-content:space-between;margin-top:9px;font-size:10.5px;color:#6C7787;font-variant-numeric:tabular-nums;letter-spacing:.08em}
+.v5 .spot{position:absolute;inset:0;background:radial-gradient(220px 220px at 50% 40%,rgba(255,255,255,.07),transparent 70%);transition:opacity .4s;pointer-events:none}
+.v5 .content.switch{animation:spotIn .55s var(--ease-out)}
+@keyframes spotIn{0%{filter:blur(7px);opacity:.25;transform:translateY(10px)}100%{filter:blur(0);opacity:1;transform:translateY(0)}}
+
+/* ---------- modal ---------- */
+.modal{position:fixed;inset:0;background:rgba(15,20,29,.72);backdrop-filter:blur(6px);z-index:50;display:none;align-items:center;justify-content:center;padding:24px}
+.modal.on{display:flex;animation:fadeIn .24s var(--ease-out)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-inner{position:relative;width:375px;max-height:92vh;border-radius:34px;overflow:hidden;box-shadow:0 40px 80px -30px rgba(0,0,0,.6);animation:popIn .34s var(--ease-out)}
+@keyframes popIn{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+.modal-close{position:absolute;top:-14px;right:-14px;width:36px;height:36px;border-radius:999px;background:#fff;border:none;font-size:16px;cursor:pointer;z-index:2;box-shadow:0 6px 16px -6px rgba(0,0,0,.4)}
+
+/* ---------- motion / links ---------- */
+.panel{background:#fff;border:1px solid var(--line);border-radius:22px;padding:30px 32px;margin-top:26px}
+.panel h3{font-size:18px;font-weight:800;letter-spacing:-.01em;margin-bottom:6px}
+.panel .sub{font-size:13px;color:var(--sub);margin-bottom:20px}
+.m-row{display:grid;grid-template-columns:120px 1fr 130px;gap:16px;padding:13px 0;border-top:1px solid var(--line);align-items:baseline;font-size:13px}
+.m-row:first-of-type{border-top:none}
+.m-row .k{font-weight:700}
+.m-row .d{color:var(--sub)}
+.m-row .t{font-family:var(--mono);font-size:11.5px;color:var(--brand);text-align:right}
+
+.link-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media (max-width:900px){.link-grid{grid-template-columns:repeat(2,1fr)}}
+.link{display:block;text-decoration:none;color:inherit;background:#FAFBFD;border:1px solid var(--line);border-radius:14px;padding:14px 16px;transition:.24s var(--ease-out)}
+.link:hover{background:#fff;border-color:#C9D6F5;transform:translateY(-2px);box-shadow:0 14px 26px -20px rgba(23,32,46,.5)}
+.link .n{font-size:13.5px;font-weight:800;display:flex;align-items:center;justify-content:space-between}
+.link .n span{font-size:11px;color:var(--brand);font-family:var(--mono)}
+.link .w{font-size:11.5px;color:var(--sub);margin-top:5px;line-height:1.5}
+.link-cat{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--weak);font-weight:700;margin:22px 0 10px}
+.link-cat:first-of-type{margin-top:0}
+
+footer{padding:56px 0 72px;font-size:12px;color:var(--weak);text-align:center;letter-spacing:.04em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">词慧 · New Word First-Learn</div>
+    <h1>单词首学<br><em>五版重设计</em></h1>
+    <p class="lede">
+      现在的进度是<b>一词一个点</b>：6 个词很舒服，100 个词就撑破屏幕。这一版把进度重做成「能装下 100 / 1000 词的语言」，
+      同时给每一版配了真实可点的动效。滚动到底有设计网站清单。
+    </p>
+    <div class="hero-meta">
+      <div class="chip">主色 <b>#0A59F7</b></div>
+      <div class="chip">强调 <b>#EC8A12</b></div>
+      <div class="chip">基准 <b>375 × 812</b></div>
+      <div class="chip">动效曲线 <b>cubic-bezier(.16,1,.3,1)</b></div>
+    </div>
+  </header>
+
+  <!-- 诊断 -->
+  <section class="diagnose">
+    <div class="d-head">
+      <h2>先说根因：为什么 100 词装不下</h2>
+      <span>NewWordsPage.ets — Dots()</span>
+    </div>
+    <div class="track-demo">
+      <div class="dots-100" id="dotsDemo"></div>
+      <div class="overflow-flag">溢出 ×3.5 屏宽 →</div>
+    </div>
+    <div class="diag-grid">
+      <div class="diag-card">
+        <div class="k">单点占宽</div>
+        <div class="v bad">6px + 6px = 12px / 词</div>
+        <p>点本体 6，左右 margin 各 3</p>
+      </div>
+      <div class="diag-card">
+        <div class="k">100 词总宽</div>
+        <div class="v bad">1200px vs 可用 343px</div>
+        <p>超出 857px，Row 不换行直接切边</p>
+      </div>
+      <div class="diag-card">
+        <div class="k">信息也重复</div>
+        <div class="v bad">点阵 + 「7 / 100」各说一遍</div>
+        <p>进度点越密，可读性越趋近于零</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 五版 -->
+  <div class="section-head">
+    <div>
+      <h2>五版方向</h2>
+      <p>都把「每词一点」换成不随词数膨胀的进度语言。卡片里的「下一个」可以点，看动效。</p>
+    </div>
+    <div class="chip">点击手机可放大 · 可交互</div>
+  </div>
+
+  <div class="v-grid">
+
+    <!-- V1 -->
+    <article class="v-card">
+      <div class="v-top">
+        <div class="v-no">V1 / 05</div>
+        <div class="v-name">白瓷细线</div>
+        <div class="v-tag">Editorial minimal · 最克制</div>
+      </div>
+      <div class="stage" data-open="v1">
+        <div class="phone v1">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="prog-wrap">
+            <div class="prog-meta"><b>第 <span class="num" id="v1n"></span> 词</b><span><span class="num" id="v1tot"></span></span></div>
+            <div class="rail-holder">
+              <div class="rail"><div class="fill" id="v1fill"></div></div>
+              <div class="cursor" id="v1cursor"></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:18px;height:452px">
+            <div class="en" id="v1en">abandon</div>
+            <div class="ph"><span id="v1ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" id="v1mean">放弃；抛弃</div>
+            <div class="hint">先看英文和中文、听一遍发音<br>待会儿要口述中文意思</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="v1">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl>
+          <dt>进度</dt><dd>3px 细轨 + 分母固定，1 万词也不溢</dd>
+          <dt>记忆点</dt><dd>游标是一枚 2px 竖线，滑动带轻微拖尾</dd>
+          <dt>动效</dt><dd>数字滚轮 + 轨道 spring 填充</dd>
+        </dl>
+        <div class="cost">落地成本 低 · Dots() 换 Row+百分比即可</div>
+      </div>
+    </article>
+
+    <!-- V2 -->
+    <article class="v-card">
+      <div class="v-top">
+        <div class="v-no">V2 / 05</div>
+        <div class="v-name">纸卡堆叠</div>
+        <div class="v-tag">Tactile paper · 不用进度条</div>
+      </div>
+      <div class="stage" data-open="v2">
+        <div class="phone v2">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="stack-zone">
+            <div class="ghost-card g3"></div>
+            <div class="ghost-card g2"></div>
+            <div class="ghost-card real card" id="v2card" style="margin:0">
+              <div class="page-no" id="v2no">007 / 100</div>
+              <div class="en" id="v2en">abandon</div>
+              <div class="ph"><span id="v2ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+              <div class="rule"></div>
+              <div class="mean" id="v2mean">放弃；抛弃</div>
+              <div class="hint">剩下的厚度 = 你的进度<br>这一叠读完就该测了</div>
+              <div class="watermark" id="v2wm">007</div>
+            </div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="v2">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl>
+          <dt>进度</dt><dd>用「还剩多厚」表达，完全不需要条</dd>
+          <dt>记忆点</dt><dd>右下角超大页码水印像书页</dd>
+          <dt>动效</dt><dd>3D 翻页 rotateY + 卡片重力落下</dd>
+        </dl>
+        <div class="cost">落地成本 中 · 需两层错位卡 + transform</div>
+      </div>
+    </article>
+
+    <!-- V3 -->
+    <article class="v-card">
+      <div class="v-top">
+        <div class="v-no">V3 / 05</div>
+        <div class="v-name">刻度尺</div>
+        <div class="v-tag">Instrument · 精密仪器感</div>
+      </div>
+      <div class="stage" data-open="v3">
+        <div class="phone v3">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="ruler-zone">
+            <div class="readout"><span class="big num" id="v3n"></span><span class="sm">/ 100</span></div>
+            <div class="ruler">
+              <div class="ticks" id="v3ticks"></div>
+              <div class="pointer"></div>
+            </div>
+            <div class="scale-hint">每格 5 词 · 滚动查看</div>
+          </div>
+          <div class="card" style="margin-top:8px;height:396px">
+            <div class="en" id="v3en">abandon</div>
+            <div class="ph"><span id="v3ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" id="v3mean">放弃；抛弃</div>
+            <div class="hint">像调焦距一样找你的位置<br>指针永远在中间</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="v3">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl>
+          <dt>进度</dt><dd>可见窗口 ±15 词，1000 词也只滚一条尺</dd>
+          <dt>记忆点</dt><dd>指针居中，尺子滚，数字跟着走</dd>
+          <dt>动效</dt><dd>刻度惯性平移 + 指针 1.3→1 弹回</dd>
+        </dl>
+        <div class="cost">落地成本 中高 · 需测量宽度算 translateX</div>
+      </div>
+    </article>
+
+    <!-- V4 -->
+    <article class="v-card">
+      <div class="v-top">
+        <div class="v-no">V4 / 05</div>
+        <div class="v-name">百格点阵</div>
+        <div class="v-tag">Pixel grid · 游戏化</div>
+      </div>
+      <div class="stage" data-open="v4">
+        <div class="phone v4">
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">新词首学</div><div class="sp"></div></div>
+          <div class="grid-zone">
+            <div class="pixels" id="v4px"></div>
+            <div class="grid-label"><b id="v4cur">7</b> / 100 · 已点亮 <span id="v4done">6</span></div>
+          </div>
+          <div class="card" style="margin-top:8px;height:392px">
+            <div class="en" id="v4en">abandon</div>
+            <div class="ph"><span id="v4ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" id="v4mean">放弃；抛弃</div>
+            <div class="hint">一格一个词，点亮的格就是走过的路<br>100 词正好铺满一格墙</div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="v4">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl>
+          <dt>进度</dt><dd>20 × 5 网格，100 词占 298px，永不溢</dd>
+          <dt>记忆点</dt><dd>当前格橙色呼吸，走过的格连成一片</dd>
+          <dt>动效</dt><dd>点亮扩散 + 入场波浪 stagger 12ms</dd>
+        </dl>
+        <div class="cost">落地成本 低 · 固定网格，无动态宽度</div>
+      </div>
+    </article>
+
+    <!-- V5 -->
+    <article class="v-card">
+      <div class="v-top">
+        <div class="v-no">V5 / 05</div>
+        <div class="v-name">沉浸剧场</div>
+        <div class="v-tag">Cinematic dark · 最有氛围</div>
+      </div>
+      <div class="stage" data-open="v5">
+        <div class="phone v5">
+          <div class="stage-light"></div>
+          <div class="statusbar"><span>08:01</span><span class="r">●●● ⌁ 100</span></div>
+          <div class="topbar"><div class="back">‹</div><div class="t">NEW WORDS</div><div class="sp"></div></div>
+          <div class="content" id="v5content">
+            <div class="en" id="v5en">abandon</div>
+            <div class="ph"><span id="v5ph">/əˈbændən/</span><span class="speaker">◗</span></div>
+            <div class="rule"></div>
+            <div class="mean" id="v5mean">放弃；抛弃</div>
+            <div class="hint" style="margin-top:26px">先听一遍，再看中文<br>最后一屏开始口述测试</div>
+          </div>
+          <div class="prog-line">
+            <div class="pl-rail"><div class="pl-fill" id="v5fill"></div></div>
+            <div class="pl-meta"><span id="v5left">第 07 词</span><span id="v5right">07 / 100 · 6%</span></div>
+          </div>
+          <div class="actions"><button class="btn ghost">上一个</button><button class="btn primary" data-next="v5">下一个</button></div>
+        </div>
+      </div>
+      <div class="v-foot">
+        <dl>
+          <dt>进度</dt><dd>1px 光晕细线，暗底上最不抢戏</dd>
+          <dt>记忆点</dt><dd>衬线大字 + 聚光灯，像看电影字幕</dd>
+          <dt>动效</dt><dd>切换时 blur 7→0 + 上浮 10px</dd>
+        </dl>
+        <div class="cost">落地成本 中 · 需新增深色主题令牌</div>
+      </div>
+    </article>
+
+  </div>
+
+  <!-- 动效处方 -->
+  <section class="panel">
+    <h3>动效处方</h3>
+    <p class="sub">问题不在「动效少」，在于没有编排：现在是每个组件各自 200ms 淡入，缺少先后与节奏。改成一条时间轴，成本很低但观感差一档。</p>
+    <div class="m-row"><div class="k">入场序列</div><div class="d">顶栏 → 进度 → 卡片（上浮 16px + blur 6→0）→ 释义（逐行 stagger 40ms）→ 底部按钮</div><div class="t">0/60/140/260/320ms</div></div>
+    <div class="m-row"><div class="k">卡片切换</div><div class="d">水平位移 28px + scale .96，阴影收放；连点用 spring 阻尼，不做纯 ease</div><div class="t">380ms spring</div></div>
+    <div class="m-row"><div class="k">数字滚轮</div><div class="d">旧值上滑出、新值下滑入，等宽数字防抖</div><div class="t">380ms</div></div>
+    <div class="m-row"><div class="k">进度填充</div><div class="d">不要 linear，用轻弹簧，尾部略过冲再回落</div><div class="t">500ms .16,1,.3,1</div></div>
+    <div class="m-row"><div class="k">发音反馈</div><div class="d">按钮 scale .94 + 三道声波扩散，声波与真实音频同步</div><div class="t">600ms</div></div>
+    <div class="m-row"><div class="k">降级</div><div class="d">reducedMotion 下全部换 120ms opacity，位移与 blur 归零</div><div class="t">120ms</div></div>
+  </section>
+
+  <!-- 网站 -->
+  <section class="panel">
+    <h3>有品味的设计网站</h3>
+    <p class="sub">按用途分组，都是我平时真会翻的。做移动端 UI 时优先看 Mobbin / Refero，看真实产品怎么排版，比看概念稿有用得多。</p>
+
+    <div class="link-cat">移动端 / 真实产品截图</div>
+    <div class="link-grid">
+      <a class="link" href="https://mobbin.com" target="_blank" rel="noopener"><div class="n">Mobbin <span>↗</span></div><div class="w">十万级真实 App 流程截图，按功能筛选，做移动端最有用的一站</div></a>
+      <a class="link" href="https://refero.design" target="_blank" rel="noopener"><div class="n">Refero <span>↗</span></div><div class="w">按页面类型检索真实产品 UI，覆盖主流 App，细节能看到像素级</div></a>
+      <a class="link" href="https://screenlane.com" target="_blank" rel="noopener"><div class="n">Screenlane <span>↗</span></div><div class="w">按交互模式归类，适合找「进度条 / 卡片切换」这类具体组件</div></a>
+      <a class="link" href="https://pttrns.com" target="_blank" rel="noopener"><div class="n">Pttrns <span>↗</span></div><div class="w">老站点但干净，iOS 交互模式库，付费墙多但预览够用</div></a>
+    </div>
+
+    <div class="link-cat">整体品味 / 站点气质</div>
+    <div class="link-grid">
+      <a class="link" href="https://godly.website" target="_blank" rel="noopener"><div class="n">Godly <span>↗</span></div><div class="w">策展级别极高，看的是「有主张的设计」，不追流行</div></a>
+      <a class="link" href="https://www.siteinspire.com" target="_blank" rel="noopener"><div class="n">SiteInspire <span>↗</span></div><div class="w">按风格和类型过滤，克制冷淡一类的样本最齐全</div></a>
+      <a class="link" href="https://minimal.gallery" target="_blank" rel="noopener"><div class="n">Minimal Gallery <span>↗</span></div><div class="w">极简方向的纯样本库，排版与留白参考</div></a>
+      <a class="link" href="https://savee.it" target="_blank" rel="noopener"><div class="n">Savee <span>↗</span></div><div class="w">设计师的图片书签站，视觉密度高，适合刷灵感</div></a>
+    </div>
+
+    <div class="link-cat">动效 / 缓动</div>
+    <div class="link-grid">
+      <a class="link" href="https://www.transitions.dev" target="_blank" rel="noopener"><div class="n">Transitions.dev <span>↗</span></div><div class="w">真实交互过渡的拆解，直接给可抄的参数</div></a>
+      <a class="link" href="https://easings.net" target="_blank" rel="noopener"><div class="n">Easings.net <span>↗</span></div><div class="w">缓动曲线速查，弹跳与回弹曲线一页看全</div></a>
+      <a class="link" href="https://motion.dev" target="_blank" rel="noopener"><div class="n">Motion <span>↗</span></div><div class="w">Framer Motion 官方站，示例的节奏感是最好的教科书</div></a>
+      <a class="link" href="https://animations.dev" target="_blank" rel="noopener"><div class="n">Animations.dev <span>↗</span></div><div class="w">Emil 的动效课程，讲「为什么这样动」而不是堆参数</div></a>
+    </div>
+
+    <div class="link-cat">字体 / 排版</div>
+    <div class="link-grid">
+      <a class="link" href="https://www.typewolf.com" target="_blank" rel="noopener"><div class="n">Typewolf <span>↗</span></div><div class="w">字体搭配推荐，实地案例，选字最快的一站</div></a>
+      <a class="link" href="https://fontsinuse.com" target="_blank" rel="noopener"><div class="n">Fonts In Use <span>↗</span></div><div class="w">看字体在真实项目里怎么用，含印刷与界面</div></a>
+      <a class="link" href="https://www.are.na" target="_blank" rel="noopener"><div class="n">Are.na <span>↗</span></div><div class="w">频道式灵感收藏，做长期审美积累最好用</div></a>
+      <a class="link" href="https://lottiefiles.com" target="_blank" rel="noopener"><div class="n">LottieFiles <span>↗</span></div><div class="w">微动效素材库，进度、勾选的现成动画可参考曲线</div></a>
+    </div>
+  </section>
+
+  <footer>词慧 · 单词首学五版重设计 · 375×812 · 全部动效可在手机上真机复现</footer>
+</div>
+
+<div class="modal" id="modal">
+  <div style="position:relative">
+    <button class="modal-close" id="modalClose">✕</button>
+    <div class="modal-inner" id="modalInner"></div>
+  </div>
+</div>
+
+<script>
+/* ---------- 数据 ---------- */
+const WORDS = [
+  {en:'abandon', ph:'/əˈbændən/', mean:'放弃；抛弃'},
+  {en:'brilliant', ph:'/ˈbrɪliənt/', mean:'极好的；才华横溢的'},
+  {en:'cautious', ph:'/ˈkɔːʃəs/', mean:'谨慎的；小心的'},
+  {en:'diligent', ph:'/ˈdɪlɪdʒənt/', mean:'勤奋的；用功的'},
+  {en:'elegant', ph:'/ˈelɪɡənt/', mean:'优雅的；简洁的'},
+  {en:'fragile', ph:'/ˈfrædʒaɪl/', mean:'易碎的；脆弱的'},
+  {en:'genuine', ph:'/ˈdʒenjuɪn/', mean:'真正的；真诚的'},
+];
+const TOTAL = 100;
+const state = {v1:6, v2:6, v3:6, v4:6, v5:6};
+
+/* ---------- 诊断区：100 个点 ---------- */
+(function(){
+  const box = document.getElementById('dotsDemo');
+  for (let i=0;i<TOTAL;i++){
+    const d = document.createElement('i');
+    if (i < 6) d.className = 'on';
+    else if (i === 6) d.className = 'cur';
+    box.appendChild(d);
+  }
+})();
+
+/* ---------- 数字滚轮 ---------- */
+function setRoller(el, val){
+  if (!el) return;
+  const next = String(val).padStart(2,'0');
+  if (el.dataset.v === next) return;
+  const prev = el.dataset.v;
+  el.dataset.v = next;
+  const nu = document.createElement('span');
+  nu.textContent = next;
+  nu.style.transform = 'translateY(100%)';
+  const old = el.querySelector('span');
+  if (old){
+    old.classList.add('old');
+    requestAnimationFrame(()=>{
+      old.style.transform = 'translateY(-100%)';
+      old.style.opacity = '0';
+      nu.style.transform = 'translateY(0)';
+    });
+    setTimeout(()=>old.remove(), 420);
+  } else {
+    requestAnimationFrame(()=>{ nu.style.transform = 'translateY(0)'; });
+  }
+  el.appendChild(nu);
+  void prev;
+}
+function setPlain(el, txt){ if(el) el.textContent = txt; }
+
+/* ---------- V1 ---------- */
+function updateV1(){
+  const i = state.v1;
+  const pct = ((i+1)/TOTAL)*100;
+  setRoller(document.getElementById('v1n'), i+1);
+  setPlain(document.getElementById('v1tot'), `共 ${TOTAL} 词`);
+  document.getElementById('v1fill').style.width = pct + '%';
+  document.getElementById('v1cursor').style.left = `calc(${pct}% - 3px)`;
+  paintCard('v1', i);
+}
+/* ---------- V2 ---------- */
+function updateV2(){
+  const i = state.v2;
+  const no = String(i+1).padStart(3,'0');
+  setPlain(document.getElementById('v2no'), `${no} / ${TOTAL}`);
+  setPlain(document.getElementById('v2wm'), no);
+  paintCard('v2', i);
+  const c = document.getElementById('v2card');
+  c.classList.remove('flip'); void c.offsetWidth; c.classList.add('flip');
+}
+/* ---------- V3 ---------- */
+function buildRuler(){
+  const t = document.getElementById('v3ticks');
+  t.innerHTML = '';
+  for (let k=0;k<TOTAL;k++){
+    const d = document.createElement('div');
+    d.className = 'tick' + (k%5===0 ? ' major' : '');
+    d.innerHTML = '<i></i>';
+    d.dataset.k = k;
+    t.appendChild(d);
+  }
+}
+function updateV3(){
+  const i = state.v3;
+  setRoller(document.getElementById('v3n'), i+1);
+  const ticks = document.querySelectorAll('#v3ticks .tick');
+  // 指针居中：整体左移 (i * 14px)
+  const shift = -(i * 14);
+  document.getElementById('v3ticks').style.transform = `translateX(${shift}px)`;
+  ticks.forEach((t,k)=>{ t.classList.toggle('done', k <= i); });
+  paintCard('v3', i);
+}
+/* ---------- V4 ---------- */
+function buildPixels(){
+  const box = document.getElementById('v4px');
+  if (box.children.length) return;
+  for (let k=0;k<TOTAL;k++){
+    const d = document.createElement('div');
+    d.className = 'px';
+    box.appendChild(d);
+  }
+}
+function updateV4(){
+  const i = state.v4;
+  buildPixels();
+  const px = document.querySelectorAll('#v4px .px');
+  px.forEach((d,k)=>{
+    d.classList.toggle('done', k < i);
+    d.classList.toggle('cur', k === i);
+  });
+  setPlain(document.getElementById('v4cur'), i+1);
+  setPlain(document.getElementById('v4done'), i);
+  paintCard('v4', i);
+}
+/* ---------- V5 ---------- */
+function updateV5(){
+  const i = state.v5;
+  const pct = Math.round(((i+1)/TOTAL)*100);
+  document.getElementById('v5fill').style.width = pct + '%';
+  setPlain(document.getElementById('v5left'), `第 ${String(i+1).padStart(2,'0')} 词`);
+  setPlain(document.getElementById('v5right'), `${String(i+1).padStart(2,'0')} / ${TOTAL} · ${pct}%`);
+  paintCard('v5', i);
+  const c = document.getElementById('v5content');
+  c.classList.remove('switch'); void c.offsetWidth; c.classList.add('switch');
+}
+function paintCard(v, i){
+  const w = WORDS[i % WORDS.length];
+  setPlain(document.getElementById(v+'en'), w.en);
+  setPlain(document.getElementById(v+'ph'), w.ph);
+  setPlain(document.getElementById(v+'mean'), w.mean);
+}
+
+/* ---------- 下一个 ---------- */
+const updaters = {v1:updateV1, v2:updateV2, v3:updateV3, v4:updateV4, v5:updateV5};
+document.querySelectorAll('[data-next]').forEach(btn=>{
+  btn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const v = btn.dataset.next;
+    state[v] = (state[v] + 1) % TOTAL;
+    updaters[v]();
+  });
+});
+
+/* ---------- 初始化 ---------- */
+buildRuler();
+Object.keys(updaters).forEach(k=>updaters[k]());
+
+/* ---------- 放大（克隆体内同步刷新） ---------- */
+const modal = document.getElementById('modal');
+const inner = document.getElementById('modalInner');
+function q(c, id){ return c.querySelector(`[data-id="${id}"]`); }
+
+function paintClone(v, c){
+  const i = state[v];
+  const w = WORDS[i % WORDS.length];
+  const en = q(c, v+'en'), ph = q(c, v+'ph'), mn = q(c, v+'mean');
+  if (en) en.textContent = w.en;
+  if (ph) ph.textContent = w.ph;
+  if (mn) mn.textContent = w.mean;
+  if (v === 'v1'){
+    const pct = ((i+1)/TOTAL)*100;
+    q(c,'v1n').textContent = String(i+1).padStart(2,'0');
+    q(c,'v1fill').style.width = pct+'%';
+    q(c,'v1cursor').style.left = `calc(${pct}% - 3px)`;
+  }
+  if (v === 'v2'){
+    const no = String(i+1).padStart(3,'0');
+    q(c,'v2no').textContent = `${no} / ${TOTAL}`;
+    q(c,'v2wm').textContent = no;
+    const card = q(c,'v2card');
+    card.classList.remove('flip'); void card.offsetWidth; card.classList.add('flip');
+  }
+  if (v === 'v3'){
+    q(c,'v3n').textContent = String(i+1).padStart(2,'0');
+    q(c,'v3ticks').style.transform = `translateX(${-i*14}px)`;
+    c.querySelectorAll('.tick').forEach((t,k)=>{ t.classList.toggle('done', k <= i); });
+  }
+  if (v === 'v4'){
+    c.querySelectorAll('.px').forEach((d,k)=>{
+      d.classList.toggle('done', k < i);
+      d.classList.toggle('cur', k === i);
+    });
+    q(c,'v4cur').textContent = i+1;
+    q(c,'v4done').textContent = i;
+  }
+  if (v === 'v5'){
+    const pct = Math.round(((i+1)/TOTAL)*100);
+    q(c,'v5fill').style.width = pct+'%';
+    q(c,'v5left').textContent = `第 ${String(i+1).padStart(2,'0')} 词`;
+    q(c,'v5right').textContent = `${String(i+1).padStart(2,'0')} / ${TOTAL} · ${pct}%`;
+    const cc = q(c,'v5content');
+    cc.classList.remove('switch'); void cc.offsetWidth; cc.classList.add('switch');
+  }
+}
+
+document.querySelectorAll('.stage').forEach(st=>{
+  st.addEventListener('click', ()=>{
+    const v = st.dataset.open;
+    const src = st.querySelector('.phone');
+    const clone = src.cloneNode(true);
+    clone.style.cssText = 'position:relative;top:0;left:0;transform:none;width:375px;height:700px;margin:0';
+    clone.querySelectorAll('[id]').forEach(el=>{
+      el.dataset.id = el.id;
+      el.removeAttribute('id');
+    });
+    inner.innerHTML = '';
+    inner.appendChild(clone);
+    modal.classList.add('on');
+    paintClone(v, clone);
+    clone.querySelectorAll('[data-next]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const ver = btn.dataset.next;
+        state[ver] = (state[ver] + 1) % TOTAL;
+        paintClone(ver, clone);
+      });
+    });
+  });
+});
+document.getElementById('modalClose').addEventListener('click', ()=>modal.classList.remove('on'));
+modal.addEventListener('click', e=>{ if(e.target === modal) modal.classList.remove('on'); });
+document.addEventListener('keydown', e=>{ if(e.key === 'Escape') modal.classList.remove('on'); });
+
+/* ---------- 直达链接：#v1 ~ #v5 直接放大该版 ---------- */
+(function(){
+  const h = location.hash.replace('#','');
+  if (!h) return;
+  const st = document.querySelector(`.stage[data-open="${h}"]`);
+  if (st) setTimeout(()=>st.click(), 60);
+})();
+</script>
+</body>
+</html>

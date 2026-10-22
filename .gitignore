@@ -63,6 +63,10 @@ cihui-harmony/_ecdict/probe_*.py
 # ===== 真机调试工具（内含本机 hdc 绝对路径，换机器即失效） =====
 cihui-harmony/Cihui/_dev/
 
+# ===== 端侧翻译可行性验证资源（127MB：onnx 109MB + tokenizer 7.8MB + wasm 9.6MB）=====
+# 仅本地探针使用（pages/dev/MtProbePage），是否入包待可行性结论出来后决定
+cihui-harmony/Cihui/entry/src/main/resources/rawfile/mt/
+
 # ===== 系统文件 =====
 Thumbs.db
 .DS_Store
