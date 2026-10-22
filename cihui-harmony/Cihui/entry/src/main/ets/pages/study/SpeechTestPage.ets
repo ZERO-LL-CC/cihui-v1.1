@@ -82,6 +82,9 @@ export struct SpeechTestPage {
   @Local cursorVisible: boolean = true;
   /** 本次进入是从上次中断处续上的：onShown 后提示一次 */
   @Local pendingResumeTip: boolean = false;
+  /** 判「模糊 / 不认识」后翻到反面看中文释义（判完即已记账，这里只是看一眼再走） */
+  @Local revealVisible: boolean = false;
+  @Local revealVerdict: string = '';
 
   private service: HmsSpeechService = new HmsSpeechService();
   private listener: AsrListener = new SpeechPageAsrListener(this);
@@ -435,6 +438,9 @@ export struct SpeechTestPage {
 
   /** 手动三档（语音模式下也常显，为等价操作与降级路径） */
   private manualJudge(verdict: Verdict): void {
+    if (this.revealVisible) {
+      return;
+    }
     if (this.autoTimer !== -1) {
       clearTimeout(this.autoTimer);
       this.autoTimer = -1;
@@ -453,10 +459,31 @@ export struct SpeechTestPage {
     }
     this.service.endWord();
     this.saveDraft();
-    this.autoTimer = setTimeout(() => {
-      this.autoTimer = -1;
-      this.advance();
-    }, 360);
+    if (verdict === 'KNOWN') {
+      this.autoTimer = setTimeout(() => {
+        this.autoTimer = -1;
+        this.advance();
+      }, 360);
+      return;
+    }
+    // 模糊 / 不认识：先翻到反面把中文给出来，看一眼再走（判定已记账，这里只是记住它）
+    this.revealVerdict = verdict;
+    this.revealVisible = true;
+  }
+
+  /** 反面关掉，进入下一个词 */
+  private closeReveal(): void {
+    if (!this.revealVisible) {
+      return;
+    }
+    this.revealVisible = false;
+    this.advance();
+  }
+
+  private replayCurrent(): void {
+    if (this.items.length > 0 && this.index < this.items.length) {
+      TtsService.speak(this.items[this.index].english);
+    }
   }
 
   private advance(): void {
@@ -635,6 +662,11 @@ export struct SpeechTestPage {
 
   /** 系统返回键：有未提交进度则拦下并二次确认（返回 true 消费事件） */
   private handleBackPressed(): boolean {
+    if (this.revealVisible) {
+      // 反面开着时，返回＝看完继续，不打断整轮
+      this.closeReveal();
+      return true;
+    }
     if (!this.hasUncommitted()) {
       return false;
     }
@@ -945,19 +977,122 @@ export struct SpeechTestPage {
     .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
   }
 
+  private revealWord(): string {
+    return this.index < this.items.length ? this.items[this.index].english : '';
+  }
+
+  private revealPhonetic(): string {
+    return this.index < this.items.length ? this.items[this.index].phonetic : '';
+  }
+
+  private revealMeanings(): string {
+    return this.index < this.items.length ? this.items[this.index].meanings.join('；') : '';
+  }
+
+  /** 识别结果里只有标点/单字噪声（如「。」）就不展示，免得「你说的：。」这种噪音 */
+  private revealHeard(): string {
+    if (this.index >= this.items.length) {
+      return '';
+    }
+    const raw: string = this.items[this.index].heard.trim();
+    let kept: number = 0;
+    for (let i: number = 0; i < raw.length; i++) {
+      const code: number = raw.charCodeAt(i);
+      const isCjk: boolean = code >= 0x4e00 && code <= 0x9fa5;
+      const isLetter: boolean = (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+      if (isCjk || isLetter) {
+        kept += 1;
+      }
+    }
+    return kept >= 2 ? raw : '';
+  }
+
+  /**
+   * 反面（释义卡）：判「模糊 / 不认识」后翻过来，
+   * 版式对齐 F7 新词首学页（英文 + 音标 + 喇叭 + 分隔线 + 中文释义），
+   * 判定在翻面那一刻已经记账，这里只是让用户把中文看一眼再继续。
+   */
+  @Builder
+  RevealSheet() {
+    Column() {
+      Column() {
+        Text(this.revealVerdict === 'VAGUE' ? '模糊 · 记住它的中文' : '不认识 · 记住它的中文')
+          .fontSize(12).fontWeight(FontWeight.Medium)
+          .fontColor(this.revealVerdict === 'VAGUE' ? Colors.FUZZY_ORANGE : Colors.UNKNOWN_RED)
+          .backgroundColor(this.revealVerdict === 'VAGUE'
+            ? Colors.FUZZY_ORANGE_SOFT : Colors.UNKNOWN_RED_SOFT)
+          .borderRadius(10)
+          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+
+        Text(this.revealWord())
+          .fontSize(38).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
+          .textAlign(TextAlign.Center).maxLines(2).width('100%').margin({ top: 18 })
+
+        Row() {
+          Text(this.revealPhonetic())
+            .fontSize(15).fontColor(Colors.TEXT_SUB).layoutWeight(1).textAlign(TextAlign.Center)
+          Button() {
+            Image($r('app.media.ic_speaker')).width(20).height(20).fillColor(Colors.BRAND)
+          }
+          .type(ButtonType.Circle).width(38).height(38).backgroundColor(Colors.BRAND_SOFT)
+          .onClick(() => this.replayCurrent())
+        }
+        .width('78%').margin({ top: 10 })
+
+        Divider().color(Colors.DIVIDER).width('78%').margin({ top: 16, bottom: 16 })
+
+        Text(this.revealMeanings())
+          .fontSize(21).fontColor(Colors.TEXT_MAIN).textAlign(TextAlign.Center)
+          .maxLines(6).width('88%')
+
+        if (this.revealHeard().length > 0) {
+          Text(`你说的：${this.revealHeard()}`)
+            .fontSize(12).fontColor(Colors.TEXT_WEAK)
+            .textAlign(TextAlign.Center).width('88%').margin({ top: 12 })
+        }
+
+        Text(this.revealVerdict === 'VAGUE'
+          ? '已记为「模糊」，本轮稍后还会再考一次'
+          : '已记为「不认识」，明天会重新学一遍')
+          .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_SUB)
+          .textAlign(TextAlign.Center).width('88%').margin({ top: 16 })
+
+        Button('知道了，继续')
+          .fontSize(16).fontColor(Colors.WHITE).backgroundColor(Colors.BRAND)
+          .borderRadius(Radius.BUTTON).height(48).width('100%').margin({ top: 18 })
+          .onClick(() => this.closeReveal())
+      }
+      .width('88%')
+      .backgroundColor(Colors.WHITE)
+      .borderRadius(Radius.SHEET)
+      .padding({ left: 20, right: 20, top: 24, bottom: 18 })
+      .alignItems(HorizontalAlign.Center)
+    }
+    .width('100%').height('100%')
+    .backgroundColor('#99000000')
+    .justifyContent(FlexAlign.Center)
+  }
+
   build() {
     NavDestination() {
-      Column() {
-        this.TopBar()
-        if (this.items.length === 0) {
-          this.EmptyState()
-        } else if (this.phase === 'review') {
-          this.ReviewBody()
-        } else {
-          this.RoundBody()
+      Stack() {
+        Column() {
+          this.TopBar()
+          if (this.items.length === 0) {
+            this.EmptyState()
+          } else if (this.phase === 'review') {
+            this.ReviewBody()
+          } else {
+            this.RoundBody()
+          }
+        }
+        .width('100%').height('100%').backgroundColor(Colors.PAGE_BG)
+
+        if (this.revealVisible) {
+          this.RevealSheet()
         }
       }
-      .width('100%').height('100%').backgroundColor(Colors.PAGE_BG)
+      .width('100%').height('100%')
     }
     .hideTitleBar(true)
     .onBackPressed((): boolean => this.handleBackPressed())
