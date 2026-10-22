@@ -5,6 +5,16 @@ Output:
   rawfile/cloudbooks/<id>.json  -> {"words":[{"w","p","m"}]}
   cloud_books.generated.ts      -> real metas + first-12 previews
 Only tag-backed books are generated: cet4/cet6/ky/gk/zk.
+
+词序策略（v2）：词书此前按 ECDICT 原文件顺序（字母序）导出，导致每本书
+第一张都是 abandon / ability / abnormal——用户体感是「每本词书打开都一样」。
+改为「分层 + 词频」：
+  1. 按级别链 zk ⊂ gk ⊂ cet4 ⊂ cet6 ⊂ ky 计算「本书独有词」（不在更低级词书里）；
+     独有词排前，与更低级词书共有的词排后 —— 让每本书的身份先出现；
+  2. 两段内部均按 ECDICT frq（词频排名，越小越常用）升序，常用词先学；
+  3. frq<=100 的超高频功能词（the/be/and/of…）对用户已属掌握，后置到本段末尾，
+     避免中考/高考词书一打开就是 the be and。
+预览词改为全量分散取样（首/中/尾），不再只取开头 12 个。
 """
 import csv, json, io, os, sys
 
@@ -23,8 +33,12 @@ BOOKS = [
     ('zhongkao', '中考词汇', '中考核心词', '初中 / 小学', '中考', False, 'zk'),
 ]
 
+# 级别链：低 → 高。排序时用于把「与更低级词书共有」的词放到后面
+LEVEL_CHAIN = ['zk', 'gk', 'cet4', 'cet6', 'ky']
+
 import re
 WORD_RE = re.compile(r"^[a-zA-Z][a-zA-Z'\- ]{0,32}$")
+
 
 def clean_meaning(trans):
     # ECDICT 释义里换行可能是真实换行，也可能是字面 \n / \r
@@ -36,11 +50,51 @@ def clean_meaning(trans):
     m = m.replace('/', '；')
     return m[:120]
 
+
+def spread_sample(words, n=12):
+    """全量分散取样，让预览体现词书全貌而不是只看开头同一批 a 词"""
+    if len(words) <= n:
+        return list(words)
+    if n <= 1:
+        return [words[0]]
+    out, used = [], set()
+    for i in range(n):
+        idx = round(i * (len(words) - 1) / (n - 1))
+        if idx not in used:
+            used.add(idx)
+            out.append(words[idx])
+    return out
+
+
+def order_words(bid, items, sets_by_tag):
+    """分层排序：本书独有词（按词频）+ 与更低级词书共有词（按词频）"""
+    lower = set()
+    for t in LEVEL_CHAIN:
+        if t == bid:
+            break
+        lower |= sets_by_tag[t]
+
+    def key(it):
+        w = it['w'].lower()
+        f = it['_frq']
+        # frq<=100 为 the/be/and 这类超高频功能词：用户已掌握，后置
+        mastered = 1 if f <= 100 else 0
+        return (mastered, f, w)
+
+    own = [it for it in items if it['w'].lower() not in lower]
+    shared = [it for it in items if it['w'].lower() in lower]
+    own.sort(key=key)
+    shared.sort(key=key)
+    return own + shared
+
+
 def main():
     os.makedirs(RAW_DIR, exist_ok=True)
-    wanted = {b[0]: b[6] for b in BOOKS}
+    tag_of_book = {b[0]: b[6] for b in BOOKS}
     buckets = {b[0]: [] for b in BOOKS}
     seen = {b[0]: set() for b in BOOKS}
+    sets_by_tag = {t: set() for t in LEVEL_CHAIN}
+
     with open(CSV, encoding='utf-8') as f:
         r = csv.DictReader(f)
         for row in r:
@@ -55,18 +109,26 @@ def main():
             meaning = clean_meaning(trans)
             if not meaning:
                 continue
-            for bid, ecdict_tag in wanted.items():
+            try:
+                frq = int(row.get('frq') or 0) or 999999
+            except ValueError:
+                frq = 999999
+            for t in LEVEL_CHAIN:
+                if t in tags:
+                    sets_by_tag[t].add(wl)
+            for bid, ecdict_tag in tag_of_book.items():
                 if ecdict_tag in tags and wl not in seen[bid]:
                     seen[bid].add(wl)
-                    buckets[bid].append({'w': word, 'p': phon, 'm': meaning})
+                    buckets[bid].append({'w': word, 'p': phon, 'm': meaning, '_frq': frq})
 
     metas = []
-    for bid, name, ver, cat, grade, hot, _tag in BOOKS:
-        words = buckets[bid]
+    for bid, name, ver, cat, grade, hot, tag in BOOKS:
+        words = order_words(tag, buckets[bid], sets_by_tag)
+        out = [{'w': it['w'], 'p': it['p'], 'm': it['m']} for it in words]
         with open(os.path.join(RAW_DIR, bid + '.json'), 'w', encoding='utf-8') as fo:
-            json.dump({'words': words}, fo, ensure_ascii=False, separators=(',', ':'))
-        metas.append((bid, name, ver, cat, grade, hot, len(words), words[:12]))
-        print(bid, len(words))
+            json.dump({'words': out}, fo, ensure_ascii=False, separators=(',', ':'))
+        metas.append((bid, name, ver, cat, grade, hot, len(out), spread_sample(out)))
+        print(bid, len(out), '| head:', ' '.join(w['w'] for w in out[:6]))
 
     # generated TS
     lines = []
@@ -94,6 +156,7 @@ def main():
     with open(TS_OUT, 'w', encoding='utf-8') as fo:
         fo.write('\n'.join(lines) + '\n')
     print('wrote', TS_OUT)
+
 
 if __name__ == '__main__':
     main()
