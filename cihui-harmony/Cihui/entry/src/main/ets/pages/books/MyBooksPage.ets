@@ -11,6 +11,7 @@ import type { BookWordsRouteParam, CameraRouteParam } from '../../common/RouteNa
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
 import type { WordBook } from '../../model/Types';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
+import { resetTodaySession } from '../../viewmodel/StudyEntry';
 import { promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
@@ -259,6 +260,8 @@ export struct MyBooksPage {
       }, (err: Error, result: promptAction.ShowDialogSuccessResponse) => {
         if (!err && result.index === 1) {
           DataStore.INSTANCE.switchActiveBook(book.id);
+          // 旧书的今日任务作废：会话里钉住的那批词已暂停排期，不清会继续显示旧书的「第 N 组」
+          resetTodaySession();
           this.showTick++;
           this.rebuildRows();
           try {

@@ -21,6 +21,7 @@ import type { WordBook } from '../../model/Types';
 import { MIN_DAILY_NEW, MAX_DAILY_NEW } from '../../model/SchedulerCore';
 import { promptAction } from '@kit.ArkUI';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
+import { resetTodaySession } from '../../viewmodel/StudyEntry';
 
 type Phase = 'idle' | 'gate' | 'downloading' | 'error' | 'quota' | 'switchConfirm';
 
@@ -129,6 +130,8 @@ export struct CloudBookDetailPage {
       }, (err: Error, result: promptAction.ShowDialogSuccessResponse) => {
         if (!err && result.index === 1) {
           DataStore.INSTANCE.switchActiveBook(bookId);
+          // 旧书的今日任务作废（会话钉住的那批词已暂停排期）
+          resetTodaySession();
           this.showTick++;
           this.toast(`已切换到《${bookName}》，今日任务已更新`);
           // 首页/打卡的今日任务在 Tab 首建时计算，回首页触发重挂载才能看到新数字
@@ -215,6 +218,8 @@ export struct CloudBookDetailPage {
       }
       this.percent = 88;
       DataStore.INSTANCE.importCloudBook(this.meta.name, this.meta.id, words);
+      // 导入即切换背诵词本：旧书今日任务作废，会话必须重建
+      resetTodaySession();
       this.percent = 100;
       // F-D：导入成功后停留在本页，弹「设置每日新词量」小框（书籍已可背诵）
       setTimeout((): void => {

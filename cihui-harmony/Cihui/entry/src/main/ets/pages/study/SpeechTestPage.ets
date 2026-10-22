@@ -148,6 +148,17 @@ export struct SpeechTestPage {
       .filter((w: Word | undefined): boolean => w !== undefined)
       .map((w: Word | undefined): Word => w as Word);
     this.items = words.map((w: Word): RoundItem => new RoundItem(w));
+    if (this.items.length === 0) {
+      // 会话钉住的那批词已被删词本 / 切书作废（真机 BUG：页面只剩「没有要测试的单词」）。
+      // 清掉失效会话与草稿，回首页按当前计划重排今日任务，避免死胡同。
+      RoundDraftStore.clear(RoundDraftStore.SPEECH);
+      StudySessionStore.clear();
+      this.toast('这批词已不在今日计划，已按当前计划重排');
+      setTimeout((): void => {
+        NavStore.INSTANCE.finishToHome();
+      }, 400);
+      return;
+    }
     // 断点续做：上次退出时存的判定与位置（跨天/换批自动作废）
     const resumed: boolean = this.restoreDraft();
     if (resumed) {
@@ -571,21 +582,27 @@ export struct SpeechTestPage {
       return { wordId: it.wordId, verdict: it.verdict, heard: it.heard };
     });
     DataStore.INSTANCE.applyFirstRound(verdicts);
-    // 本轮已确认落调度，断点草稿使命结束（再次进入即全新一轮）
-    RoundDraftStore.clear(RoundDraftStore.SPEECH);
-    RoundDraftStore.clearBrowse();
     this.clearTimers();
     this.service.release();
     TtsService.stop();
 
     // 分组学习：本组判完即推进会话，直接进下一步（下一组看词 / 下一批模糊重考 / 收尾）
+    // 顺序敏感：会话推进必须早于清草稿——reconcile 靠草稿里的判定把「刚判完、已离开今日计划」
+    // 的本组词留在会话里；先清草稿会让本组在 reconcile 时整组消失，finishStep 就会推错组。
     if (this.param.chunk === true) {
-      const session: NewWordSession | null = StudySessionStore.begin();
+      const loaded: NewWordSession | null = StudySessionStore.load();
+      const session: NewWordSession | null =
+        loaded !== null ? loaded : StudySessionStore.begin();
+      if (session !== null) {
+        StudySessionStore.finishStep(session, verdicts, this.param.retest === true);
+      }
+      RoundDraftStore.clear(RoundDraftStore.SPEECH);
+      RoundDraftStore.clearBrowse();
       if (session === null) {
+        this.toast('今日新词已全部完成');
         NavStore.INSTANCE.finishToHome();
         return;
       }
-      StudySessionStore.finishStep(session, verdicts, this.param.retest === true);
       const step: SessionStep = StudySessionStore.step(session);
       if (step.kind !== 'done') {
         this.toast(this.param.retest === true
@@ -611,6 +628,9 @@ export struct SpeechTestPage {
 
     // F-C 统一入口：新学完成后若当天还有到期复习词，提示并直接切换复习模式（通知式，不强制额外操作）。
     // 中途退出不丢：每次判定/推进都写断点草稿（RoundDraftStore），重进从上次那个词继续。
+    // 本轮已确认落调度，断点草稿使命结束（再次进入即全新一轮）
+    RoundDraftStore.clear(RoundDraftStore.SPEECH);
+    RoundDraftStore.clearBrowse();
     const remain: Word[] = DataStore.INSTANCE.todayReviewWordList();
     if (remain.length > 0) {
       this.toast(`新学完成，进入复习模式（${remain.length} 个待复习）`);

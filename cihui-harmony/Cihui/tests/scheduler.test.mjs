@@ -638,6 +638,23 @@ console.log('[I] 逾期打散');
     check(same.schedules[0].dueDay === '', 'J3: 重复切到同一本幂等');
   }
 
+  // J3b switchActiveBookData：拍照词本例外——即使它曾被设为背诵中，切走也不暂停它的词
+  //（真机 BUG：先切到拍照词本再切回四级，刚「加入当天计划」的词被暂停，看着像分开计划）
+  {
+    const d = emptyData();
+    d.books = [mkBook('BP', '拍照词本', 'DIY_PHOTO'), mkBook('B2', '四级', 'CLOUD')];
+    d.words = [mkWord('p1', 'BP'), mkWord('b1', 'B2')];
+    d.settings.activeBookId = 'BP';
+    d.schedules = [
+      { ...newImportedSchedule('p1'), dueDay: TODAY, intake: 'TODAY' },
+      newImportedSchedule('b1'),
+    ];
+    const out = switchActiveBookData(d, 'B2', NOW);
+    check(out.schedules[0].dueDay === TODAY, 'J3b: 切走拍照词本，导入的词仍留在今天（不被暂停）');
+    check(out.schedules[1].dueDay === TODAY, 'J3b: 新书词汇排到今天（不被白占配额）');
+    check(out.settings.activeBookId === 'B2', 'J3b: activeBookId 切到四级');
+  }
+
   // J4 activeScopeWordIds 例外集合
   {
     const d = emptyData();

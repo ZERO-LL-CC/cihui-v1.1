@@ -192,6 +192,17 @@ export function todayNewWordsDone(): boolean {
   return StudySessionStore.step(session).kind === 'done';
 }
 
+/**
+ * 切换背诵词本 / 词库变动后重置今日会话：
+ * 旧书钉住的那批词已经作废（新词被暂停排期），必须连同断点草稿一起清掉，
+ * 否则首页会继续显示旧书那批「第 N 组」，点进去还可能整组失配。
+ */
+export function resetTodaySession(): void {
+  StudySessionStore.clear();
+  RoundDraftStore.clear(RoundDraftStore.SPEECH);
+  RoundDraftStore.clearBrowse();
+}
+
 /* ============================================================================
  * 临时兼容层（待删除）
  *

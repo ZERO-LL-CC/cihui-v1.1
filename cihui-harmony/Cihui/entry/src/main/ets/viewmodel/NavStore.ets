@@ -16,6 +16,8 @@ export class NavStore {
   @Trace covered: boolean = false;
   /** F4 导入完成标记：校对页返回后，相机页 onShown 据此再退一层，实现关全部二级页回来源页 */
   @Trace importDone: boolean = false;
+  /** 导入完成后落到哪个一级 Tab：加入当天计划→首页(0)，否则→我的词本(2) */
+  @Trace importDoneTab: number = 2;
   /** 系统“减弱动态效果”开关 */
   @Trace reducedMotion: boolean = false;
   /** F16：通知点击冷启动/回前台时携带的落地页目标（如 checkin），Index 消费一次后清空 */

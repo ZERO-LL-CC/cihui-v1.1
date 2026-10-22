@@ -285,7 +285,8 @@ export struct OcrPickPage {
       // 校对页导入成功返回：消费标志，直接回「我的」词本（相机页不再需要二次处理）
       if (NavStore.INSTANCE.importDone) {
         NavStore.INSTANCE.importDone = false;
-        NavStore.INSTANCE.backToTab(2);
+        // 加入当天计划 → 首页（今日任务可见）；加入词本排队 → 我的词本
+        NavStore.INSTANCE.backToTab(NavStore.INSTANCE.importDoneTab);
       }
     })
     .customTransition((operation: NavigationOperation, isEnter: boolean): NavDestinationTransition[] | undefined => {

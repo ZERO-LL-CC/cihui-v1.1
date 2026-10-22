@@ -18,6 +18,7 @@ import type { CloudBookMeta, CloudSampleWord } from '../../service/CloudCatalog'
 import type { MemeSentence, Word, WordBook } from '../../model/Types';
 import { promptAction } from '@kit.ArkUI';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
+import { resetTodaySession } from '../../viewmodel/StudyEntry';
 
 interface BookWordRow {
   english: string;
@@ -253,6 +254,8 @@ export struct BookWordsPage {
       return;
     }
     DataStore.INSTANCE.switchActiveBook(b.id);
+    // 旧书的今日任务作废（会话钉住的那批词已暂停排期）
+    resetTodaySession();
     this.showTick++;
     this.toast(`已切换到《${b.name}》，今日任务已更新`);
     // 首页/打卡的今日任务在 Tab 首建时计算，回首页触发重挂载才能看到新数字

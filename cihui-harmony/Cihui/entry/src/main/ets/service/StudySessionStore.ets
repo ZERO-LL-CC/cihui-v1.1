@@ -14,6 +14,8 @@
  *    跨天后 planNewWords 会自动把它排回计划（不会永久悬空）。
  */
 import { LocalStateFiles } from './LocalStateFiles';
+import { RoundDraftStore } from './RoundDraftStore';
+import type { RoundDraft } from './RoundDraftStore';
 import { dayKeyFromTs } from '../model/SchedulerCore';
 import { DataStore } from '../viewmodel/DataStore';
 import type { RoundVerdict, Word } from '../model/Types';
@@ -85,7 +87,133 @@ export class StudySessionStore {
     if (s.vaguePool === undefined) {
       s.vaguePool = [];
     }
-    return s;
+    return StudySessionStore.reconcile(s);
+  }
+
+  /**
+   * 会话与今日真实计划对齐（真机 BUG：会话钉住的一批词被删/切书后，测试页「没有要测试的单词」）。
+   *
+   * 三种漂移都在这里收敛，避免会话永久悬空：
+   * 1. 词本身没了（删词本 / 删词）→ 剔除；
+   * 2. 还在词库里、但已不在今日计划（切换背诵词本把旧书新词暂停）→ 剔除；
+   * 3. 今日计划里有、会话没纳入（切书后的新词、拍照导入「加入当天计划」的词）→ 追加成组。
+   *
+   * 判「已判定」只看断点草稿：判定落库后词会离开今日计划，不能把它当"已失效"剔掉，
+   * 否则复核/续做会丢词。整会话无待做内容时返回 null（由调用方重新 derive）。
+   */
+  private static reconcile(s: NewWordSession): NewWordSession | null {
+    const allIds: Set<string> = new Set();
+    for (const w of DataStore.INSTANCE.words) {
+      allIds.add(w.id);
+    }
+    const plannedList: Word[] = DataStore.INSTANCE.todayNewWordList();
+    const planned: Set<string> = new Set();
+    for (const w of plannedList) {
+      planned.add(w.id);
+    }
+    const judged: Set<string> = new Set();
+    const draft: RoundDraft | null = RoundDraftStore.load(RoundDraftStore.SPEECH);
+    if (draft !== null) {
+      for (const e of draft.entries) {
+        if (e.verdict.length > 0) {
+          judged.add(e.wordId);
+        }
+      }
+    }
+
+    const groups: SessionGroup[] = [];
+    const seen: Set<string> = new Set();
+    let cursor: number = 0;
+    let changed: boolean = false;
+    for (let i: number = 0; i < s.groups.length; i++) {
+      const g: SessionGroup = s.groups[i];
+      const history: boolean = i < s.cursor;
+      const keep: string[] = [];
+      for (const id of g.wordIds) {
+        if (!allIds.has(id)) {
+          continue;
+        }
+        // 已完成的组只校验词还在；待做的组还必须仍在今日计划里（或今天已判过）
+        if (!history && !planned.has(id) && !judged.has(id)) {
+          continue;
+        }
+        keep.push(id);
+      }
+      if (keep.length !== g.wordIds.length) {
+        changed = true;
+      }
+      if (keep.length === 0) {
+        continue;
+      }
+      groups.push({ wordIds: keep, browseDone: g.browseDone });
+      for (const id of keep) {
+        seen.add(id);
+      }
+      if (history) {
+        cursor += 1;
+      }
+    }
+
+    const pool: string[] = [];
+    for (const id of s.vaguePool) {
+      // 模糊词是「今日留白」状态，本就不在今日计划里，只能用词库存在性 + 判定记录校验
+      if (allIds.has(id)) {
+        pool.push(id);
+        seen.add(id);
+      } else {
+        changed = true;
+      }
+    }
+
+    // 今日计划里有、会话没纳入的词 → 追加成新组（按计划顺序，每 CHUNK_SIZE 一组）
+    const extra: string[] = [];
+    for (const w of plannedList) {
+      if (!seen.has(w.id) && pool.indexOf(w.id) < 0) {
+        extra.push(w.id);
+      }
+    }
+    if (extra.length > 0) {
+      changed = true;
+      let i: number = 0;
+      while (i < extra.length) {
+        const ids: string[] = extra.slice(i, i + CHUNK_SIZE);
+        groups.push({ wordIds: ids, browseDone: false });
+        for (const id of ids) {
+          seen.add(id);
+        }
+        i += CHUNK_SIZE;
+      }
+    }
+
+    if (groups.length === 0 && pool.length === 0) {
+      return null;
+    }
+    if (!changed && pool.length === s.vaguePool.length && cursor === s.cursor) {
+      return s;
+    }
+    const batchIds: string[] = [];
+    for (const g of groups) {
+      for (const id of g.wordIds) {
+        batchIds.push(id);
+      }
+    }
+    const next: NewWordSession = {
+      day: s.day,
+      batchIds: batchIds,
+      groups: groups,
+      cursor: Math.min(cursor, groups.length),
+      vaguePool: pool,
+      retestBatch: s.retestBatch,
+      finished: cursor >= groups.length && pool.length === 0,
+      savedAt: s.savedAt,
+    };
+    StudySessionStore.save(next);
+    if (next.finished) {
+      // 今日任务全部走完：会话使命结束，首页按「无新词」收口
+      StudySessionStore.clear();
+      return null;
+    }
+    return next;
   }
 
   static save(s: NewWordSession): void {

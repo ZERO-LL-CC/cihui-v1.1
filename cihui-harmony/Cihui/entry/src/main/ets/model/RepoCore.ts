@@ -365,18 +365,26 @@ export function switchActiveBookData(data: AppData, newBookId: string, now: numb
   }
   let schedules: ReviewSchedule[] = data.schedules;
   if (oldId.length > 0) {
-    const oldWordIds: Set<string> = new Set();
-    for (const w of data.words) {
-      if (w.bookId === oldId) {
-        oldWordIds.add(w.id);
+    const oldBook: WordBook | undefined = data.books.find((b: WordBook): boolean => b.id === oldId);
+    // 拍照 / 梗句是例外词本（不受「一次只背一本」约束，永远参与排期），
+    // 即使它曾被手动设为背诵中，切走时也不能暂停它的词——否则用户刚导入的
+    // 「加入当天计划」词会莫名从今天任务里消失，看着像「分开计划」。
+    const oldFree: boolean = oldBook !== undefined
+      && (oldBook.source === 'DIY_PHOTO' || oldBook.source === 'MEME');
+    if (!oldFree) {
+      const oldWordIds: Set<string> = new Set();
+      for (const w of data.words) {
+        if (w.bookId === oldId) {
+          oldWordIds.add(w.id);
+        }
       }
+      schedules = data.schedules.map((s: ReviewSchedule): ReviewSchedule => {
+        if (oldWordIds.has(s.wordId) && s.stage === 'NEW' && s.firstLearnDay === '' && s.dueDay !== '') {
+          return { ...s, dueDay: '' };
+        }
+        return s;
+      });
     }
-    schedules = data.schedules.map((s: ReviewSchedule): ReviewSchedule => {
-      if (oldWordIds.has(s.wordId) && s.stage === 'NEW' && s.firstLearnDay === '' && s.dueDay !== '') {
-        return { ...s, dueDay: '' };
-      }
-      return s;
-    });
   }
   const next: AppData = { ...data, schedules, settings: { ...data.settings, activeBookId: newBookId } };
   // 切回时恢复该词本被暂停的新词排期（scope 已指向新词本，旧词本词保持暂停）

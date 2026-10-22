@@ -585,8 +585,9 @@ export struct CameraPage {
       // F4 导入成功：校对页已返回，相机页再退一层，全部二级页关闭回来源页
       if (NavStore.INSTANCE.importDone) {
         NavStore.INSTANCE.importDone = false;
-        // 动态 QA：回「我的」Tab 整页重挂载，避免落到冻结的旧我的词本
-        NavStore.INSTANCE.backToTab(2);
+        // 动态 QA：回一级 Tab 整页重挂载，避免落到冻结的旧页面
+        // 加入当天计划 → 回首页（今日任务里要能看见这批词）；否则回我的词本
+        NavStore.INSTANCE.backToTab(NavStore.INSTANCE.importDoneTab);
         return;
       }
       if (this.phase === 'recognizing' || this.phase === 'failed') {

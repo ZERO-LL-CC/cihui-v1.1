@@ -191,6 +191,8 @@ export struct OcrReviewPage {
       });
       // 关闭全部二级页回来源页：本页返回后由相机页 onShown 再退一层
       NavStore.INSTANCE.importDone = true;
+      // 「加入当天计划」是给今天加任务：直接落首页看今日进度，别停在词本列表里
+      NavStore.INSTANCE.importDoneTab = intake === 'TODAY' ? 0 : 2;
       NavStore.INSTANCE.back();
     } catch (err) {
       promptAction.showToast({ message: `导入失败：${(err as Error).message}`, duration: 2600 });

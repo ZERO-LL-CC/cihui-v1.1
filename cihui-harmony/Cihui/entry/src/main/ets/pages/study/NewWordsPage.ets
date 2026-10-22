@@ -53,6 +53,16 @@ export struct NewWordsPage {
     REFRESH_BUS.onNav(this.refreshWhenTop);
     REFRESH_BUS.onData(this.refreshWhenTop);
     this.loadGroup();
+    if (this.words.length === 0) {
+      // 会话钉住的词已被删词本/切书作废：清失效会话与浏览草稿，回首页按当前计划重排
+      RoundDraftStore.clearBrowse();
+      StudySessionStore.clear();
+      this.toast('这批词已不在今日计划，已按当前计划重排');
+      setTimeout((): void => {
+        NavStore.INSTANCE.finishToHome();
+      }, 400);
+      return;
+    }
     this.restoreBrowse();
     const rate: number = DataStore.INSTANCE.settings.ttsRate;
     TtsService.init(rate).then((state: TtsState): void => {
