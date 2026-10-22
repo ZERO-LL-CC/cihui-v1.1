@@ -88,8 +88,12 @@ export struct SpeechTestPage {
   private autoTimer: number = -1;
   private micStartTimer: number = -1;
   private cursorTimer: number = -1;
+  /** 引擎报错后重开会话的定时器（1002200010 冷启动失败靠重开自愈） */
+  private asrRetryTimer: number = -1;
   private wordErrorCount: number = 0;
   private released: boolean = false;
+  /** 正在拉起语音（防并发：切回语音时用户可能连点） */
+  private voiceStarting: boolean = false;
 
   onAsrPartial(text: string): void {
     this.interim = text;
@@ -101,16 +105,31 @@ export struct SpeechTestPage {
 
   onAsrError(code: number, message: string): void {
     console.warn(`[SpeechTest] asr error ${code} ${message}`);
-    this.wordErrorCount += 1;
-    if (this.wordErrorCount >= 2) {
-      this.asrState = 'unavailable';
-      this.mode = 'manual';
-      this.toast('语音识别不可用，已切换手动判定');
-    } else {
-      // 偶发错误：为当前词重开一个会话
-      this.service.endWord();
-      this.service.beginWord();
+    this.service.endWord();
+    if (this.mode !== 'asr' || this.phase !== 'round') {
+      // 手动模式/复核态本就不该在识别，静默
+      return;
     }
+    this.wordErrorCount += 1;
+    // 1002200010 = 引擎未启动识别（冷启动失败），重开一个会话通常自愈；
+    // 旧实现在这里直接把 mode 改成 manual，用户就再也切不回语音了，这里只重试、不改模式。
+    if (this.wordErrorCount <= 3) {
+      const delay: number = this.wordErrorCount === 1 ? 700 : 1200;
+      if (this.asrRetryTimer !== -1) {
+        clearTimeout(this.asrRetryTimer);
+      }
+      this.asrRetryTimer = setTimeout(() => {
+        this.asrRetryTimer = -1;
+        if (this.mode === 'asr' && !this.micPaused && this.phase === 'round') {
+          this.service.beginWord();
+        }
+      }, delay);
+      return;
+    }
+    // 连续失败：停下麦克风，但仍然是语音模式，点麦克风可继续重试
+    this.micPaused = true;
+    this.asrState = 'unavailable';
+    this.toast('语音没连上，点麦克风重试（下方三档也能判定）');
   }
 
   onAsrStateChange(state: AsrState): void {
@@ -144,7 +163,7 @@ export struct SpeechTestPage {
         // 续上的是复核态：不申请麦克风，判定都还在草稿里，等用户确认
         this.micPaused = true;
       } else {
-        this.bootAsr();
+        this.bootAsr(true);
       }
     }
   }
@@ -170,6 +189,10 @@ export struct SpeechTestPage {
     if (this.cursorTimer !== -1) {
       clearInterval(this.cursorTimer);
       this.cursorTimer = -1;
+    }
+    if (this.asrRetryTimer !== -1) {
+      clearTimeout(this.asrRetryTimer);
+      this.asrRetryTimer = -1;
     }
   }
 
@@ -287,39 +310,85 @@ export struct SpeechTestPage {
     return 'MID';
   }
 
-  private async bootAsr(): Promise<void> {
+  /** 语音起不来时也别让单词没声：至少把当前词读出来 */
+  private speakIfNeeded(need: boolean): void {
+    if (need && this.items.length > 0 && this.index < this.items.length) {
+      TtsService.speak(this.items[this.index].english);
+    }
+  }
+
+  /**
+   * 语音模式统一入口：权限 → 引擎（需要时重建）→ 开麦。
+   * 首学进页、手动切回语音、麦克风异常重试，全部走这里，
+   * 保证「语音就是语音」：任何一次失败都不再把用户踢进手动模式。
+   * @param speakCurrent 是否重新播报当前词（首学进页需要，切回/重试不需要）
+   */
+  private async bootAsr(speakCurrent: boolean): Promise<void> {
+    if (this.voiceStarting) {
+      return;
+    }
+    this.voiceStarting = true;
+    this.mode = 'asr';
+    this.micPaused = false;
+    this.wordErrorCount = 0;
+    this.interim = '';
     try {
-      const context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
-      const granted: boolean =
-        await PermissionUtil.request(context, 'ohos.permission.MICROPHONE' as Permissions);
-      if (!granted) {
-        this.permDenied = true;
-        this.mode = 'manual';
-        TtsService.speak(this.items[this.index].english);
+      if (this.phase !== 'round') {
+        // 复核态不开麦，切回语音只切界面
         return;
       }
-    } catch (e) {
-      console.warn(`[SpeechTest] mic permission failed: ${(e as Error)?.message ?? e}`);
-      this.permDenied = true;
-      this.mode = 'manual';
-      TtsService.speak(this.items[this.index].english);
-      return;
-    }
+      // ① 麦克风权限：已授权时是幂等快速返回；刚被拒过的也会重新弹一次
+      let granted: boolean = false;
+      try {
+        const context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+        granted = await PermissionUtil.request(context, 'ohos.permission.MICROPHONE' as Permissions);
+      } catch (e) {
+        console.warn(`[SpeechTest] mic permission failed: ${(e as Error)?.message ?? e}`);
+        granted = false;
+      }
+      if (this.released) {
+        this.voiceStarting = false;
+        return;
+      }
+      if (!granted) {
+        this.permDenied = true;
+        // 没权限就不是「在听」：字幕位要说实话，否则用户以为麦克风开着
+        this.asrState = 'unavailable';
+        this.micPaused = true;
+        this.speakIfNeeded(speakCurrent);
+        this.toast('没有麦克风权限，语音起不来；点「去设置」开启后再点右上角「语音」');
+        return;
+      }
+      this.permDenied = false;
 
-    this.asrState = 'creating';
-    this.service.setListener(this.listener);
-    const ok: boolean = await this.service.init();
-    if (this.released) {
-      return;
+      // ② 引擎：还活着就直接开麦；不可用/已释放则重建（重建会先拆干净旧引擎）
+      const engineAlive: boolean = this.asrState === 'ready' || this.asrState === 'listening';
+      if (!engineAlive) {
+        this.asrState = 'creating';
+        this.service.setListener(this.listener);
+        const ok: boolean = await this.service.rebuild();
+        if (this.released) {
+          this.voiceStarting = false;
+          return;
+        }
+        if (!ok) {
+          this.asrState = 'unavailable';
+          this.mode = 'asr';
+          this.micPaused = true;
+          this.speakIfNeeded(speakCurrent);
+          this.toast('语音引擎没起来，点麦克风再试（下方三档仍可判定）');
+          return;
+        }
+      }
+      if (speakCurrent) {
+        this.startWord();
+      } else {
+        this.interim = '';
+        this.service.beginWord();
+      }
+    } finally {
+      this.voiceStarting = false;
     }
-    if (!ok) {
-      this.asrState = 'unavailable';
-      this.mode = 'manual';
-      this.toast('语音识别不可用，可用手动三档完成本轮');
-      TtsService.speak(this.items[this.index].english);
-      return;
-    }
-    this.startWord();
   }
 
   /** 进词：先播报英文，再开麦克风（避免 TTS 被识别入口述） */
@@ -409,7 +478,8 @@ export struct SpeechTestPage {
 
   private toggleMic(): void {
     if (this.asrState === 'unavailable' || this.asrState === 'creating') {
-      this.toast('语音识别未就绪，请用手动按钮');
+      // 不再是「请用手动」，直接重试语音
+      this.bootAsr(false);
       return;
     }
     if (this.micPaused) {
@@ -423,21 +493,22 @@ export struct SpeechTestPage {
     }
   }
 
+  /**
+   * 右上角切换：语音 ⇄ 手动。
+   * 切到手动只是暂时闭嘴（引擎、进度、草稿都不动），
+   * 切回语音一律重新申请权限 + 需要时重建引擎 —— 不存在「切不回去」。
+   */
   private switchMode(): void {
     if (this.mode === 'asr') {
       this.mode = 'manual';
       this.micPaused = true;
+      this.interim = '';
       this.service.endWord();
-      this.toast('已切手动模式');
-    } else {
-      if (this.asrState === 'unavailable') {
-        this.toast('语音识别不可用，无法切回');
-        return;
-      }
-      this.mode = 'asr';
-      this.micPaused = false;
-      this.service.beginWord();
+      this.toast('已切手动，点右上角「语音」可随时切回');
+      return;
     }
+    this.toast('正在切回语音…');
+    this.bootAsr(false);
   }
 
   private openSettings(): void {
@@ -603,6 +674,27 @@ export struct SpeechTestPage {
     return this.param.retest === true ? '确认，继续重考' : '确认，继续下一组';
   }
 
+  /** 语音模式下没在听时，字幕位说清楚「为什么没在听」以及怎么恢复 */
+  private idleCaption(): string {
+    if (this.permDenied) {
+      return '没有麦克风权限，可用下方三档判定';
+    }
+    if (this.asrState === 'unavailable') {
+      return '语音未连上，点麦克风重试';
+    }
+    if (this.asrState === 'creating') {
+      return '正在启动语音识别…';
+    }
+    return this.micPaused ? '已暂停，点麦克风继续' : '准备中…';
+  }
+
+  private micHint(): string {
+    if (this.asrState === 'unavailable') {
+      return '点我重试语音';
+    }
+    return this.micPaused ? '已暂停，点击继续' : '点击麦克风可暂停';
+  }
+
   private animateCovered(covered: boolean): void {
     const reduced: boolean = NavStore.INSTANCE.reducedMotion;
     this.getUIContext().animateTo(
@@ -686,7 +778,7 @@ export struct SpeechTestPage {
                 .fontSize(16).fontColor(Colors.TEXT_SUB).textAlign(TextAlign.Center)
                 .constraintSize({ minHeight: 56 }).width('100%')
             } else {
-              Text(this.micPaused ? '已暂停，点麦克风继续' : '准备中…')
+              Text(this.idleCaption())
                 .fontSize(16).fontColor(Colors.TEXT_SUB).textAlign(TextAlign.Center)
                 .constraintSize({ minHeight: 56 }).width('100%')
             }
@@ -708,7 +800,7 @@ export struct SpeechTestPage {
             .shadow(this.micPaused ? ShadowStyle.OUTER_DEFAULT_XS : ShadowStyle.OUTER_DEFAULT_MD)
             .margin({ bottom: 8 })
             .onClick(() => this.toggleMic())
-            Text(this.micPaused ? '已暂停，点击继续' : '点击麦克风可暂停')
+            Text(this.micHint())
               .fontSize(12).fontColor(Colors.TEXT_WEAK).margin({ bottom: 12 })
           }
 
