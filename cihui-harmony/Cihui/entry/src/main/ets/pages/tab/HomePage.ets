@@ -14,7 +14,7 @@ import { AuthStore } from '../../viewmodel/AuthStore';
 import { dayKeyFromTs, type HomeStats } from '../../model/SchedulerCore';
 import type { Word, StudySession } from '../../model/Types';
 import type { CameraRouteParam, MemeReviewRouteParam, ReviewRouteParam } from '../../common/RouteNames';
-import { openTodayNewWords, entryLabelFor, isTodayBatchBrowsed, browseResumeAt } from '../../viewmodel/StudyEntry';
+import { openTodayNewWords, entryLabel, taskSubLabel as studySubLabel } from '../../viewmodel/StudyEntry';
 import { MIN_WORDS_FOR_SENTENCE } from '../../model/SentenceCore';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 
@@ -50,10 +50,9 @@ export struct HomePage {
   @Local memeDotOpacity: number = 0;
   /** 动态QA：显式刷新版本号，导航/数据事件到达且本 Tab 可见时自增强制重绘（BUG-02） */
   @Local viewTick: number = 0;
-  /** 今日新词浏览断点（在刷新点算一次并缓存，构建期不读文件） */
-  @Local resumeAt: number = 0;
-  @Local resumeTotal: number = 0;
-  @Local batchBrowsed: boolean = false;
+  /** 今日新词主按钮文案与副标题（刷新点算一次并缓存，构建期不读文件） */
+  @Local entryLabelText: string = '';
+  @Local studySubText: string = '';
   /** 上一次例句是否已解锁、蓝点是否已出现，用于捕捉"状态翻转瞬间" */
   private lastSentenceReady: boolean = false;
   private lastMemeInProgress: boolean = false;
@@ -66,12 +65,10 @@ export struct HomePage {
     }
   };
 
-  /** 刷新浏览断点缓存：只在 Tab 可见/数据变化时读一次草稿文件 */
+  /** 刷新今日学习会话文案：只在 Tab 可见/数据变化时读一次会话文件 */
   private syncResume(): void {
-    const words: Word[] = DataStore.INSTANCE.todayNewWordList();
-    this.resumeTotal = words.length;
-    this.batchBrowsed = isTodayBatchBrowsed(words);
-    this.resumeAt = browseResumeAt();
+    this.entryLabelText = entryLabel();
+    this.studySubText = studySubLabel();
   }
 
   /** 今日任务主卡副标题 */
@@ -80,10 +77,18 @@ export struct HomePage {
     if (!s.hasWords) {
       return '还没有要背的单词';
     }
-    if (this.resumeAt > 0 && this.resumeTotal > 0) {
-      return `新词看到第 ${this.resumeAt} / ${this.resumeTotal} 个 · 接着继续`;
+    if (s.newAssigned - s.newDone > 0 && this.studySubText.length > 0) {
+      return this.studySubText;
     }
     return `还剩 ${s.remaining} 个词 · 预计约 ${Math.max(1, Math.ceil(s.remaining * 12 / 60))} 分钟`;
+  }
+
+  /** 今日新词主按钮文案（会话文案优先，缺省回落到剩余词数） */
+  private mainCta(s: HomeStats): string {
+    if (this.entryLabelText.length > 0 && this.entryLabelText !== '开始今日学习') {
+      return this.entryLabelText;
+    }
+    return `开始今日学习（剩 ${Math.max(0, s.newAssigned - s.newDone)} 个新词）`;
   }
 
   @Monitor('active')
@@ -233,7 +238,7 @@ export struct HomePage {
         .fontSize(16).fontWeight(FontWeight.Medium)
         .onClick(() => NavStore.INSTANCE.goTab(1));
     } else if (s.newAssigned - s.newDone > 0) {
-      Button(entryLabelFor(this.resumeAt, this.resumeTotal, this.batchBrowsed, s.newAssigned - s.newDone))
+      Button(this.mainCta(s))
         .width('100%').height(46).borderRadius(Radius.BUTTON)
         .backgroundColor(Colors.WHITE).fontColor(Colors.BRAND)
         .fontSize(16).fontWeight(FontWeight.Medium)

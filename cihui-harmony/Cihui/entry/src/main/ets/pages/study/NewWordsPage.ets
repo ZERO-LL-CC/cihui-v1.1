@@ -11,7 +11,7 @@
 import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
 import { RouteName } from '../../common/RouteNames';
-import type { SpeechRouteParam } from '../../common/RouteNames';
+import type { NewWordsRouteParam, SpeechRouteParam } from '../../common/RouteNames';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
 import type { Word } from '../../model/Types';
 import { TtsService } from '../../service/TtsService';
@@ -20,9 +20,12 @@ import { promptAction } from '@kit.ArkUI';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 import { RoundDraftStore } from '../../service/RoundDraftStore';
 import type { BrowseDraft } from '../../service/RoundDraftStore';
+import { StudySessionStore } from '../../service/StudySessionStore';
 
 @ComponentV2
 export struct NewWordsPage {
+  /** 本组词（分组学习：每 10 个一组，看完立刻测这一组） */
+  @Require @Param param: NewWordsRouteParam;
   @Local sheetX: string = '100%';
   /** 动态QA：页面每次重新显示时自增，强制重算仓库派生数据 */
   @Local showTick: number = 0;
@@ -34,7 +37,8 @@ export struct NewWordsPage {
     }
   };
   @Local sheetOpacity: number = 0;
-  @Local words: Word[] = DataStore.INSTANCE.todayNewWordList();
+  /** 本组词（aboutToAppear 按 param.wordIds 填充，见 loadGroup） */
+  @Local words: Word[] = [];
   @Local index: number = 0;
   @Local ttsState: TtsState = 'idle';
   /** 是否已浏览到最后一张（整批浏览完成的唯一凭据） */
@@ -48,12 +52,35 @@ export struct NewWordsPage {
   aboutToAppear(): void {
     REFRESH_BUS.onNav(this.refreshWhenTop);
     REFRESH_BUS.onData(this.refreshWhenTop);
+    this.loadGroup();
     this.restoreBrowse();
     const rate: number = DataStore.INSTANCE.settings.ttsRate;
     TtsService.init(rate).then((state: TtsState): void => {
       this.ttsState = state;
       this.scheduleSpeak(350);
     });
+  }
+
+  /** 本组词：按会话传入的 wordIds 取（不再用今日全部新词，否则会串组） */
+  private loadGroup(): void {
+    const ids: string[] = this.param.wordIds ?? [];
+    const out: Word[] = [];
+    ids.forEach((id: string): void => {
+      const w: Word | undefined = DataStore.INSTANCE.words.find((x: Word): boolean => x.id === id);
+      if (w !== undefined) {
+        out.push(w);
+      }
+    });
+    this.words = out;
+  }
+
+  /** 顶栏标题：多组时带组号 */
+  private groupTitle(): string {
+    const total: number = this.param.groupTotal > 0 ? this.param.groupTotal : 1;
+    if (total <= 1) {
+      return '新词首学';
+    }
+    return `新词首学 · 第 ${this.param.groupIndex} / ${total} 组`;
   }
 
   /** 同批（词 id 顺序一致）才续上次看到的那张，避免换批后错位 */
@@ -114,8 +141,8 @@ export struct NewWordsPage {
     }
     const total: number = this.words.length;
     const message: string = this.reachedEnd
-      ? `本批 ${total} 个词已浏览完，进度已保存，下次进入可直接开始语音测试。`
-      : `已浏览到第 ${this.index + 1} / ${total} 个词，进度已保存，下次进入从这里继续。`;
+      ? `本组 ${total} 个词已看完，进度已保存，下次进入直接测这一组。`
+      : `已看到第 ${this.index + 1} / ${total} 个词，进度已保存，下次进入从这里继续。`;
     try {
       promptAction.showDialog({
         title: '退出首学？',
@@ -242,15 +269,29 @@ export struct NewWordsPage {
     this.swiperController.showNext();
   }
 
-  /** 末张 CTA：携带本批词 id 进入 F8 语音快过 */
+  /** 末张 CTA：本组浏览完 → 立刻测这一组（只传组内 id，避免串组） */
   private startTest(): void {
     if (!this.reachedEnd) {
-      this.toast('请先把本批新词浏览完');
+      this.toast('请先把这一组看完');
       return;
     }
     TtsService.stop();
+    const session = StudySessionStore.begin();
+    if (session !== null) {
+      StudySessionStore.markBrowseDone(session);
+    }
+    // 本组浏览凭证已交给会话，浏览草稿清掉，下一组重新计
+    RoundDraftStore.clearBrowse();
     const ids: string[] = this.words.map((w: Word): string => w.id);
-    const param: SpeechRouteParam = { wordIds: ids };
+    const param: SpeechRouteParam = {
+      wordIds: ids,
+      chunk: true,
+      groupIndex: this.param.groupIndex,
+      groupTotal: this.param.groupTotal,
+      retest: false,
+      batchIndex: 0,
+      batchTotal: 0,
+    };
     NavStore.INSTANCE.push(RouteName.SPEECH_TEST, param);
   }
 
@@ -263,7 +304,7 @@ export struct NewWordsPage {
       .type(ButtonType.Normal).width(44).height(44).backgroundColor(Color.Transparent)
       .onClick(() => this.confirmExit())
 
-      Text('新词首学')
+      Text(this.groupTitle())
         .fontSize(TypeScale.CARD_TITLE).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
         .layoutWeight(1).textAlign(TextAlign.Center)
 
@@ -414,7 +455,7 @@ export struct NewWordsPage {
                 .borderRadius(Radius.BUTTON).height(48).layoutWeight(1).margin({ left: 12 })
                 .onClick(() => this.goNext())
             } else {
-              Button('开始语音测试')
+              Button(`测这 ${this.words.length} 个`)
                 .fontSize(15)
                 .fontColor(Colors.WHITE)
                 .backgroundColor(this.reachedEnd ? Colors.KNOW_GREEN : Colors.TEXT_WEAK)
@@ -438,7 +479,7 @@ export struct NewWordsPage {
       if (this.pendingResumeTip) {
         this.pendingResumeTip = false;
         this.toast(this.reachedEnd
-          ? '已恢复上次进度，本批已浏览完，可直接开始语音测试'
+          ? '已恢复上次进度，本组已看完，可直接测这一组'
           : `已恢复上次进度，从第 ${this.index + 1} 个词继续`);
       }
     })

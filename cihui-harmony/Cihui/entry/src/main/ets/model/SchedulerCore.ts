@@ -212,6 +212,49 @@ export function judge(
   }
 
   if (verdict === 'VAGUE') {
+    // 新词首学：模糊分两阶（vagueCount 当日累计）
+    // 第 1 次 → 留在「今天」的排队重考里：不排明天、不进错词本，本轮结束前还会再考一次；
+    // 第 2 次 → 认了，进错词本 + 明天作为新词重学。
+    // 复习阶段（REVIEW）维持原口径：停留节点 + 次日强制复习 + 进错词本。
+    const priorVague: number = schedule.vagueDay === day ? (schedule.vagueCount ?? 0) : 0;
+    const vagueToday: number = priorVague + 1;
+    if (phase === 'FIRST' && vagueToday < 2) {
+      return {
+        schedule: {
+          ...schedule,
+          forceNextDay: false,
+          roundRequeue: true,
+          dueDay: '',
+          wrongReason: '',
+          vagueCount: vagueToday,
+          vagueDay: day,
+          lastVerdictAt: now,
+        },
+        record: { ...record, lastStudyDay: day },
+        wrongAdded: false,
+        wrongReason: '',
+      };
+    }
+    if (phase === 'FIRST') {
+      return {
+        schedule: {
+          ...schedule,
+          stage: 'NEW',
+          status: 'LEARNING',
+          firstLearnDay: '',
+          dueDay: tomorrow,
+          forceNextDay: true,
+          roundRequeue: false,
+          wrongReason: WRONG_REASON_VAGUE,
+          vagueCount: vagueToday,
+          vagueDay: day,
+          lastVerdictAt: now,
+        },
+        record: { ...record, lastStudyDay: day },
+        wrongAdded: true,
+        wrongReason: WRONG_REASON_VAGUE,
+      };
+    }
     // 模糊：停留当前节点 + 本轮末尾重考 + 强制次日复习（到期日一律改明天）；同时进错词本（F10 标签）
     return {
       schedule: {
@@ -220,6 +263,8 @@ export function judge(
         roundRequeue: true,
         dueDay: tomorrow,
         wrongReason: WRONG_REASON_VAGUE,
+        vagueCount: vagueToday,
+        vagueDay: day,
         lastVerdictAt: now,
       },
       record: { ...record, lastStudyDay: day },
@@ -315,6 +360,11 @@ export function planNewWords(schedules: ReviewSchedule[], now: number, dailyNewC
   for (let i = 0; i < result.length; i++) {
     const s: ReviewSchedule = result[i];
     if (s.stage !== 'NEW' || s.dueDay !== '') {
+      continue;
+    }
+    // 今天判「模糊」待重考的词：本轮先留白（dueDay=''），不占今明两天配额。
+    // 只对「今天判的」生效，跨天后自动回到正常排期，避免词汇永远悬空。
+    if (s.roundRequeue && s.lastVerdictAt > 0 && dayKeyFromTs(s.lastVerdictAt) === dayKeyFromTs(now)) {
       continue;
     }
     if (scopeWordIds !== undefined && !scopeWordIds.has(s.wordId)) {
@@ -479,6 +529,10 @@ export function buildHomeStats(state: SchedulerState, day: string): HomeStats {
   const assignedIds: Set<string> = new Set(plan.newWords);
   for (const s of state.schedules) {
     if (s.firstLearnDay === day) {
+      assignedIds.add(s.wordId);
+    } else if (s.stage === 'NEW' && s.roundRequeue && s.vagueDay === day && s.status !== 'WRONG') {
+      // 今天判「模糊」还在重考队列里：仍算今日新词任务，
+      // 否则进度环会在还有词没考完时提前跳到 100%。
       assignedIds.add(s.wordId);
     }
   }

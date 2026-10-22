@@ -62,9 +62,25 @@ export interface FieldEditRouteParam {
   field: string;
 }
 
-/** F8 入参：本轮要测的词 id（F7 浏览完的当日新词） */
+/** F7 入参：分组浏览（每 10 个一组，看完立刻测这一组） */
+export interface NewWordsRouteParam {
+  wordIds: string[];
+  /** 组序号（1 基） */
+  groupIndex: number;
+  groupTotal: number;
+}
+
+/** F8 入参：本轮要测的词 id（一组新词 / 一批模糊重考词） */
 export interface SpeechRouteParam {
   wordIds: string[];
+  /** 分组学习模式：本组判完即提交并按会话推进下一组 */
+  chunk?: boolean;
+  groupIndex?: number;
+  groupTotal?: number;
+  /** 模糊重考批次 */
+  retest?: boolean;
+  batchIndex?: number;
+  batchTotal?: number;
 }
 
 /** F9/F10/F12 闪卡入参：本轮要过的词 id、标题与模式（复习 / 错词强化 / 补卡） */

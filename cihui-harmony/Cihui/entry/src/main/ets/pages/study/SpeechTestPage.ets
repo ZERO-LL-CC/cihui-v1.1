@@ -27,6 +27,9 @@ import type { Strictness } from '../../model/SpeechMatch';
 import type { RoundVerdict, Verdict, Word } from '../../model/Types';
 import { RoundDraftStore } from '../../service/RoundDraftStore';
 import type { RoundDraft, RoundDraftEntry } from '../../service/RoundDraftStore';
+import { StudySessionStore } from '../../service/StudySessionStore';
+import type { SessionStep, NewWordSession } from '../../service/StudySessionStore';
+import { continueToday } from '../../viewmodel/StudyEntry';
 import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import type { Permissions } from '@kit.AbilityKit';
@@ -476,6 +479,38 @@ export struct SpeechTestPage {
     this.clearTimers();
     this.service.release();
     TtsService.stop();
+
+    // 分组学习：本组判完即推进会话，直接进下一步（下一组看词 / 下一批模糊重考 / 收尾）
+    if (this.param.chunk === true) {
+      const session: NewWordSession | null = StudySessionStore.begin();
+      if (session === null) {
+        NavStore.INSTANCE.finishToHome();
+        return;
+      }
+      StudySessionStore.finishStep(session, verdicts, this.param.retest === true);
+      const step: SessionStep = StudySessionStore.step(session);
+      if (step.kind !== 'done') {
+        this.toast(this.param.retest === true
+          ? '这批重考完成，继续下一批'
+          : `第 ${this.param.groupIndex} 组完成，继续下一组`);
+        continueToday();
+        return;
+      }
+      // 今日新词全部走完（含模糊重考）：若还有到期复习词，按原口径直接切复习
+      const remainAll: Word[] = DataStore.INSTANCE.todayReviewWordList();
+      if (remainAll.length > 0) {
+        this.toast(`新学完成，进入复习模式（${remainAll.length} 个待复习）`);
+        const ids: string[] = remainAll.map((w: Word): string => w.id);
+        const p: ReviewRouteParam = { wordIds: ids, title: '到期复习', mode: 'REVIEW' };
+        NavStore.INSTANCE.finishToHome();
+        NavStore.INSTANCE.push(RouteName.REVIEW_CARDS, p);
+      } else {
+        this.toast('今日新词已全部完成，调度已更新');
+        NavStore.INSTANCE.finishToHome();
+      }
+      return;
+    }
+
     // F-C 统一入口：新学完成后若当天还有到期复习词，提示并直接切换复习模式（通知式，不强制额外操作）。
     // 中途退出不丢：每次判定/推进都写断点草稿（RoundDraftStore），重进从上次那个词继续。
     const remain: Word[] = DataStore.INSTANCE.todayReviewWordList();
@@ -536,6 +571,38 @@ export struct SpeechTestPage {
     return true;
   }
 
+  /** 顶栏标题：分组/重考时带批次信息 */
+  private pageTitle(): string {
+    if (this.param.retest === true) {
+      const n: number = this.param.batchTotal ?? 0;
+      return n > 0 ? `模糊重考 · ${n} 个` : '模糊重考';
+    }
+    const groupTotal: number = this.param.groupTotal ?? 1;
+    if (this.param.chunk === true && groupTotal > 1) {
+      const gi: number = this.param.groupIndex ?? 1;
+      return `语音快过 · 第 ${gi} / ${groupTotal} 组`;
+    }
+    return '语音快过';
+  }
+
+  /** 复核页标题与确认按钮文案（分组模式下是「本组」而不是「本轮」） */
+  private reviewTitle(): string {
+    if (this.param.chunk !== true) {
+      return '本轮复核';
+    }
+    return this.param.retest === true ? '本批重考复核' : '本组复核';
+  }
+
+  private confirmLabel(): string {
+    if (!this.allJudged()) {
+      return '还有单词未判定';
+    }
+    if (this.param.chunk !== true) {
+      return '确认并返回首页';
+    }
+    return this.param.retest === true ? '确认，继续重考' : '确认，继续下一组';
+  }
+
   private animateCovered(covered: boolean): void {
     const reduced: boolean = NavStore.INSTANCE.reducedMotion;
     this.getUIContext().animateTo(
@@ -555,7 +622,7 @@ export struct SpeechTestPage {
       .type(ButtonType.Normal).width(44).height(44).backgroundColor(Color.Transparent)
       .onClick(() => this.confirmExit())
 
-      Text('语音快过')
+      Text(this.pageTitle())
         .fontSize(TypeScale.CARD_TITLE).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
         .layoutWeight(1).textAlign(TextAlign.Center)
 
@@ -712,10 +779,12 @@ export struct SpeechTestPage {
   @Builder
   ReviewBody() {
     Column() {
-      Text('本轮复核')
+      Text(this.reviewTitle())
         .fontSize(TypeScale.TITLE_LARGE).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
         .margin({ top: 14 })
-      Text('可逐词改判，确认后按最终结果更新复习计划')
+      Text(this.param.chunk === true
+        ? '判「模糊」的词会排到今天的末尾重考，判完 2 次才进错词本'
+        : '可逐词改判，确认后按最终结果更新复习计划')
         .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_SUB).margin({ top: 6 })
 
       Scroll() {
@@ -757,7 +826,7 @@ export struct SpeechTestPage {
       // 直接加在固定高 50 的 Button 上只会压缩其内容、不会上抬按钮），
       // 口径与 RoundBody 底部三档按钮一致。
       Row() {
-        Button(this.allJudged() ? '确认并返回首页' : '还有单词未判定')
+        Button(this.confirmLabel())
           .fontSize(16).fontColor(Colors.WHITE)
           .backgroundColor(this.allJudged() ? Colors.BRAND : Colors.TEXT_WEAK)
           .borderRadius(Radius.BUTTON).height(50).width('92%')

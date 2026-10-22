@@ -46,6 +46,7 @@ import type {
   FieldEditRouteParam,
   MakeupRouteParam,
   MemeReviewRouteParam,
+  NewWordsRouteParam,
   OcrPickRouteParam,
   OcrReviewRouteParam,
   ReviewRouteParam,
@@ -141,7 +142,7 @@ struct Index {
     } else if (name === RouteName.BOOK_WORDS) {
       BookWordsPage({ param: param as BookWordsRouteParam })
     } else if (name === RouteName.NEW_WORDS) {
-      NewWordsPage()
+      NewWordsPage({ param: param as NewWordsRouteParam })
     } else if (name === RouteName.SPEECH_TEST) {
       SpeechTestPage({ param: param as SpeechRouteParam })
     } else if (name === RouteName.REVIEW_CARDS) {

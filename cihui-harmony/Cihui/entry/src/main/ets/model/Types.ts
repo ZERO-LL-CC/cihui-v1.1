@@ -101,6 +101,11 @@ export interface ReviewSchedule {
   /** 入列方式：QUEUE=按每日新词量排队；TODAY=当天计划（不占每日新词配额）。
    * 旧数据无此字段视为 QUEUE（planNewWords 预扫描排除 intake==='TODAY'）。 */
   intake?: IntakeMode;
+  /** 当日「模糊」累计次数（仅新词首学计）：1=留在今日排队重考（不排明天、不进错词本），
+   *  2=进错词本并转明天重学。跨日按 vagueDay 归零。旧数据无此字段视为 0。 */
+  vagueCount?: number;
+  /** vagueCount 所属日期 yyyy-mm-dd（跨日归零的唯一判据） */
+  vagueDay?: string;
 }
 
 /** 打卡记录（一天一条） */
