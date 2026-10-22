@@ -47,6 +47,7 @@ import {
   removeWrongFromData,
   renameBook,
   setDailyNewCount,
+  switchActiveBookData,
   todayGateStatus,
   updateWord,
   upsertCheckin,
@@ -355,6 +356,21 @@ export class DataStore {
   /** 某词本是否为当前背诵中的词本（我的词本页「背诵中」徽章） */
   isBookLearning(bookId: string): boolean {
     return this.activeBookId() === bookId;
+  }
+
+  /**
+   * F-D 切换背诵中的词本（我的词本页 / 云书详情「切换」入口）。
+   * 旧词本未首学新词暂停排期，新词本被暂停的新词立即重排；已学复习义务两本都不受影响。
+   */
+  switchActiveBook(bookId: string): void {
+    this.commit(switchActiveBookData(this.data, bookId, Date.now()));
+  }
+
+  /** 按 id 取词本（切换后取名字做提示） */
+  bookById(bookId: string): WordBook | null {
+    const found: WordBook | undefined =
+      this.data.books.find((b: WordBook): boolean => b.id === bookId);
+    return found ?? null;
   }
 
   /** 导入词本后的弹框口径：设置每日新词量并重排未学新词（不动今日已学与打卡） */

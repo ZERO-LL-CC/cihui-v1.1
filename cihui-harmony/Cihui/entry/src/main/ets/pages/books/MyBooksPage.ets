@@ -11,6 +11,7 @@ import type { BookWordsRouteParam, CameraRouteParam } from '../../common/RouteNa
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
 import type { WordBook } from '../../model/Types';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
+import { promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 function sourceLabel(book: WordBook): string {
@@ -24,6 +25,14 @@ function sourceLabel(book: WordBook): string {
     return '拍照导入';
   }
   return '个人 DIY';
+}
+
+/** 卡片快照：把「背诵中」等派生状态固化进数据源，切换词本后新数组才能驱动 ForEach 重建 */
+interface BookRowVM {
+  book: WordBook;
+  wordCount: number;
+  fresh: boolean;
+  learning: boolean;
 }
 
 @ComponentV2
@@ -56,6 +65,7 @@ struct BookCardView {
   @Require @Param learning: boolean;
   @Require @Param index: number;
   @Require @Param onTap: (book: WordBook) => void;
+  @Require @Param onSwitch: (book: WordBook) => void;
   @Local cardOpacity: number = 0;
   @Local cardTy: number = 14;
 
@@ -71,57 +81,77 @@ struct BookCardView {
 
   build() {
     Row() {
-      BookTile({ book: this.book })
-      Column() {
-        Row() {
-          Text(this.book.name)
-            .fontSize(TypeScale.CARD_TITLE)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(Colors.TEXT_MAIN)
-            .layoutWeight(1)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-          if (this.book.source === 'MEME') {
-            Text('梗句')
-              .fontSize(11)
-              .fontColor(Colors.BRAND)
-              .backgroundColor(Colors.BRAND_SOFT)
-              .borderRadius(8)
-              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-              .margin({ right: 6 })
+      // 详情区：点这里进「全书单词」（与「切换」按钮分开，点切换不会误入详情）
+      Row() {
+        BookTile({ book: this.book })
+        Column() {
+          Row() {
+            Text(this.book.name)
+              .fontSize(TypeScale.CARD_TITLE)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Colors.TEXT_MAIN)
+              .layoutWeight(1)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (this.book.source === 'MEME') {
+              Text('梗句')
+                .fontSize(11)
+                .fontColor(Colors.BRAND)
+                .backgroundColor(Colors.BRAND_SOFT)
+                .borderRadius(8)
+                .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                .margin({ right: 6 })
+            }
+            if (this.learning) {
+              // F-D 一次只能背一本：当前背诵中的词本
+              Text('背诵中')
+                .fontSize(11)
+                .fontColor(Colors.WHITE)
+                .backgroundColor(Colors.BRAND)
+                .borderRadius(8)
+                .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                .margin({ right: 6 })
+            }
+            if (this.fresh) {
+              Text('刚导入')
+                .fontSize(11)
+                .fontColor(Colors.KNOW_GREEN)
+                .backgroundColor(Colors.KNOW_GREEN_SOFT)
+                .borderRadius(8)
+                .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                .margin({ right: 6 })
+            }
+            Text('›').fontSize(22).fontColor(Colors.TEXT_WEAK)
           }
-          if (this.learning) {
-            // F-D 一次只能背一本：当前背诵中的词本
-            Text('背诵中')
-              .fontSize(11)
-              .fontColor(Colors.WHITE)
-              .backgroundColor(Colors.BRAND)
-              .borderRadius(8)
-              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-              .margin({ right: 6 })
-          }
-          if (this.fresh) {
-            Text('刚导入')
-              .fontSize(11)
-              .fontColor(Colors.KNOW_GREEN)
-              .backgroundColor(Colors.KNOW_GREEN_SOFT)
-              .borderRadius(8)
-              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-              .margin({ right: 6 })
-          }
-          Text('›').fontSize(22).fontColor(Colors.TEXT_WEAK)
-        }
-        .width('100%')
-
-        Text(`${this.wordCount} 个词 · ${sourceLabel(this.book)}`)
-          .fontSize(TypeScale.CAPTION)
-          .fontColor(Colors.TEXT_SUB)
-          .margin({ top: 6 })
           .width('100%')
+
+          Text(`${this.wordCount} 个词 · ${sourceLabel(this.book)}`)
+            .fontSize(TypeScale.CAPTION)
+            .fontColor(Colors.TEXT_SUB)
+            .margin({ top: 6 })
+            .width('100%')
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+        .margin({ left: 12 })
       }
       .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      .margin({ left: 12 })
+      .onClick(() => this.onTap(this.book))
+
+      // 切换背诵词本入口：解决「导入高考词汇后回不到四级词汇」
+      if (!this.learning) {
+        Text('切换')
+          .fontSize(12)
+          .fontColor(Colors.BRAND)
+          .borderRadius(13)
+          .borderWidth(1)
+          .borderColor(Colors.BRAND)
+          .height(26)
+          .padding({ left: 12, right: 12 })
+          .textAlign(TextAlign.Center)
+          .margin({ left: 8 })
+          .onClick(() => this.onSwitch(this.book))
+      }
     }
     .width('100%')
     .padding(14)
@@ -130,7 +160,6 @@ struct BookCardView {
     .margin({ bottom: 12 })
     .opacity(this.cardOpacity)
     .translate({ y: this.cardTy })
-    .onClick(() => this.onTap(this.book))
   }
 }
 
@@ -140,6 +169,8 @@ export struct MyBooksPage {
   @Local sheetOpacity: number = 0;
   /** 动态QA：页面每次重新显示时自增，强制重算词本列表（BUG-01） */
   @Local showTick: number = 0;
+  /** 词本卡片快照（含「背诵中」派生状态），切换词本后整体替换驱动列表重建 */
+  @Local rows: BookRowVM[] = [];
   /** 动态QA：导航/数据事件总线，本页成为栈顶时强制重算（@Trace 覆盖期投递不可靠） */
   private refreshWhenTop: RefreshListener = (): void => {
     const names: string[] = NavStore.INSTANCE.stack.getAllPathName();
@@ -148,11 +179,13 @@ export struct MyBooksPage {
       top, DataStore.INSTANCE.books.length, this.showTick);
     if (names.length > 0 && names[names.length - 1] === RouteName.MY_BOOKS) {
       this.showTick++;
+      this.rebuildRows();
     }
   };
   aboutToAppear(): void {
     REFRESH_BUS.onNav(this.refreshWhenTop);
     REFRESH_BUS.onData(this.refreshWhenTop);
+    this.rebuildRows();
   }
 
   aboutToDisappear(): void {
@@ -162,6 +195,21 @@ export struct MyBooksPage {
 
   /** 本页创建时刻：之后产生的词本标记「刚导入」 */
   @Local freshCutoff: number = Date.now();
+
+  /** 重建卡片快照：词数 / 刚导入 / 背诵中 全部按仓库当前状态重算 */
+  private rebuildRows(): void {
+    const out: BookRowVM[] = [];
+    for (const b of DataStore.INSTANCE.books) {
+      const row: BookRowVM = {
+        book: b,
+        wordCount: DataStore.INSTANCE.wordCountOfBook(b.id),
+        fresh: b.createdAt > this.freshCutoff,
+        learning: DataStore.INSTANCE.isBookLearning(b.id),
+      };
+      out.push(row);
+    }
+    this.rows = out;
+  }
 
   private animateCovered(covered: boolean): void {
     const reduced: boolean = NavStore.INSTANCE.reducedMotion;
@@ -178,6 +226,54 @@ export struct MyBooksPage {
     // 全书页内再按来源给「编辑（DIY/拍照）/ 背诵（梗句）」主动作。
     const p: BookWordsRouteParam = { bookId: book.id };
     NavStore.INSTANCE.push(RouteName.BOOK_WORDS, p);
+  }
+
+  /**
+   * F-D 切换背诵词本（真机反馈：导入高考词汇后无法切回四级词汇）。
+   * 一次只能背一本：旧词本未学新词暂停排期，已学复习照常；新词本被暂停的新词从今天起重排。
+   */
+  private onSwitchBook(book: WordBook): void {
+    if (DataStore.INSTANCE.isBookLearning(book.id)) {
+      return;
+    }
+    const activeId: string = DataStore.INSTANCE.activeBookId();
+    const activeBook: WordBook | null = DataStore.INSTANCE.bookById(activeId);
+    const unlearned: number = activeId.length > 0
+      ? DataStore.INSTANCE.unlearnedCountOfBook(activeId) : 0;
+    let msg: string = '';
+    if (activeBook !== null && unlearned > 0) {
+      msg = `当前在背《${activeBook.name}》，还有 ${unlearned} 个新词没学。切换后它会暂停排期（已学的复习照常），《${book.name}》的新词从今天起接着排。`;
+    } else if (activeBook !== null) {
+      msg = `《${activeBook.name}》的新词已全部学完，切换后只保留复习；《${book.name}》的新词从今天起接着排。`;
+    } else {
+      msg = `《${book.name}》将成为当前背诵词本，新词按每日新词量从今天起排期。`;
+    }
+    try {
+      promptAction.showDialog({
+        title: `切换到《${book.name}》？`,
+        message: msg,
+        buttons: [
+          { text: '取消', color: Colors.TEXT_SUB },
+          { text: '切换', color: Colors.BRAND },
+        ],
+      }, (err: Error, result: promptAction.ShowDialogSuccessResponse) => {
+        if (!err && result.index === 1) {
+          DataStore.INSTANCE.switchActiveBook(book.id);
+          this.showTick++;
+          this.rebuildRows();
+          try {
+            promptAction.showToast({ message: `已切换到《${book.name}》，今日任务已更新`, duration: 1800 });
+          } catch (e) {
+          }
+          // 首页/打卡的今日任务由 Tab 页首建时计算：留在本页会使它们显示切书前的数字，
+          // 因此切换后回首页，让 Tab 页按最新仓库重建（用户下一步正是去学新书）。
+          setTimeout((): void => {
+            NavStore.INSTANCE.backToTab(0);
+          }, 700);
+        }
+      });
+    } catch (e) {
+    }
   }
 
   @Builder
@@ -239,22 +335,26 @@ export struct MyBooksPage {
             .fontSize(12).fontColor(Colors.TEXT_WEAK)
             .width('100%').padding({ left: 20, right: 20, bottom: 10 })
 
-          if (DataStore.INSTANCE.books.length === 0) {
+          if (this.rows.length === 0) {
             this.EmptyState()
           } else {
             List({ space: 0 }) {
-              ForEach(DataStore.INSTANCE.books, (book: WordBook, index: number) => {
+              ForEach(this.rows, (row: BookRowVM, index: number) => {
                 ListItem() {
                   BookCardView({
-                    book,
-                    wordCount: DataStore.INSTANCE.wordCountOfBook(book.id),
-                    fresh: book.createdAt > this.freshCutoff,
-                    learning: DataStore.INSTANCE.isBookLearning(book.id),
+                    book: row.book,
+                    wordCount: row.wordCount,
+                    fresh: row.fresh,
+                    learning: row.learning,
                     index,
                     onTap: (b: WordBook): void => this.openBook(b),
+                    onSwitch: (b: WordBook): void => this.onSwitchBook(b),
                   })
                 }
-              }, (book: WordBook): string => book.id)
+              }, (row: BookRowVM): string =>
+                // key 带上派生状态：ArkUI 对 key 相同的 ForEach item 不做子组件参数更新，
+                // 切换词本后「背诵中」徽章不会迁移，故把 learning/词数并入 key 强制重建
+                `${row.book.id}-${row.learning ? 'on' : 'off'}-${row.wordCount}`)
             }
             .layoutWeight(1)
             .width('100%')
@@ -286,6 +386,7 @@ export struct MyBooksPage {
     .onShown(() => {
       this.animateCovered(true);
       this.showTick++;
+      this.rebuildRows();
     })
     .onHidden(() => this.animateCovered(false))
     .customTransition((operation: NavigationOperation, isEnter: boolean): NavDestinationTransition[] | undefined => {

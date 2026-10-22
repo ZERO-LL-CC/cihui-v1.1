@@ -354,12 +354,17 @@ export function activeScopeWordIds(data: AppData): Set<string> | undefined {
  * F-D 切换背诵词本：
  * - 旧背诵词本中「未首学」的新词清空排期（暂停，切回来时再排）；
  * - 已首学的词（R1–R15 复习义务）不动，继续按节点复习；
- * - 设置 activeBookId = 新词本。重复切到同一本幂等。
+ * - 设置 activeBookId = 新词本，并立刻为新词本里此前被暂停（dueDay 为空）的新词重排，
+ *   否则「切走再切回」的词永远排不上队（BUG：导入高考词汇后回不去四级词汇）；
+ * - 重复切到同一本幂等。
  */
 export function switchActiveBookData(data: AppData, newBookId: string, now: number): AppData {
   const oldId: string = data.settings.activeBookId ?? '';
+  if (oldId === newBookId) {
+    return data;
+  }
   let schedules: ReviewSchedule[] = data.schedules;
-  if (oldId.length > 0 && oldId !== newBookId) {
+  if (oldId.length > 0) {
     const oldWordIds: Set<string> = new Set();
     for (const w of data.words) {
       if (w.bookId === oldId) {
@@ -373,7 +378,12 @@ export function switchActiveBookData(data: AppData, newBookId: string, now: numb
       return s;
     });
   }
-  return { ...data, schedules, settings: { ...data.settings, activeBookId: newBookId } };
+  const next: AppData = { ...data, schedules, settings: { ...data.settings, activeBookId: newBookId } };
+  // 切回时恢复该词本被暂停的新词排期（scope 已指向新词本，旧词本词保持暂停）
+  return {
+    ...next,
+    schedules: planNewWords(schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next)),
+  };
 }
 
 /** 云词书下载导入入参中的单词（结构与 service 层 CloudSampleWord 兼容） */

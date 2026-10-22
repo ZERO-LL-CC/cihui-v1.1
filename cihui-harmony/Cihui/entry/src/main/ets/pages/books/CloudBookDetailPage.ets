@@ -86,14 +86,92 @@ export struct CloudBookDetailPage {
     return DataStore.INSTANCE.isCloudBookImported(this.param.cloudBookId);
   }
 
-  /** 点击右上角：筹备中词书只提示；未导入走下载；已导入走移除确认 */
+  /** 该云书对应的本地词本（已导入才有） */
+  private localBook(): WordBook | null {
+    const cid: string = this.param.cloudBookId;
+    const found: WordBook | undefined =
+      DataStore.INSTANCE.books.find((b: WordBook): boolean => b.cloudBookId === cid);
+    return found ?? null;
+  }
+
+  /** 该云书是否为当前背诵中的词本 */
+  private isActiveBook(): boolean {
+    const b: WordBook | null = this.localBook();
+    return b !== null && DataStore.INSTANCE.isBookLearning(b.id);
+  }
+
+  /** 已导入但当前在背别的书 → 切回这本（真机反馈：导入高考词汇后回不到四级词汇） */
+  private confirmSwitchToThis(): void {
+    const b: WordBook | null = this.localBook();
+    if (b === null) {
+      return;
+    }
+    const activeId: string = DataStore.INSTANCE.activeBookId();
+    const activeBook: WordBook | null = DataStore.INSTANCE.bookById(activeId);
+    const unlearned: number = activeId.length > 0
+      ? DataStore.INSTANCE.unlearnedCountOfBook(activeId) : 0;
+    let msg: string = `《${b.name}》的新词从今天起接着排。`;
+    if (activeBook !== null && unlearned > 0) {
+      msg = `当前在背《${activeBook.name}》，还有 ${unlearned} 个新词没学。切换后它会暂停排期（已学的复习照常），${msg}`;
+    } else if (activeBook !== null) {
+      msg = `《${activeBook.name}》的新词已学完，切换后只保留复习；${msg}`;
+    }
+    const bookId: string = b.id;
+    const bookName: string = b.name;
+    try {
+      promptAction.showDialog({
+        title: `切换到《${bookName}》？`,
+        message: msg,
+        buttons: [
+          { text: '取消', color: Colors.TEXT_SUB },
+          { text: '切换', color: Colors.BRAND },
+        ],
+      }, (err: Error, result: promptAction.ShowDialogSuccessResponse) => {
+        if (!err && result.index === 1) {
+          DataStore.INSTANCE.switchActiveBook(bookId);
+          this.showTick++;
+          this.toast(`已切换到《${bookName}》，今日任务已更新`);
+          // 首页/打卡的今日任务在 Tab 首建时计算，回首页触发重挂载才能看到新数字
+          setTimeout((): void => {
+            NavStore.INSTANCE.backToTab(0);
+          }, 700);
+        }
+      });
+    } catch (e) {
+    }
+  }
+
+  /** 顶栏右侧标签：已导入未在背 → 「切换」可点回这本 */
+  private headerLabel(): string {
+    if (this.imported()) {
+      return this.isActiveBook() ? '背诵中' : '切换';
+    }
+    if (this.meta !== null && this.meta.coming === true) {
+      return '筹备中';
+    }
+    return '下载导入';
+  }
+
+  /** 顶栏标签是否用弱化色（背诵中 / 筹备中不可当主行动） */
+  private headerMuted(): boolean {
+    if (this.imported()) {
+      return this.isActiveBook();
+    }
+    return this.meta !== null && this.meta.coming === true;
+  }
+
+  /** 点击右上角：筹备中只提示；已导入 → 在背则移除确认、不在背则切换；未导入走下载 */
   private onHeaderAction(): void {
     if (this.meta && this.meta.coming === true) {
       this.toast('该词书正在接入开源教材词表，暂未开放');
       return;
     }
     if (this.imported()) {
-      this.confirmRemove = true;
+      if (this.isActiveBook()) {
+        this.confirmRemove = true;
+      } else {
+        this.confirmSwitchToThis();
+      }
       return;
     }
     // F14：下载强制登录，未登录弹引导跳登录页；登录后再次点击直接下载
@@ -211,10 +289,10 @@ export struct CloudBookDetailPage {
         .layoutWeight(1).textAlign(TextAlign.Center).maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-      Text(this.imported() ? '已导入' : (this.meta && this.meta.coming === true ? '筹备中' : '下载导入'))
+      Text(this.headerLabel())
         .fontSize(13)
-        .fontColor(this.imported() || (this.meta && this.meta.coming === true) ? Colors.TEXT_WEAK : Colors.WHITE)
-        .backgroundColor(this.imported() || (this.meta && this.meta.coming === true) ? Colors.DIVIDER : Colors.BRAND)
+        .fontColor(this.headerMuted() ? Colors.TEXT_WEAK : Colors.WHITE)
+        .backgroundColor(this.headerMuted() ? Colors.DIVIDER : Colors.BRAND)
         .borderRadius(14)
         .height(30).padding({ left: 12, right: 12 })
         .textAlign(TextAlign.Center)

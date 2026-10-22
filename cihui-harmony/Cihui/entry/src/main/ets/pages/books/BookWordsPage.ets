@@ -232,6 +232,35 @@ export struct BookWordsPage {
     return id.length > 0 && DataStore.INSTANCE.isCloudBookImported(id);
   }
 
+  /** 云书对应的本地词本 */
+  private localCloudBook(): WordBook | null {
+    const cid: string = this.param.cloudBookId ?? '';
+    const found: WordBook | undefined =
+      DataStore.INSTANCE.books.find((b: WordBook): boolean => b.cloudBookId === cid);
+    return found ?? null;
+  }
+
+  /** 云书是否已是当前背诵中的词本 */
+  private isActiveCloud(): boolean {
+    const b: WordBook | null = this.localCloudBook();
+    return b !== null && DataStore.INSTANCE.isBookLearning(b.id);
+  }
+
+  /** 已导入但没在背 → 切回这本（替代原来不可点的「已在我的词本中」） */
+  private switchToThisCloud(): void {
+    const b: WordBook | null = this.localCloudBook();
+    if (b === null) {
+      return;
+    }
+    DataStore.INSTANCE.switchActiveBook(b.id);
+    this.showTick++;
+    this.toast(`已切换到《${b.name}》，今日任务已更新`);
+    // 首页/打卡的今日任务在 Tab 首建时计算，回首页触发重挂载才能看到新数字
+    setTimeout((): void => {
+      NavStore.INSTANCE.backToTab(0);
+    }, 700);
+  }
+
   private isComing(): boolean {
     return this.meta !== null && this.meta.coming === true;
   }
@@ -459,10 +488,19 @@ export struct BookWordsPage {
 
           if (this.isCloud()) {
             if (this.cloudImported()) {
-              Text('✓ 已在我的词本中')
-                .width('100%').height(46).textAlign(TextAlign.Center)
-                .fontSize(14).fontColor(Colors.KNOW_GREEN).backgroundColor(Colors.KNOW_GREEN_SOFT)
-                .borderRadius(Radius.BUTTON).margin({ top: 10, bottom: 6 })
+              if (this.isActiveCloud()) {
+                Text('✓ 背诵中')
+                  .width('100%').height(46).textAlign(TextAlign.Center)
+                  .fontSize(14).fontColor(Colors.KNOW_GREEN).backgroundColor(Colors.KNOW_GREEN_SOFT)
+                  .borderRadius(Radius.BUTTON).margin({ top: 10, bottom: 6 })
+              } else {
+                Button('切换为背诵词本')
+                  .width('100%').height(46).borderRadius(Radius.BUTTON)
+                  .fontSize(14).fontColor(Colors.BRAND)
+                  .backgroundColor(Colors.BRAND_SOFT)
+                  .margin({ top: 10, bottom: 6 })
+                  .onClick(() => this.switchToThisCloud())
+              }
             } else if (!this.isComing()) {
               Button(`下载导入这本书（共 ${this.allRows.length} 词）`)
                 .width('100%').height(48).borderRadius(Radius.BUTTON)

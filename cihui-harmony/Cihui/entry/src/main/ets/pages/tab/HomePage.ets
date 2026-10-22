@@ -220,7 +220,7 @@ export struct HomePage {
         .backgroundColor(Colors.WHITE).fontColor(Colors.BRAND)
         .fontSize(16).fontWeight(FontWeight.Medium)
         .onClick(() => this.openCamera());
-    } else if (checkedIn) {
+    } else if (checkedIn && s.remaining === 0) {
       Button('今日已打卡，明天见')
         .width('100%').height(46).borderRadius(Radius.BUTTON)
         .backgroundColor(Colors.WHITE).fontColor(Colors.KNOW_GREEN)
