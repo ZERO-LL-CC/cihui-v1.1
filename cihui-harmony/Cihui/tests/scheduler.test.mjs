@@ -104,6 +104,16 @@ function planNewWordsLegacy(schedules, now, dailyNewCount) {
     }
     return hit.size;
   };
+  // 今日超额收敛（与生产同口径）：今天到期且未开始的词超过额度时，从队尾顺延
+  const dueToday = result.filter((x) => x.stage === 'NEW' && x.dueDay === today
+    && x.intake !== 'TODAY'
+    && !(x.lastVerdictAt > 0 && dayKeyFromTs(x.lastVerdictAt) === today));
+  let overToday = dueToday.length - quota;
+  for (let i = dueToday.length - 1; i >= 0 && overToday > 0; i--) {
+    dueToday[i].dueDay = '';
+    overToday -= 1;
+  }
+
   // 配额再平衡（与生产同口径的朴素实现）：某天超配额时把未判定的普通排期词退回待排
   const countOf = (day) => {
     const hit = new Set();
@@ -948,6 +958,63 @@ function testFourSources() {
     check(tomorrow === 10, 'K9: 明天仍是 10 个（10 个不认识的占满，不额外发新词）');
     const todayNew = second.filter((s) => s.stage === 'NEW' && s.dueDay === TODAY).length;
     check(todayNew === 0, 'K9: 判不认识后今天不再补发新词');
+  }
+
+  // K10 存量超额收敛：设 10 个，今天却已经排了 20 个（额度调小/历史遗留）→ 收敛到 10
+  {
+    const sched = [];
+    for (let i = 0; i < 20; i++) {
+      sched.push({ ...newImportedSchedule('s' + i), dueDay: TODAY });
+    }
+    const planned = planNewWords(sched, NOW, 10);
+    const kept = planned.filter((s) => s.stage === 'NEW' && s.dueDay === TODAY).map((s) => s.wordId);
+    check(kept.length === 10, 'K10: 今日 20 个收敛到 10 个');
+    check(kept[0] === 's0' && kept[9] === 's9', 'K10: 保留队首 10 个，学习顺序不变');
+    const tmr = planned.filter((s) => s.stage === 'NEW' && s.dueDay === addDays(TODAY, 1)).length;
+    check(tmr === 10, 'K10: 顺延的 10 个接到明天');
+  }
+
+  // K10b 今天已学 8 个，今日剩余 10 个（本来就 ≤ 额度）不动
+  {
+    const sched = [];
+    for (let i = 0; i < 8; i++) {
+      sched.push({ ...newImportedSchedule('d' + i), stage: 'R1', firstLearnDay: TODAY,
+        dueDay: addDays(TODAY, 1) });
+    }
+    for (let i = 0; i < 10; i++) {
+      sched.push({ ...newImportedSchedule('e' + i), dueDay: TODAY });
+    }
+    const planned = planNewWords(sched, NOW, 10);
+    const todayN = planned.filter((s) => s.stage === 'NEW' && s.dueDay === TODAY).length;
+    check(todayN === 10, 'K10b: 已学的不参与收敛，今日剩余 10 个保持不动');
+  }
+
+  // K10c 插队词不占额度，也不被收敛
+  {
+    const sched = [];
+    for (let i = 0; i < 10; i++) {
+      sched.push({ ...newImportedSchedule('n' + i), dueDay: TODAY });
+    }
+    for (let i = 0; i < 3; i++) {
+      sched.push({ ...newImportedSchedule('t' + i), dueDay: TODAY, intake: 'TODAY' });
+    }
+    const planned = planNewWords(sched, NOW, 10);
+    const normal = planned.filter((s) => s.stage === 'NEW' && s.dueDay === TODAY
+      && s.intake !== 'TODAY').length;
+    const insert = planned.filter((s) => s.stage === 'NEW' && s.dueDay === TODAY
+      && s.intake === 'TODAY').length;
+    check(normal === 10 && insert === 3, 'K10c: 插队词不占额度也不被收敛（10 + 3）');
+  }
+
+  // K10d 今天判过的词不参与收敛（否则正在重考的会被踢走）
+  {
+    const sched = [];
+    for (let i = 0; i < 10; i++) {
+      sched.push({ ...newImportedSchedule('j' + i), dueDay: TODAY, lastVerdictAt: NOW });
+    }
+    const planned = planNewWords(sched, NOW, 5);
+    const todayN = planned.filter((s) => s.stage === 'NEW' && s.dueDay === TODAY).length;
+    check(todayN === 10, 'K10d: 今天已判过的 10 个不被收敛（只收敛未开始的）');
   }
 
   // K5 切书：旧书未学暂停、新书恢复、例外词本不受影响

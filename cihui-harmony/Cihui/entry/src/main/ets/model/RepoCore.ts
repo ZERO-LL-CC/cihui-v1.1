@@ -795,6 +795,30 @@ export function applyDailyNewCount(data: AppData, n: number, now: number): AppDa
 }
 
 /**
+ * 今日额度校准（启动时调用一次）：
+ * 历史遗留或额度调小后，今天的排期可能超过每日新词量（真机：设 10 个却排了 20 个），
+ * 而 App 平时只在导入/切书/改额度时才重排，这类存量永远不会自己收敛。
+ * 只在「今天到期且未开始的词 > 额度」时才重排；正常情况返回 null，不写盘。
+ */
+export function calibrateToday(data: AppData, now: number): AppData | null {
+  const today: string = dayKeyFromTs(now);
+  const quota: number = clampDailyNew(data.settings.dailyNewCount);
+  let dueToday: number = 0;
+  for (const s of data.schedules) {
+    if (s.stage === 'NEW' && s.dueDay === today && s.intake !== 'TODAY'
+      && !(s.lastVerdictAt > 0 && dayKeyFromTs(s.lastVerdictAt) === today)) {
+      dueToday += 1;
+    }
+  }
+  if (dueToday <= quota) {
+    return null;
+  }
+  const replanned: ReviewSchedule[] =
+    planNewWords(data.schedules, now, quota, activeScopeWordIds(data), exceptionWordIds(data));
+  return { ...data, schedules: replanned };
+}
+
+/**
  * 设置每日新词量（F-D 导入词本后的弹框口径）：
  * 只更新设置并重排「未首学」新词的未来排期——
  * 与 applyDailyNewCount 的区别：不回退今天已学的词、不删除当天打卡

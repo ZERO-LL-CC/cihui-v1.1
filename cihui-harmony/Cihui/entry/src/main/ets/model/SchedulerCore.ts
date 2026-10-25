@@ -387,6 +387,32 @@ export function planNewWords(schedules: ReviewSchedule[], now: number, dailyNewC
     countByDay.set(day, set.size);
   });
 
+  // 今日超额收敛：每日新词量被调小、或历史遗留把今天排爆时，把队尾「尚未开始」的词
+  // 顺延到后面，保证「设 10 个就只背 10 个」。
+  // 只动今天到期且从未判定过的词：已学的（stage 已变）、今天判过的（dueDay 已改）、
+  // 插队词（不占额度）都不碰，学习顺序保持原样（保留队首 quota 个）。
+  const dueTodayIds: string[] = [];
+  for (const s of result) {
+    if (s.stage === 'NEW' && s.dueDay === todayKey && s.intake !== 'TODAY'
+      && !(s.lastVerdictAt > 0 && dayKeyFromTs(s.lastVerdictAt) === todayKey)) {
+      dueTodayIds.push(s.wordId);
+    }
+  }
+  let todayOver: number = dueTodayIds.length - quota;
+  if (todayOver > 0) {
+    for (let i: number = dueTodayIds.length - 1; i >= 0 && todayOver > 0; i--) {
+      const target: string = dueTodayIds[i];
+      for (const s of result) {
+        if (s.wordId === target) {
+          s.dueDay = '';
+          break;
+        }
+      }
+      todayOver -= 1;
+      countByDay.set(todayKey, (countByDay.get(todayKey) ?? 0) - 1);
+    }
+  }
+
   // 配额再平衡：刚性占用（逾期复学 / 今日判定推过来）把某天挤爆时，
   // 把该天「从未判定过的普通排期词」退回待排池顺延。
   // 例：设 10 个，判 10 个不认识 → 明天 10 个重学已占满，原本排在明天的 10 个新词顺延，

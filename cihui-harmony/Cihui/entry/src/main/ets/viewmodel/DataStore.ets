@@ -44,6 +44,7 @@ import {
   importCloudBook,
   importTransaction,
   activeScopeWordIds,
+  calibrateToday,
   exceptionWordIds,
   removeWrongFromData,
   renameBook,
@@ -243,7 +244,15 @@ export class DataStore {
     const restored: AppData | null = this.persistence.load();
     if (restored) {
       this.data = this.normalize(restored);
+      // 启动校准：今天排期超过每日新词量时收敛（否则「设 10 个却背 20 个」的存量永远不会变）
+      const calibrated: AppData | null = calibrateToday(this.data, Date.now());
+      if (calibrated !== null) {
+        this.data = calibrated;
+      }
       this.publish();
+      if (calibrated !== null) {
+        this.persistence.save(calibrated);
+      }
     }
   }
 
