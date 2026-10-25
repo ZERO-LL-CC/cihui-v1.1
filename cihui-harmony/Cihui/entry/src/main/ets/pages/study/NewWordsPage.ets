@@ -82,6 +82,11 @@ export struct NewWordsPage {
       }
     });
     this.words = out;
+    // 只有一个词时无需翻页，Swiper 的 onChange 永远不触发 → reachedEnd 恒为 false，
+    // CTA 会一直提示「请先把这一组看完」，最后一个词永远进不了测试（真机：第 3 组剩 1 个卡死）
+    if (out.length <= 1) {
+      this.reachedEnd = true;
+    }
   }
 
   /** 顶栏标题：多组时带组号 */

@@ -90,8 +90,52 @@ function planNewWordsLegacy(schedules, now, dailyNewCount) {
   let cursorDay = today;
   // 逾期未学的新词算作今日占用（与生产实现同口径；否则昨天欠 20 个今天又发 20 个）
   const bucketOf = (d) => (d < today ? today : d);
-  const remaining = () => result.filter((s) => s.stage === 'NEW' && s.dueDay !== ''
-    && s.intake !== 'TODAY' && bucketOf(s.dueDay) === cursorDay).length;
+  const remaining = () => {
+    const hit = new Set();
+    for (const s of result) {
+      if (s.stage !== 'NEW' || s.intake === 'TODAY') continue;
+      const judgedToday = s.lastVerdictAt > 0 && dayKeyFromTs(s.lastVerdictAt) === today;
+      if (s.roundRequeue && s.vagueDay === today) {
+        if (cursorDay === today) hit.add(s.wordId);
+        continue;
+      }
+      if (judgedToday && s.status === 'WRONG' && cursorDay === today) hit.add(s.wordId);
+      if (s.dueDay !== '' && bucketOf(s.dueDay) === cursorDay) hit.add(s.wordId);
+    }
+    return hit.size;
+  };
+  // 配额再平衡（与生产同口径的朴素实现）：某天超配额时把未判定的普通排期词退回待排
+  const countOf = (day) => {
+    const hit = new Set();
+    for (const x of result) {
+      if (x.stage !== 'NEW' || x.intake === 'TODAY') continue;
+      const jt = x.lastVerdictAt > 0 && dayKeyFromTs(x.lastVerdictAt) === today;
+      if (x.roundRequeue && x.vagueDay === today) {
+        if (day === today) hit.add(x.wordId);
+        continue;
+      }
+      if (jt && x.status === 'WRONG' && day === today) hit.add(x.wordId);
+      if (x.dueDay !== '' && bucketOf(x.dueDay) === day) hit.add(x.wordId);
+    }
+    return hit.size;
+  };
+  const futureDays = [];
+  for (const x of result) {
+    if (x.stage === 'NEW' && x.dueDay > today && futureDays.indexOf(x.dueDay) < 0) {
+      futureDays.push(x.dueDay);
+    }
+  }
+  for (const day of futureDays) {
+    let over = countOf(day) - quota;
+    for (const x of result) {
+      if (over <= 0) break;
+      if (x.stage !== 'NEW' || x.dueDay !== day || x.intake === 'TODAY') continue;
+      if (x.lastVerdictAt > 0 && dayKeyFromTs(x.lastVerdictAt) === today) continue;
+      x.dueDay = '';
+      over -= 1;
+    }
+  }
+
   for (let i = 0; i < result.length; i++) {
     const s = result[i];
     if (s.stage !== 'NEW' || s.dueDay !== '') {
@@ -736,18 +780,30 @@ function testFourSources() {
     settings: { ...DEFAULT_SETTINGS, dailyNewCount },
   });
 
-  // K1 昨天没学完的新词不撑爆今天的计划：20 逾期 + 20 今日到期 → 今日只放 20，顺延 20
+  // K1 缺席两天回来：逾期堆积受额度限流，不会一次全塞进今天
   {
     const sched = [];
     for (let i = 0; i < 20; i++) {
-      sched.push({ ...newImportedSchedule('a' + i), dueDay: addDays(TODAY, -1) });
-      sched.push({ ...newImportedSchedule('b' + i), dueDay: TODAY });
+      sched.push({ ...newImportedSchedule('a' + i), dueDay: addDays(TODAY, -2) });
+      sched.push({ ...newImportedSchedule('b' + i), dueDay: addDays(TODAY, -1) });
     }
-    const plan = buildDayPlan(state(sched, 20), TODAY);
-    check(plan.newWords.length === 20, 'K1: 今日新词被额度截断为 20（不膨胀成 40）');
-    check(plan.newDeferred === 20, 'K1: 剩余 20 个顺延到明天');
-    check(plan.newWords[0] === 'a0' && plan.newWords[19] === 'a19',
-      'K1: 逾期词优先（先补昨天欠的，今天新排的顺延）');
+    const plan = buildDayPlan(state(sched, 10), TODAY);
+    check(plan.newWords.length === 10, 'K1: 逾期 40 个只放行 10 个（按额度限流）');
+    check(plan.newDeferred === 30, 'K1: 其余 30 个顺延');
+    check(plan.newWords[0] === 'a0', 'K1: 最老的逾期词优先');
+  }
+
+  // K1b 今天正常分配的词不受额度截断（超额已成事实时也不能把今天该学的藏起来）
+  {
+    const sched = [];
+    for (let i = 0; i < 18; i++) {
+      sched.push({ ...newImportedSchedule('p' + i), stage: 'R1', firstLearnDay: TODAY,
+        dueDay: addDays(TODAY, 1) });
+    }
+    sched.push({ ...newImportedSchedule('last'), dueDay: TODAY });
+    const plan = buildDayPlan(state(sched, 10), TODAY);
+    check(plan.newWords.length === 1 && plan.newWords[0] === 'last',
+      'K1b: 已学 18 个超额度后，今天到期的 1 个仍然要学（不被截断）');
   }
 
   // K2 「加入当天计划」词插队且不占额度
@@ -763,20 +819,24 @@ function testFourSources() {
     check(plan.newDeferred === 0, 'K2: 没有顺延');
   }
 
-  // K3 今天已学掉的词消耗额度，不会重复发新词
+  // K3 今天已学掉的词消耗额度：剩余额度只够补 5 个逾期词
   {
     const sched = [];
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 10; i++) {
       sched.push({ ...newImportedSchedule('r' + i), dueDay: TODAY });
     }
-    const st = state(sched, 20);
+    for (let i = 0; i < 10; i++) {
+      sched.push({ ...newImportedSchedule('o' + i), dueDay: addDays(TODAY, -1) });
+    }
+    const st = state(sched, 10);
     st.records = [];
     for (let i = 0; i < 5; i++) {
       st.records.push({ ...newStudyRecord('r' + i), firstPassedAt: NOW });
       st.schedules[i] = { ...st.schedules[i], stage: 'R1', firstLearnDay: TODAY, dueDay: addDays(TODAY, 1) };
     }
     const plan = buildDayPlan(st, TODAY);
-    check(plan.newWords.length === 15, 'K3: 已学 5 个后今日只剩 15 个新词额度');
+    check(plan.newWords.length === 10, 'K3: 今天到期剩 5 + 逾期补 5 = 10（额度封顶）');
+    check(plan.newDeferred === 5, 'K3: 逾期超出额度的 5 个顺延');
   }
 
   // K4 例外词本优先排期：主书几千词不会把拍照/梗句词挤到几个月后
@@ -849,6 +909,45 @@ function testFourSources() {
     }
     const after = buildDayPlan(st, TODAY);
     check(after.newWords.length === 20, 'K7: 学完插队词后计划仍是 20（不缩水成 15）');
+  }
+
+  // K8 判「模糊」不刷新额度：设 10 个，判 10 个模糊后不许再发新词
+  {
+    const sched = [];
+    for (let i = 0; i < 40; i++) {
+      sched.push(newImportedSchedule('v' + i));
+    }
+    const first = planNewWords(sched, NOW, 10);
+    const todayIds = first.filter((s) => s.stage === 'NEW' && s.dueDay === TODAY).map((s) => s.wordId);
+    check(todayIds.length === 10, 'K8: 首轮发 10 个新词');
+    // 这 10 个全判模糊（第一次）：留今天重考，不首过
+    const judged = first.map((s) => (todayIds.indexOf(s.wordId) >= 0
+      ? { ...s, dueDay: '', roundRequeue: true, vagueCount: 1, vagueDay: TODAY, lastVerdictAt: NOW }
+      : s));
+    const second = planNewWords(judged, NOW, 10);
+    const leaked = second.filter((s) => s.stage === 'NEW' && s.dueDay === TODAY
+      && todayIds.indexOf(s.wordId) < 0).length;
+    check(leaked === 0, 'K8: 判模糊不腾名额，不会再发 10 个新词（曾导致设 10 实背 20）');
+    const plan = buildDayPlan({ schedules: second, records: [], settings: { ...DEFAULT_SETTINGS, dailyNewCount: 10 } }, TODAY);
+    check(plan.newWords.length === 10, 'K8: 今日任务仍是这 10 个（待重考）');
+  }
+
+  // K9 判「不认识」：今天占位、明天也占位，明天不会翻倍
+  {
+    const sched = [];
+    for (let i = 0; i < 40; i++) {
+      sched.push(newImportedSchedule('u' + i));
+    }
+    const first = planNewWords(sched, NOW, 10);
+    const todayIds = first.filter((s) => s.stage === 'NEW' && s.dueDay === TODAY).map((s) => s.wordId);
+    const judged = first.map((s) => (todayIds.indexOf(s.wordId) >= 0
+      ? { ...s, status: 'WRONG', dueDay: addDays(TODAY, 1), lastVerdictAt: NOW }
+      : s));
+    const second = planNewWords(judged, NOW, 10);
+    const tomorrow = second.filter((s) => s.stage === 'NEW' && s.dueDay === addDays(TODAY, 1)).length;
+    check(tomorrow === 10, 'K9: 明天仍是 10 个（10 个不认识的占满，不额外发新词）');
+    const todayNew = second.filter((s) => s.stage === 'NEW' && s.dueDay === TODAY).length;
+    check(todayNew === 0, 'K9: 判不认识后今天不再补发新词');
   }
 
   // K5 切书：旧书未学暂停、新书恢复、例外词本不受影响

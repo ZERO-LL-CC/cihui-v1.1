@@ -288,6 +288,20 @@ export class StudySessionStore {
         batchIndex: 0, batchTotal: 0,
       };
     }
+    // 模糊重考优先于「下一组新词」：判完一组立刻清本组的模糊词，记忆还在重考才有意义。
+    // 此前是新组优先，序号小的组判完 10 个模糊后要先把后面所有组的新词看完才轮到重考
+    // （真机：18 个模糊词干等，用户以为「模糊的词没进池子，进的是新词」）。
+    if (s.vaguePool.length > 0) {
+      const batch: string[] = s.vaguePool.slice(0, CHUNK_SIZE);
+      return {
+        kind: 'retest',
+        wordIds: batch,
+        groupIndex: 0,
+        groupTotal: s.groups.length,
+        batchIndex: s.retestBatch + 1,
+        batchTotal: batch.length,
+      };
+    }
     if (s.cursor < s.groups.length) {
       const g: SessionGroup = s.groups[s.cursor];
       return {
@@ -299,15 +313,9 @@ export class StudySessionStore {
         batchTotal: 0,
       };
     }
-    // 新词组已走完 → 模糊池按每批 CHUNK_SIZE 个重考，轮完 10 个再轮剩下的几个
-    const batch: string[] = s.vaguePool.slice(0, CHUNK_SIZE);
     return {
-      kind: 'retest',
-      wordIds: batch,
-      groupIndex: 0,
-      groupTotal: s.groups.length,
-      batchIndex: s.retestBatch + 1,
-      batchTotal: batch.length,
+      kind: 'done', wordIds: [], groupIndex: 0, groupTotal: s.groups.length,
+      batchIndex: 0, batchTotal: 0,
     };
   }
 

@@ -351,12 +351,67 @@ export function planNewWords(schedules: ReviewSchedule[], now: number, dailyNewC
   // F-A：intake='TODAY'（拍照导入·加入当天计划）的词不占每日新词配额。
   // 逾期未学的新词算作「今天的占用」：否则昨天欠 20 个没学，今天又发 20 个，
   // 数据层计划翻倍（视图层虽有硬上限挡住，但两边数字会对不上）。
+  // 今天已判过的词（模糊待重考 / 不认识清零）同样占用今日额度：
+  // 它们首过不了，firstLearnDay 仍为空，若不计占用就是「判一次模糊腾一个名额」，
+  // 设 10 个会越学越多（真机：设 10 实际学了 20 个）。
   const todayKey: string = dayKeyFromTs(now);
-  const countByDay: Map<string, number> = new Map();
+  const occupied: Map<string, Set<string>> = new Map();
+  const occupy = (day: string, wordId: string): void => {
+    let set: Set<string> | undefined = occupied.get(day);
+    if (set === undefined) {
+      set = new Set<string>();
+      occupied.set(day, set);
+    }
+    set.add(wordId);
+  };
   for (const s of result) {
-    if (s.stage === 'NEW' && s.dueDay !== '' && s.intake !== 'TODAY') {
-      const bucket: string = diffDays(s.dueDay, todayKey) > 0 ? todayKey : s.dueDay;
-      countByDay.set(bucket, (countByDay.get(bucket) ?? 0) + 1);
+    if (s.stage !== 'NEW' || s.intake === 'TODAY') {
+      continue;
+    }
+    const judgedToday: boolean = s.lastVerdictAt > 0 && dayKeyFromTs(s.lastVerdictAt) === todayKey;
+    // 判「模糊」还在重考队列：今天指标已用掉，且明天不会重学（dueDay 为空），到此为止
+    if (s.roundRequeue && s.vagueDay === todayKey) {
+      occupy(todayKey, s.wordId);
+      continue;
+    }
+    // 判「不认识」：今天指标已用掉，但词被推到明天重学，明天也要占位
+    if (judgedToday && s.status === 'WRONG') {
+      occupy(todayKey, s.wordId);
+    }
+    if (s.dueDay !== '') {
+      occupy(diffDays(s.dueDay, todayKey) > 0 ? todayKey : s.dueDay, s.wordId);
+    }
+  }
+  const countByDay: Map<string, number> = new Map();
+  occupied.forEach((set: Set<string>, day: string): void => {
+    countByDay.set(day, set.size);
+  });
+
+  // 配额再平衡：刚性占用（逾期复学 / 今日判定推过来）把某天挤爆时，
+  // 把该天「从未判定过的普通排期词」退回待排池顺延。
+  // 例：设 10 个，判 10 个不认识 → 明天 10 个重学已占满，原本排在明天的 10 个新词顺延，
+  // 否则明天会变成 20 个（用户设 10 却要背 20，正是「越背越多」的另一半原因）。
+  const overflowDays: string[] = [];
+  countByDay.forEach((v: number, day: string): void => {
+    if (v > quota && diffDays(day, todayKey) < 0) {
+      overflowDays.push(day);
+    }
+  });
+  for (const day of overflowDays) {
+    let over: number = (countByDay.get(day) ?? 0) - quota;
+    for (const s of result) {
+      if (over <= 0) {
+        break;
+      }
+      if (s.stage !== 'NEW' || s.dueDay !== day || s.intake === 'TODAY') {
+        continue;
+      }
+      if (s.lastVerdictAt > 0 && dayKeyFromTs(s.lastVerdictAt) === todayKey) {
+        continue;
+      }
+      s.dueDay = '';
+      over -= 1;
+      countByDay.set(day, (countByDay.get(day) ?? 0) - 1);
     }
   }
 
@@ -470,6 +525,11 @@ export function buildDayPlan(state: SchedulerState, day: string): DayPlan {
     if (s.status === 'WRONG' && s.lastVerdictAt > 0 && dayKeyFromTs(s.lastVerdictAt) === day) {
       learnedTodayIds.add(s.wordId);
     }
+    // 今天判「模糊」还在重考队列里：没首过但今天的额度已经用掉了，
+    // 与 planNewWords 的预扫描同口径，否则两个数字会漂移。
+    if (s.stage === 'NEW' && s.roundRequeue && s.vagueDay === day) {
+      learnedTodayIds.add(s.wordId);
+    }
   }
 
   for (let i = 0; i < state.schedules.length; i++) {
@@ -486,6 +546,11 @@ export function buildDayPlan(state: SchedulerState, day: string): DayPlan {
         rank = 1;
       }
       newCandidates.push({ wordId: s.wordId, rank, seq: i });
+    } else if (s.stage === 'NEW' && s.status === 'LEARNING' && s.dueDay === ''
+      && s.roundRequeue && s.vagueDay === day) {
+      // 今天判「模糊」正在重考队列里：仍是今天的任务（否则今日新词列表会缺这些词，
+      // 会话 reconcile 会把它们当失效剔掉）。额度已在 learnedTodayIds 里算过，这里不再扣。
+      newCandidates.push({ wordId: s.wordId, rank: 0, seq: i });
     }
     if (s.status === 'LEARNING' && REVIEW_STAGES.indexOf(s.stage) >= 0 && s.dueDay !== ''
       && diffDays(s.dueDay, day) >= 0) {
@@ -508,7 +573,10 @@ export function buildDayPlan(state: SchedulerState, day: string): DayPlan {
     a.rank !== b.rank ? a.rank - b.rank : a.seq - b.seq);
   let deferred = 0;
   for (const c of newCandidates) {
-    if (c.rank === 0) {
+    // rank 0（今日插队 / 待重考）不占额度；rank 2（今天正常到期）已经由 planNewWords
+    // 按额度分配好，本就是这个份额，再截断会把「今天该学的词」藏起来。
+    // 只有 rank 1（逾期未学）需要按剩余额度限流，避免缺席几天后一次性堆爆。
+    if (c.rank === 0 || c.rank === 2) {
       newWords.push(c.wordId);
       continue;
     }
