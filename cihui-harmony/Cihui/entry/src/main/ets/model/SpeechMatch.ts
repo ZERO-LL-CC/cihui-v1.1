@@ -20,16 +20,22 @@ export interface MatchResult {
   matched: string;
 }
 
-const POS_EN: RegExp = /^(?:vt|vi|aux|n|v|adj|adv|prep|conj|pron|num|art|int|abbr)\.\s*/i;
+// 词性前缀：词库实际用的是 a.（形容词）/ ad.（副词）等缩写，不能只认 adj/adv，
+// 否则 "a. 重要的" 归一成 "a重要的"，用户说出「重要的」永远匹配不上。
+const POS_EN: RegExp =
+  /^(?:vt|vi|aux|adj|adv|ad|abbr|art|prep|conj|pron|num|pl|int|n|v|a)\.\s*/i;
 const POS_ZH: RegExp =
   /^(?:及物动词|不及物动词|名词|动词|形容词|副词|介词|连词|代词|数词|冠词|感叹词|助动词|量词)\s*/;
-const SPLIT: RegExp = /[；;；,、\/|]|\s+\/\s+/;
+const SPLIT: RegExp = /[；;，,、\/|。]/;
 const PAREN: RegExp = /[（(][^）)]*[）)]/g;
+/** 领域标签：[计] [经] [医] [法] 等（含全角），去掉后才是真正的义项 */
+const SQUARE: RegExp = /\[[^\]]*\]|［[^］]*］/g;
 const KEEP: RegExp = /[a-z0-9\u4e00-\u9fa5]/g;
 
-/** 单个释义串归一：去括号补充、去词性、去标点空白 */
+/** 单个释义串归一：去领域标签、括号补充、词性、标点空白 */
 export function normalizeMeaning(raw: string): string {
   let s: string = raw.trim();
+  s = s.replace(SQUARE, '');
   s = s.replace(PAREN, '');
   s = s.replace(POS_EN, '');
   s = s.replace(POS_ZH, '');

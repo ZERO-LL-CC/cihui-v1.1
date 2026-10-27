@@ -93,6 +93,13 @@ export struct SpeechTestPage {
   private cursorTimer: number = -1;
   /** 引擎报错后重开会话的定时器（1002200010 冷启动失败靠重开自愈） */
   private asrRetryTimer: number = -1;
+  /** 口述停顿判定：interim 稳定这么久没变化就主动 finish，逼引擎吐出 isFinal */
+  private settleTimer: number = -1;
+  /** 上次 interim 文本，用来判断「是否还在说话」 */
+  private lastPartial: string = '';
+  /** 静音兜底：开麦后 8 秒没有任何识别结果就提示一次 */
+  private silentTimer: number = -1;
+  private silentWarned: boolean = false;
   private wordErrorCount: number = 0;
   private released: boolean = false;
   /** 正在拉起语音（防并发：切回语音时用户可能连点） */
@@ -100,6 +107,54 @@ export struct SpeechTestPage {
 
   onAsrPartial(text: string): void {
     this.interim = text;
+    if (this.mode !== 'asr' || this.phase !== 'round' || this.micPaused) {
+      return;
+    }
+    const trimmed: string = text.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+    if (this.silentTimer !== -1) {
+      clearTimeout(this.silentTimer);
+      this.silentTimer = -1;
+    }
+    // 命中释义就当场判过：离线引擎不会主动收尾，等 final 会一直干等
+    if (this.tryAutoJudge(trimmed)) {
+      return;
+    }
+    // 没命中：停顿 900ms 主动 finish，引擎收到 finish 才会给 isFinal，
+    // 否则 interim 变成最终字幕后就永远停在那里（真机表现：说了中文不通过）
+    if (trimmed !== this.lastPartial) {
+      this.lastPartial = trimmed;
+      this.armSettleTimer();
+    }
+  }
+
+  /** 取消「停顿收尾」：暂停 / 切模式 / 换词时都要停，否则会误触发 finish */
+  private cancelSettle(): void {
+    if (this.settleTimer !== -1) {
+      clearTimeout(this.settleTimer);
+      this.settleTimer = -1;
+    }
+    if (this.silentTimer !== -1) {
+      clearTimeout(this.silentTimer);
+      this.silentTimer = -1;
+    }
+    this.lastPartial = '';
+  }
+
+  /** interim 稳定 → 主动收尾，把中间结果逼成最终结果 */
+  private armSettleTimer(): void {
+    if (this.settleTimer !== -1) {
+      clearTimeout(this.settleTimer);
+    }
+    this.settleTimer = setTimeout(() => {
+      this.settleTimer = -1;
+      if (this.mode === 'asr' && !this.micPaused && this.phase === 'round'
+        && this.items[this.index].verdict === null) {
+        this.service.endWord();
+      }
+    }, 900);
   }
 
   onAsrFinal(text: string): void {
@@ -137,6 +192,27 @@ export struct SpeechTestPage {
 
   onAsrStateChange(state: AsrState): void {
     this.asrState = state;
+    if (state === 'listening') {
+      this.armSilentWatch();
+    }
+  }
+
+  /**
+   * 静音兜底：开麦后长时间一个字都没识别到，提示靠近/再说一次。
+   * 离线引擎对小词、生僻词的识别率本身有限，至少要让用户知道「不是我没说对」。
+   */
+  private armSilentWatch(): void {
+    if (this.silentTimer !== -1) {
+      clearTimeout(this.silentTimer);
+    }
+    this.silentTimer = setTimeout(() => {
+      this.silentTimer = -1;
+      if (this.mode === 'asr' && !this.micPaused && this.phase === 'round'
+        && this.interim.trim().length === 0 && !this.silentWarned) {
+        this.silentWarned = true;
+        this.toast('还没听到声音：靠近麦克风、慢一点说中文意思');
+      }
+    }, 8000);
   }
 
   aboutToAppear(): void {
@@ -208,6 +284,15 @@ export struct SpeechTestPage {
       clearTimeout(this.asrRetryTimer);
       this.asrRetryTimer = -1;
     }
+    if (this.settleTimer !== -1) {
+      clearTimeout(this.settleTimer);
+      this.settleTimer = -1;
+    }
+    if (this.silentTimer !== -1) {
+      clearTimeout(this.silentTimer);
+      this.silentTimer = -1;
+    }
+    this.lastPartial = '';
   }
 
   /**
@@ -411,6 +496,8 @@ export struct SpeechTestPage {
     this.flash = '';
     this.flashLabel = '';
     this.wordErrorCount = 0;
+    this.silentWarned = false;
+    this.cancelSettle();
     const word: RoundItem = this.items[this.index];
     TtsService.speak(word.english);
     if (this.mode === 'asr' && !this.micPaused && this.asrState !== 'unavailable') {
@@ -426,25 +513,74 @@ export struct SpeechTestPage {
     }
   }
 
+  /**
+   * 语音自动判定：命中释义就过词。interim 与 final 共用（interim 先命中可以提前过词）。
+   * @returns 是否已判定为「认识」
+   */
+  private tryAutoJudge(text: string): boolean {
+    const item: RoundItem = this.items[this.index];
+    if (item.verdict !== null) {
+      return item.verdict === 'KNOWN';
+    }
+    const r = matchSpoken(text, item.meanings, this.strictness());
+    if (!r.known) {
+      return false;
+    }
+    item.heard = text;
+    item.verdict = 'KNOWN';
+    this.flash = 'green';
+    this.flashLabel = `认识：${r.matched}`;
+    this.cancelSettle();
+    this.service.endWord();
+    this.saveDraft();
+    if (this.autoTimer !== -1) {
+      clearTimeout(this.autoTimer);
+    }
+    this.autoTimer = setTimeout(() => {
+      this.autoTimer = -1;
+      this.advance();
+    }, 1000);
+    return true;
+  }
+
   private handleFinal(text: string): void {
     if (this.phase !== 'round' || this.micPaused) {
       return;
     }
+    this.cancelSettle();
     const item: RoundItem = this.items[this.index];
-    item.heard = text;
-    const r = matchSpoken(text, item.meanings, this.strictness());
-    if (r.known) {
-      item.verdict = 'KNOWN';
-      this.flash = 'green';
-      this.flashLabel = `认识：${r.matched}`;
-      this.service.endWord();
-      this.saveDraft();
-      this.autoTimer = setTimeout(() => {
-        this.autoTimer = -1;
-        this.advance();
-      }, 1000);
+    if (item.verdict !== null) {
+      return;
     }
-    // 没命中：静默等待用户再说或手动判定，不自动过词
+    item.heard = text;
+    // 听清了但没对上释义：以前是静默（用户以为没识别出来），这里明确告知并重开麦
+    if (!this.tryAutoJudge(text)) {
+      const spoken: string = text.trim();
+      this.flash = 'orange';
+      this.flashLabel = spoken.length > 0 ? `听到「${spoken}」，没对上释义` : '没听清';
+      this.toast(spoken.length > 0
+        ? '识别到了，但不在释义里：可以换个说法再说一次，或点下方三档'
+        : '没听清，再说一次或点下方三档');
+      this.reopenMic(600);
+    }
+  }
+
+  /** 未命中后重开一个识别会话（endWord 已停采，不重开就再也听不到） */
+  private reopenMic(delay: number): void {
+    if (this.mode !== 'asr' || this.micPaused || this.phase !== 'round') {
+      return;
+    }
+    if (this.asrRetryTimer !== -1) {
+      clearTimeout(this.asrRetryTimer);
+    }
+    this.asrRetryTimer = setTimeout(() => {
+      this.asrRetryTimer = -1;
+      if (this.mode === 'asr' && !this.micPaused && this.phase === 'round'
+        && this.items[this.index].verdict === null) {
+        this.lastPartial = '';
+        this.service.beginWord();
+      }
+    }, delay);
   }
 
   /** 手动三档（语音模式下也常显，为等价操作与降级路径） */
@@ -527,6 +663,7 @@ export struct SpeechTestPage {
     } else {
       this.micPaused = true;
       this.interim = '';
+      this.cancelSettle();
       this.service.endWord();
     }
   }
@@ -541,6 +678,7 @@ export struct SpeechTestPage {
       this.mode = 'manual';
       this.micPaused = true;
       this.interim = '';
+      this.cancelSettle();
       this.service.endWord();
       this.toast('已切手动，点右上角「语音」可随时切回');
       return;
