@@ -66,5 +66,37 @@ console.log('[6] 口述归一：全角与标点');
 check(matchSpoken('重要的。', sig, 'MID').known === true, '句末中文句号不影响');
 check(matchSpoken('重 要 的', sig, 'MID').known === true, '词间空格不影响');
 
+console.log('[7] 词性全域隔离（任意位置，不只是行首）');
+check(normalizeMeaning('vt. 放弃, 抛弃；n. 放任') === '放弃抛弃放任', '中段 n. 也被隔离');
+check(normalizeMeaning('n.&vt. 使重要') === '使重要', '连写 n.&vt. 两个都隔离');
+check(normalizeMeaning('名词 重要性') === '重要性', '中文词性前缀被隔离');
+check(normalizeMeaning('重要性（名词）') === '重要性', '圆括号里的中文词性被隔离');
+const multi = splitMeanings(['n. 能力, 才干；vt. 使有能力']);
+check(JSON.stringify(multi) === JSON.stringify(['能力', '才干', '使有能力']),
+  '一条释义里两段不同词性，拆出的义项都不带词性残留');
+
+console.log('[8] 方括号：标签删除 / 补字保留');
+check(normalizeMeaning('腹[部]') === '腹部', '腹[部] 去括号留字（旧实现只剩「腹」）');
+check(normalizeMeaning('[医] 腹[部]') === '腹部', '[医] 删标签 + [部] 留字');
+check(matchSpoken('腹部', ['n. 腹部；[医] 腹[部]'], 'STRICT').known === true, 'STRICT：说「腹部」通过');
+check(matchSpoken('腹部', ['[医] 腹[部]'], 'MID').known === true, '只有标签义项时也能比对「腹部」');
+
+console.log('[9] 只念词性不算通过');
+check(matchSpoken('名词', sig, 'LEN').known === false, '只说「名词」不通过');
+check(matchSpoken('形容词', sig, 'LEN').known === false, '只说「形容词」不通过');
+check(matchSpoken('这个是形容词 重要的', sig, 'MID').known === true, '带词性口癖但说出了释义，通过');
+
+console.log('[10] 尾缀容错（说「能干」＝「能干的」）');
+check(matchSpoken('能干', ['a. 能干的, 能够的'], 'MID').known === true, 'MID：省略「的」也通过');
+check(matchSpoken('能干', ['a. 能干的, 能够的'], 'STRICT').known === true, 'STRICT：首个义项省「的」通过');
+check(matchSpoken('能', ['a. 能干的'], 'MID').known === false, '只说出一个字不通过');
+
+console.log('[11] 释义本身就是词性名（adverb = n. 副词）不被自己的隔离规则抹掉');
+check(JSON.stringify(splitMeanings(['n. 副词'])) === JSON.stringify(['副词']), 'adverb：隔离后为空则回退保留「副词」');
+check(matchSpoken('副词', ['n. 副词'], 'MID').known === true, 'MID：说「副词」通过');
+check(matchSpoken('副词', ['n. 副词'], 'STRICT').known === true, 'STRICT：说「副词」通过');
+check(matchSpoken('冠词', ['n. 文章, 冠词；[计] 信件'], 'MID').known === true, 'article：含正常义项时也能说「冠词」');
+check(splitMeanings(['n. 文章, 冠词']).indexOf('冠词') >= 0, 'article：「冠词」义项保留');
+
 console.log(`[词慧语音匹配测试] 通过 ${pass} 项，失败 ${fail} 项`);
 process.exit(fail > 0 ? 1 : 0);
