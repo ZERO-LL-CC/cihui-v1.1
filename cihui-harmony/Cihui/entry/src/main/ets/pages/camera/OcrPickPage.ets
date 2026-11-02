@@ -1,8 +1,12 @@
 /**
  * 真机反馈 #25 OCR 单词气泡选词页（拍照 → 识别 → 选词 → 校对 → 入库）：
  * - 把识别文本拆成一个个独立英文单词气泡，默认全选，点按勾选 / 取消；
- * - 音标 + 中文优先用 OCR 行级配对结果，缺失的用随包离线词典（LocalDictService）自动补全，
- *   仍无中文的气泡标“补中文”，可取消不要，也能带进校对页手补；
+ * - 音标 + 中文优先用 OCR 行级配对结果，再用随包离线词典（LocalDictService）对齐：
+ *   · 没中文      → 词库补上，标「补全」
+ *   · 差 1~3 字   → 判定 90% 以上是识别坏了，直接换成词库中文，标「已修正」
+ *   · 完全不像    → 不猜，保留原文，标「待确认」，到校对页由用户一键替换
+ *   · 词库也没有  → 才标「补中文」
+ *   **中文替换只发生在这里（收进词本之前）**，背单词时不再改释义；
  * - 确认后只把所选词条送 F4 校对页做最终人工校对，再事务入库；
  * - 校对页导入成功返回时，本页消费 importDone 直接回「我的」Tab，与手动录入路径闭环一致。
  */
@@ -16,21 +20,45 @@ import { OcrImageResult } from '../../service/OcrService';
 import { parseOcrLines, tokenizeEnglishWords, OcrDraft } from '../../service/OcrParser';
 import { LocalDictService } from '../../service/LocalDictService';
 import type { DictEntry } from '../../service/LocalDictService';
+import { reconcileMeaning } from '../../model/MeaningFix';
+import type { ReconcileResult } from '../../model/MeaningFix';
+
+/** 已按词库修正/补全的标记色（气泡里的小徽标） */
+const FIX_COLOR: string = '#12A150';
 
 @ObservedV2
 class PickWord {
   @Trace english: string;
   @Trace phonetic: string;
+  /** 最终要入库的中文（已被词库对齐过） */
   @Trace meaning: string;
   @Trace selected: boolean;
+  /** 是否有中文（含词库补全），false 时气泡显示「补中文」 */
   @Trace matched: boolean;
+  /** 气泡小徽标：'' | '补全' | '已修正' | '待确认' */
+  @Trace badge: string;
+  /** OCR 原始中文（清洗后），展示「原：xxx」用 */
+  @Trace origin: string;
+  /** 词库建议（待确认时给校对页一键替换） */
+  @Trace suggestion: string;
 
-  constructor(english: string, phonetic: string, meaning: string, matched: boolean) {
+  constructor(english: string, phonetic: string, rec: ReconcileResult) {
     this.english = english;
     this.phonetic = phonetic;
-    this.meaning = meaning;
+    this.meaning = rec.meaning;
     this.selected = true;
-    this.matched = matched;
+    this.matched = rec.meaning.length > 0;
+    this.origin = rec.original;
+    this.suggestion = rec.suggestion;
+    if (rec.status === 'FILLED') {
+      this.badge = '补全';
+    } else if (rec.status === 'FIXED') {
+      this.badge = '已修正';
+    } else if (rec.status === 'REVIEW') {
+      this.badge = '待确认';
+    } else {
+      this.badge = '';
+    }
   }
 }
 
@@ -82,16 +110,19 @@ export struct OcrPickPage {
           phonetic = od.phonetic;
           meaning = od.meaning;
         }
-        if (meaning.length === 0 && dictReady) {
+        // 有 OCR 中文也要查词库：不是只为了补空缺，而是要判断 OCR 这串中文是不是识别坏了
+        let dictMeaning: string | null = null;
+        if (dictReady) {
           const hit: DictEntry | null = LocalDictService.lookup(tok);
           if (hit !== null) {
+            dictMeaning = hit.meaning;
             if (phonetic.length === 0) {
               phonetic = hit.phonetic;
             }
-            meaning = hit.meaning;
           }
         }
-        list.push(new PickWord(tok, phonetic, meaning, meaning.length > 0));
+        const rec: ReconcileResult = reconcileMeaning(meaning, dictMeaning);
+        list.push(new PickWord(tok, phonetic, rec));
       }
       this.words = list;
       this.loading = false;
@@ -113,6 +144,28 @@ export struct OcrPickPage {
 
   private toggle(w: PickWord): void {
     w.selected = !w.selected;
+  }
+
+  /** 已按词库改过中文（补全 + 修正）的词数，给顶栏提示用 */
+  private fixedCount(): number {
+    let n: number = 0;
+    for (const w of this.words) {
+      if (w.badge === '补全' || w.badge === '已修正') {
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /** 词库也查不到、需要用户手补中文的词数 */
+  private missingCount(): number {
+    let n: number = 0;
+    for (const w of this.words) {
+      if (!w.matched) {
+        n++;
+      }
+    }
+    return n;
   }
 
   private selectAll(): void {
@@ -141,7 +194,10 @@ export struct OcrPickPage {
     const picked: OcrDraft[] = [];
     for (const w of this.words) {
       if (w.selected) {
-        const d: OcrDraft = { english: w.english, phonetic: w.phonetic, meaning: w.meaning };
+        // 与词库完全不像的词带 suspect 进校对页，界面用「!」提醒重点核对
+        const d: OcrDraft = {
+          english: w.english, phonetic: w.phonetic, meaning: w.meaning, suspect: w.badge === '待确认'
+        };
         picked.push(d);
       }
     }
@@ -173,11 +229,23 @@ export struct OcrPickPage {
             .fontColor(w.selected ? Color.White : Colors.TEXT_MAIN)
         }
 
-        Text(w.matched ? w.meaning : '补中文')
-          .fontSize(11).maxLines(1).constraintSize({ maxWidth: 156 }).margin({ top: 2 })
-          .fontColor(w.selected
-            ? (w.matched ? '#DCE7FF' : '#FFD9A8')
-            : (w.matched ? Colors.TEXT_WEAK : Colors.FUZZY_ORANGE))
+        Row() {
+          if (w.badge.length > 0) {
+            Text(w.badge)
+              .fontSize(9.5).fontWeight(FontWeight.Medium)
+              .fontColor(w.badge === '待确认' ? Colors.FUZZY_ORANGE : FIX_COLOR)
+              .backgroundColor(w.selected ? '#E8FFF3' : '#EAF7F0')
+              .borderRadius(4).padding({ left: 4, right: 4, top: 1, bottom: 1 })
+              .margin({ right: 4 })
+          }
+          Text(w.matched ? w.meaning : '补中文')
+            .fontSize(11).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .constraintSize({ maxWidth: w.badge.length > 0 ? 108 : 140 })
+            .fontColor(w.selected
+              ? (w.matched ? '#DCE7FF' : '#FFD9A8')
+              : (w.matched ? Colors.TEXT_WEAK : Colors.FUZZY_ORANGE))
+        }
+        .margin({ top: 2 })
       }
       .alignItems(HorizontalAlign.Start)
       .padding({ left: 12, right: 12, top: 8, bottom: 8 })
@@ -204,7 +272,9 @@ export struct OcrPickPage {
             Text('选择要学的单词')
               .fontSize(TypeScale.CARD_TITLE).fontWeight(FontWeight.Medium)
               .fontColor(Colors.TEXT_MAIN)
-            Text(this.loading ? '正在匹配中文释义…' : `识别到 ${this.words.length} 个英文词 · 已选 ${this.selectedCount()}`)
+            Text(this.loading
+              ? '正在匹配词库中文…'
+              : `识别到 ${this.words.length} 个词 · 已按词库校正 ${this.fixedCount()} 个中文 · 已选 ${this.selectedCount()}`)
               .fontSize(11.5).fontColor(Colors.TEXT_WEAK).margin({ top: 2 })
           }.layoutWeight(1).alignItems(HorizontalAlign.Center)
           Button('全选')
@@ -245,7 +315,9 @@ export struct OcrPickPage {
         } else {
           // 工具行
           Row() {
-            Text('点按气泡勾选，橙色为待补中文')
+            Text(this.missingCount() > 0
+              ? `点按勾选 · 绿标=已按词库改好 · ${this.missingCount()} 个缺中文需手补`
+              : '点按勾选 · 绿标=已按词库改好中文')
               .fontSize(12.5).fontColor(Colors.TEXT_SUB).layoutWeight(1)
             Button('清空')
               .fontSize(13).fontColor(Colors.TEXT_SUB).height(34)

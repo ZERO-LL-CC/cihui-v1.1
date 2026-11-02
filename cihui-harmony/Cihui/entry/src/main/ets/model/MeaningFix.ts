@@ -166,12 +166,17 @@ export function fixMeanings(meanings: string[], dictMeaning: string | null): Mea
     const probes: string[] = parts.length > 0 ? parts : [normClean];
     let best: string = '';
     let bestScore: number = 0;
+    let bestGap: number = 999;
     for (const probe of probes) {
       for (const ds of dictSenses) {
         const sc: number = similarity(probe, ds);
-        if (sc > bestScore) {
+        // 分数并列时选长度更接近的：`各种名样的` 与 `各种的`、`各式各样的` 同为 0.6，
+        // 不看长度就会选中短的那个，把两个错字（名→式、样→样）改成一个残句
+        const gap: number = probe.length > ds.length ? probe.length - ds.length : ds.length - probe.length;
+        if (sc > bestScore || (sc === bestScore && gap < bestGap)) {
           bestScore = sc;
           best = ds;
+          bestGap = gap;
         }
       }
       // 有一个片段与词库原文完全一致，整条就是对的，不用再往下比
@@ -181,30 +186,30 @@ export function fixMeanings(meanings: string[], dictMeaning: string | null): Mea
     }
     // 建议直接用归一后的纯字串：可读串里常带 `<法>`、`在，下方` 这类噪声
     const bestVisible: string = best;
-    let action: FixAction = 'KEEP';
-    if (bestScore >= 0.999) {
-      action = 'KEEP'; // 已经是词库原文，只是带脏尾巴，属清洗范畴
-    } else {
-      // 用最接近的那个片段算距离，避免「赝品,模仿」这类多个义项叠在一个字段里的误判
-      let probeBest: string = normClean;
-      let probeScore: number = 0;
-      for (const probe of probes) {
-        const sc: number = similarity(probe, best);
-        if (sc > probeScore) {
-          probeScore = sc;
-          probeBest = probe;
-        }
+    // 用最接近的那个片段算距离，避免「赝品,模仿」这类多个义项叠在一个字段里的误判
+    let probeBest: string = normClean;
+    let probeScore: number = 0;
+    for (const probe of probes) {
+      const sc: number = similarity(probe, best);
+      if (sc > probeScore) {
+        probeScore = sc;
+        probeBest = probe;
       }
+    }
+    // 互为子串说明只是详略不同（用户写「分」，词库是「分配」），不是错字，别动
+    const abbreviated: boolean = best.length > 0
+      && (best.indexOf(probeBest) >= 0 || probeBest.indexOf(best) >= 0);
+    let action: FixAction = 'KEEP';
+    if (bestScore >= 0.999 || abbreviated) {
+      action = 'KEEP'; // 已经是词库原文（或只是简写），剩下属于清洗范畴
+    } else {
       const dist: number = levenshtein(probeBest, best);
       const len: number = probeBest.length > best.length ? probeBest.length : best.length;
-      if (dist <= 1 && len >= 3) {
-        // 三个字以上只差一个字：该词词库里就有这个义项，百分百是录入/OCR 坏了，直接改
+      if (dist <= 1 && probeBest.length >= 2) {
+        // 只差一个字（含两字词差一字，如「统冶」→「统治」）：几乎必然是录入/OCR 坏了，直接改
         action = 'AUTO';
-      } else if (dist <= 3 && len >= 3) {
-        // 差两三个字：大概率录错，但可能是同义改写，交给用户一键确认
-        action = 'ASK';
-      } else if (dist <= 1 && len === 2 && probeBest.length >= 2) {
-        // 两字义项只差一字（腹部↔腹部）容易误判，只提示不自动改
+      } else if (dist <= 2 && len >= 4) {
+        // 四个字以上只差两个字（各种名样的→各式各样的）：大概率录错，交给用户确认
         action = 'ASK';
       }
     }
@@ -258,6 +263,155 @@ export function fixMeanings(meanings: string[], dictMeaning: string | null): Mea
   };
 }
 
+/* ================= 导入期规范化（拍照选词 / 校对页用） ================= */
+
+/**
+ * 导入期对一条 OCR 中文释义的处理结论。
+ * 注意这一层只在「把词收进词本之前」跑，背单词/语音判定时不改任何释义。
+ */
+export type ReconcileStatus =
+  /** 有中文且与词库一致（或词库没这个词）：原样保留 */
+  | 'KEEP'
+  /** 原本没中文，从词库补上 */
+  | 'FILLED'
+  /** 有中文但与词库差 1~3 字（判定 ≥90% 是识别坏了）：直接换成词库中文 */
+  | 'FIXED'
+  /** 与词库完全不像：不猜，保留原文，只给建议让用户自己定 */
+  | 'REVIEW';
+
+export interface ReconcileResult {
+  /** 最终采用的中文（空串 = 词库里也没有） */
+  meaning: string;
+  status: ReconcileStatus;
+  /** 清洗后的原释义（界面显示「原：xxx」用） */
+  original: string;
+  /** 词库给出的标准中文（FILLED / FIXED / REVIEW 时非空） */
+  suggestion: string;
+}
+
+/** 释义里的分隔符：逐段判断，避免「赝品,模仿」这种多义项被整串改写 */
+const SEG_CHARS: string = '；;，,、/|。';
+
+/** 按分隔符切分并保留分隔符，保证拼回去时原样 */
+function splitKeepSep(s: string): string[] {
+  const out: string[] = [];
+  let buf: string = '';
+  for (let i: number = 0; i < s.length; i++) {
+    const ch: string = s.charAt(i);
+    if (SEG_CHARS.indexOf(ch) >= 0) {
+      out.push(buf);
+      out.push(ch);
+      buf = '';
+    } else {
+      buf += ch;
+    }
+  }
+  out.push(buf);
+  return out;
+}
+
+/**
+ * 把一条 OCR 中文释义与词库对齐，得到「导入时该存什么」。
+ *
+ * 规则（与用户约定一致）：
+ * - 没中文 → 用词库补（FILLED）
+ * - 有中文、词库里能找到差 1~3 字的义项 → 判定 90% 以上是识别/录入坏了，直接换成词库原文（FIXED）
+ * - 有中文、与词库完全不像 → 不确定，不动用户数据，只把词库释义作为建议带出去（REVIEW）
+ * - 词库查不到这个词 → 只做清洗，不改语义（KEEP）
+ *
+ * 多义项逐段判断：某段对得上就保留原样，只替换对不上的那段。
+ */
+export function reconcileMeaning(ocrMeaning: string, dictMeaning: string | null): ReconcileResult {
+  const original: string = cleanForDisplay(ocrMeaning);
+  const dictClean: string = dictMeaning === null ? '' : cleanForDisplay(dictMeaning);
+  if (original.length === 0) {
+    if (dictClean.length === 0) {
+      return { meaning: '', status: 'KEEP', original: '', suggestion: '' };
+    }
+    return { meaning: dictClean, status: 'FILLED', original: '', suggestion: dictClean };
+  }
+  if (dictClean.length === 0) {
+    return { meaning: original, status: 'KEEP', original: original, suggestion: '' };
+  }
+
+  // 逐段判断：某段与词库同一义项就保留，只替换判定为识别错的那段
+  const pieces: string[] = splitKeepSep(original);
+  const dictSenses: string[] = splitMeanings([dictClean]);
+  const dictReadable: string[] = dictClean
+    .split(/[；;]/)
+    .map((x: string): string => x.trim())
+    .filter((x: string): boolean => x.length > 0);
+  const out: string[] = [];
+  let fixed: boolean = false;
+  let fixedTo: string = '';
+  let uncertain: boolean = false;
+  // 不确定时给用户看的「我认为应该是」：取最接近的那条词库义项，短、可直接替换
+  let tip: string = '';
+  let tipScore: number = 0;
+  for (const p of pieces) {
+    if (p.length === 0 || (p.length === 1 && SEG_CHARS.indexOf(p) >= 0)) {
+      out.push(p);
+      continue;
+    }
+    const norm: string = normalizeMeaning(p);
+    if (norm.length === 0) {
+      out.push(p);
+      continue;
+    }
+    let best: string = '';
+    let bestScore: number = 0;
+    let bestGap: number = 999;
+    for (const ds of dictSenses) {
+      const sc: number = similarity(norm, ds);
+      const gap: number = norm.length > ds.length ? norm.length - ds.length : ds.length - norm.length;
+      if (sc > bestScore || (sc === bestScore && gap < bestGap)) {
+        bestScore = sc;
+        best = ds;
+        bestGap = gap;
+      }
+    }
+    // 与词库同一义项，或只是详略不同（写「分」，词库「分配」）：都不算错，原样保留
+    const abbreviated: boolean = best.length > 0
+      && (best.indexOf(norm) >= 0 || norm.indexOf(best) >= 0);
+    if (bestScore >= 0.999 || abbreviated) {
+      out.push(p);
+      continue;
+    }
+    const dist: number = best.length === 0 ? norm.length : levenshtein(norm, best);
+    const len: number = norm.length > best.length ? norm.length : best.length;
+    // 差一个字（含两字词差一字，如「统冶」→「统治」）：几乎必然是识别错，直接改
+    // 四字以上差两个字（各种名样的→各式各样的）：同样按确认错处理
+    const certain: boolean = best.length > 0 && norm.length >= 2
+      && (dist <= 1 || (dist <= 2 && len >= 4));
+    if (certain) {
+      out.push(best);
+      fixed = true;
+      fixedTo = best;
+      continue;
+    }
+    // 剩下的都是「像又不像」，不替用户拿主意，只把词库释义作为建议带出去
+    uncertain = true;
+    if (bestScore > tipScore) {
+      tipScore = bestScore;
+      tip = best;
+    }
+    out.push(p);
+  }
+  if (fixed) {
+    return { meaning: out.join(''), status: 'FIXED', original: original, suggestion: fixedTo };
+  }
+  if (uncertain) {
+    // 建议取「最接近的那条词库义项」；连一个字都对不上时退而取词库首个义项，
+    // 不再整条甩出来——一整串塞进建议里，用户根本没法判断该不该换
+    const firstSense: string = dictReadable.length > 0
+      ? (dictReadable[0] as string).split(/[，,]/)[0].trim()
+      : '';
+    const suggestion: string = tip.length > 0 ? tip : firstSense;
+    return { meaning: original, status: 'REVIEW', original: original, suggestion: suggestion };
+  }
+  return { meaning: original, status: 'KEEP', original: original, suggestion: '' };
+}
+
 /* ================= 批量清洗（纯数据变换，可 Node 单测） ================= */
 
 /** 查词库的回调：返回该词的标准释义串，未收录返回 null */
@@ -306,10 +460,9 @@ export interface AuditSummary {
 }
 
 /**
- * 清洗 + 词库自动纠正。
- * 只自动改「差 1 字」的（该词词库里就有这个义项，百分百录坏）；
- * 差 2~3 字的只记录，交给用户在语音页一键替换。
- * 用户自己补录过释义（diySupplement）的词不自动改，只清洗。
+ * 存量词条的清洗 + 词库纠正（启动后跑一次）。
+ * 口径与拍照导入时完全一致：差 1~3 字（≥90% 判断是识别坏了）直接换成词库中文，
+ * 与词库完全不像的只记录不动。用户自己补录过释义（diySupplement）的词只清洗。
  * 无任何变更返回 null。
  */
 export function auditMeaningsInData(data: AppData, lookup: MeaningLookup | null): AppData | null {
@@ -323,20 +476,25 @@ export function auditMeaningsInData(data: AppData, lookup: MeaningLookup | null)
     if (w.meanings.length === 0) {
       return w;
     }
+    const dict: string | null = w.diySupplement ? null : lookup(w.english);
     const cleanList: string[] = w.meanings.map((m: string): string => {
       const c: string = cleanForDisplay(m);
       return c.length === 0 ? m : c;
     });
-    let next: string[] = cleanList;
-    if (!w.diySupplement) {
-      const r: MeaningFixResult = fixMeanings(cleanList, lookup(w.english));
-      next = r.fixed.map((m: string, i: number): string =>
-        m.length === 0 ? (cleanList[i] as string) : m);
-      if (r.ask.length > 0) {
-        const first: SenseFix = r.ask[0];
-        asks.push(`${w.english}: ${first.cleaned} → ${first.suggestion}`);
+    const next: string[] = w.meanings.map((m: string, i: number): string => {
+      const base: string = cleanList[i] as string;
+      if (dict === null) {
+        return base;
       }
-    }
+      const rec: ReconcileResult = reconcileMeaning(base, dict);
+      if (rec.status === 'FIXED') {
+        return rec.meaning;
+      }
+      if (rec.status === 'REVIEW') {
+        asks.push(`${w.english}: ${rec.original} → ${rec.suggestion}`);
+      }
+      return base;
+    });
     let same: boolean = next.length === w.meanings.length;
     if (same) {
       for (let i: number = 0; i < next.length; i++) {

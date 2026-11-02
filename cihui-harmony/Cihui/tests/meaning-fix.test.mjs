@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import {
   cleanForDisplay, fixMeanings, levenshtein, similarity,
-  cleanMeaningsInData, auditMeaningsInData,
+  cleanMeaningsInData, auditMeaningsInData, reconcileMeaning,
 } from '../entry/src/main/ets/model/MeaningFix.ts';
 
 let pass = 0;
@@ -115,7 +115,7 @@ eq(cleaned.words[0].meanings[0], '精密的', '清洗后义项');
 eq(cleaned.words[1].meanings[0], '干净的', '干净数据保持不变');
 check(cleanMeaningsInData(cleaned) === null, '已清洗过的数据不再变更（幂等）');
 
-console.log('[11] 批量：词库纠错只写 AUTO');
+console.log('[11] 批量：确认是识别错就改，不确定不动');
 const data2 = {
   words: [
     { id: 'w1', bookId: 'b1', english: 'impressive', phonetic: '', meanings: ['给入深刻印象的'], source: 'DIY', missingMeaning: false, diySupplement: false, createdAt: 0 },
@@ -126,8 +126,8 @@ const data2 = {
 };
 const audited = auditMeaningsInData(data2, (w) => dictOf(w));
 check(audited !== null, '有变更返回新数据');
-eq(audited.words[0].meanings[0], '给人深刻印象的', 'AUTO：差 1 字改成词库原文');
-eq(audited.words[1].meanings[0], '各种名样的', 'ASK：不自动改');
+eq(audited.words[0].meanings[0], '给人深刻印象的', '差 1 字 → 改成词库原文');
+eq(audited.words[1].meanings[0], '各式各样的', '四字以上差 2 字 → 同样按确认错改掉');
 eq(audited.words[2].meanings[0], '控制', 'diySupplement 不自动改');
 check(auditMeaningsInData(audited, (w) => dictOf(w)) === null, '二次审计无变更（幂等）');
 
@@ -146,6 +146,70 @@ for (let i = 0; i < raw.words.length; i += 17) {
 }
 check(injected > 50, `注入样本足够（${injected}）`);
 check(fixedBack / injected > 0.9, `自动改回率 ${(fixedBack / injected * 100).toFixed(1)}% > 90%`);
+
+
+console.log('[13] 导入期对齐：拍照选词时决定存哪条中文');
+{
+  const r = reconcileMeaning('放异', dictOf('abandon'));
+  eq(r.status, 'FIXED', '差 1 字 → 判定识别坏了，直接改');
+  eq(r.meaning, '放弃', '改成词库原文');
+  eq(r.original, '放异', '保留原文供界面显示');
+}
+{
+  const r = reconcileMeaning('统冶', dictOf('govern'));
+  eq(r.status, 'FIXED', '两字词差 1 字也直接改（统冶→统治）');
+  eq(r.meaning, '统治', '修正结果');
+}
+{
+  const r = reconcileMeaning('', dictOf('abandon'));
+  eq(r.status, 'FILLED', 'OCR 没中文 → 词库补');
+  eq(r.meaning, '放弃，抛弃，遗弃，使屈从，沉溺，放纵；放任，无拘束，狂热', '补全内容取词库');
+}
+{
+  const r = reconcileMeaning('我喜欢吃饭', dictOf('abandon'));
+  eq(r.status, 'REVIEW', '与词库完全不像 → 不猜，交给用户');
+  eq(r.meaning, '我喜欢吃饭', 'REVIEW 不改用户原文');
+  check(r.suggestion.length > 0, 'REVIEW 必须带词库建议');
+}
+{
+  const r = reconcileMeaning('放弃,抛弃', dictOf('abandon'));
+  eq(r.status, 'KEEP', '多义项都对得上词库 → 一个字都不动');
+}
+{
+  const r = reconcileMeaning('控制(1)', dictOf('govern'));
+  eq(r.status, 'REVIEW', '能清洗但语义与词库不同 → 只给建议不硬改');
+  eq(r.meaning, '控制', '清洗仍然生效（括号数字残渣）');
+}
+{
+  const r = reconcileMeaning('精精密的ladi', dictOf('sophisticated'));
+  eq(r.status, 'REVIEW', '「精精密的」与词库差异过大 → 不自动改');
+  eq(r.meaning, '精精密的', '原文保留，让用户自己判断');
+}
+{
+  const r = reconcileMeaning('我瞎写的', null);
+  eq(r.status, 'KEEP', '词库没这个词 → 原样保留');
+  eq(r.suggestion, '', '无词库就不给建议');
+}
+
+console.log('[14] 存量清洗与导入同口径：确认错就改，不确定不动');
+{
+  const w = (id, english, meanings, diy) => ({
+    id, english, meanings, phonetic: '', bookId: 'b1', createdAt: 0, updatedAt: 0,
+    missingMeaning: false, diySupplement: !!diy, paused: false,
+  });
+  const data = {
+    words: [
+      w('w1', 'govern', ['统冶']),
+      w('w2', 'abandon', ['我喜欢吃饭']),
+      w('w3', 'abandon', ['放异'], true),
+    ],
+    books: [], settings: {}, schedules: [], sentences: [], history: [],
+  };
+  const out = auditMeaningsInData(data, (e) => dictOf(e));
+  eq(out.words[0].meanings[0], '统治', '确认是错字的自动改回词库');
+  eq(out.words[1].meanings[0], '我喜欢吃饭', '不确定的不动用户数据');
+  eq(out.words[2].meanings[0], '放异', '用户自己补录的释义（diySupplement）一律不动');
+}
 
 console.log(`[词慧释义清洗测试] 通过 ${pass} 项，失败 ${fail} 项`);
 process.exit(fail > 0 ? 1 : 0);

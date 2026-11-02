@@ -15,7 +15,6 @@
 import { NavStore } from '../../viewmodel/NavStore';
 import { RouteName } from '../../common/RouteNames';
 import { DataStore } from '../../viewmodel/DataStore';
-import { MeaningFixService } from '../../service/MeaningFixService';
 import { LocalDictService } from '../../service/LocalDictService';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
@@ -85,10 +84,6 @@ export struct SpeechTestPage {
   @Local missCount: number = 0;
   /** 连续没对上后亮出的中文释义（空串=不显示） */
   @Local hintMeanings: string = '';
-  /** 词库给出的「我认为应该是」建议（空串=没有建议，只亮原文） */
-  @Local hintSuggest: string = '';
-  /** 建议是否来自「整条都跟词库不像」：这种替换要连带把英文释义一起换掉 */
-  @Local hintIsWhole: boolean = false;
   @Local permDenied: boolean = false;
   @Local cursorVisible: boolean = true;
   /** 本次进入是从上次中断处续上的：onShown 后提示一次 */
@@ -513,8 +508,6 @@ export struct SpeechTestPage {
     this.flashLabel = '';
     this.missCount = 0;
     this.hintMeanings = '';
-    this.hintSuggest = '';
-    this.hintIsWhole = false;
     this.wordErrorCount = 0;
     this.silentWarned = false;
     this.cancelSettle();
@@ -552,8 +545,6 @@ export struct SpeechTestPage {
     this.flashLabel = `认识：${r.matched}`;
     this.missCount = 0;
     this.hintMeanings = '';
-    this.hintSuggest = '';
-    this.hintIsWhole = false;
     this.cancelSettle();
     this.service.endWord();
     this.saveDraft();
@@ -589,61 +580,12 @@ export struct SpeechTestPage {
       this.missCount += 1;
       if (this.missCount >= 2) {
         this.hintMeanings = item.meanings.join('；');
-        this.loadSuggestion(item);
       }
       this.toast(spoken.length > 0
         ? '识别到了，但不在释义里：可以换个说法再说一次，或点下方三档'
         : '没听清，再说一次或点下方三档');
       this.reopenMic(600);
     }
-  }
-
-  /**
-   * 连续没对上时去词库找「我认为应该是」。
-   * 只有两个来源：某条义项与词库差 2~3 个字（ASK），或整条释义跟词库完全不像（suggestAll）。
-   * 词库没加载 / 没有建议时留空，界面只亮原文不动。
-   */
-  private loadSuggestion(item: RoundItem): void {
-    this.hintSuggest = '';
-    this.hintIsWhole = false;
-    const r = MeaningFixService.fixOne(item.english, item.meanings);
-    if (r === null) {
-      return;
-    }
-    if (r.ask.length > 0) {
-      this.hintSuggest = r.ask[0].suggestion;
-      return;
-    }
-    if (r.suggestAll.length > 0) {
-      this.hintSuggest = r.suggestAll;
-      this.hintIsWhole = true;
-    }
-  }
-
-  /** 一键换成词库释义：写盘 + 更新本轮词条，然后让用户再说一次 */
-  private applySuggestion(): void {
-    if (this.hintSuggest.length === 0) {
-      return;
-    }
-    const item: RoundItem = this.items[this.index];
-    const list: string[] = this.hintSuggest
-      .split(/[；;]/)
-      .map((x: string): string => x.trim())
-      .filter((x: string): boolean => x.length > 0);
-    if (list.length === 0) {
-      return;
-    }
-    DataStore.INSTANCE.updateWord(item.wordId, { meanings: list });
-    item.meanings = list;
-    // 提示卡的用途是「你录的和词库不一致」，改完就该消失，别再挂着「没对上」
-    this.hintMeanings = '';
-    this.hintSuggest = '';
-    this.hintIsWhole = false;
-    this.missCount = 0;
-    this.flash = 'green';
-    this.flashLabel = '已换成词库释义';
-    this.toast('释义已改正，再说一次');
-    this.reopenMic(400);
   }
 
   /** 未命中后重开一个识别会话（endWord 已停采，不重开就再也听不到） */
@@ -1036,30 +978,16 @@ export struct SpeechTestPage {
               .fontSize(13).fontColor(Colors.TEXT_WEAK).margin({ top: 18 })
           }
 
-          // 连续没对上：亮出录入的释义 + 词库给出的建议，用户可一键替换
+          // 连续没对上：把录入的释义亮出来，让用户当场判断是听错还是词条本身有问题。
+          // 这里不提供「改释义」——中文在拍照选词那一步就已经对齐词库了，
+          // 背单词时改释义等于边背边改答案，只会把错记牢。
           if (this.hintMeanings.length > 0) {
             Column() {
               Text(`你的释义：${this.hintMeanings}`)
                 .fontSize(14).fontColor(Colors.FUZZY_ORANGE).textAlign(TextAlign.Center)
-              if (this.hintSuggest.length > 0) {
-                Text(`词库：${this.hintSuggest}`)
-                  .fontSize(14).fontColor(Colors.TEXT_MAIN).textAlign(TextAlign.Center)
-                  .margin({ top: 6 })
-                Text(this.hintIsWhole
-                  ? '整条释义跟词库对不上，可能录错了词'
-                  : '录入的释义和词库不一致，可能是 OCR 或手输错了')
-                  .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
-                  .margin({ top: 4 })
-                Button('换成词库释义')
-                  .fontSize(13).height(32).padding({ left: 16, right: 16 })
-                  .backgroundColor(Colors.FUZZY_ORANGE).fontColor(Colors.WHITE)
-                  .margin({ top: 8 })
-                  .onClick((): void => this.applySuggestion())
-              } else {
-                Text('说了两次都没对上，核对一下释义是不是录错了')
-                  .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
-                  .margin({ top: 4 })
-              }
+              Text('说了两次都没对上。若是录音里就有错字，回词本改一下这条释义')
+                .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
+                .margin({ top: 4 })
             }
             .width('90%').padding(12).margin({ top: 10 })
             .backgroundColor('#FFF7E6').borderRadius(Radius.CARD)

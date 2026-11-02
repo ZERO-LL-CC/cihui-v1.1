@@ -9,27 +9,47 @@ export interface OcrDraft {
   english: string;
   phonetic: string;
   meaning: string;
+  /** true=纠错失败（损毁/词库外），校对页标 "!" 提醒手改；无纠错时恒 false */
+  suspect: boolean;
+}
+
+/** 纠错回调结果（由 OcrCorrector 提供，PRD §6） */
+export interface CorrectResult {
+  english: string;
+  suspect: boolean;
 }
 
 const CHINESE_RE: RegExp = /[\u4e00-\u9fff]/;
 // 行首英文词条：单词/短语，允许撇号、连字符，最多 3 个单词；后续词不得是 n./v./adj. 等词性标记
 const ENGLISH_HEAD_RE: RegExp =
-  /^([A-Za-z][A-Za-z''\-]*(?:\s+(?!(?:n|v|adj|adv|prep|conj|pron|num|int|art|aux|vt|vi)\.)[A-Za-z][A-Za-z''\-]*){0,2})/;
+  /^([A-Za-z][A-Za-z''\-]*(?:\s+(?!(?:n|v|adj|adv|a|prep|conj|pron|num|int|art|aux|vt|vi)\.)[A-Za-z][A-Za-z''\-]*){0,2})/;
 const PHONETIC_RE: RegExp = /\s*[\/\[][^\/\[\]]{1,40}[\/\]]\s*/;
-// 词性与序号前缀：n. v. adj. adv. prep. conj. pron. num. int. art. aux. 以及 1. ①
-const POS_RE: RegExp = /^(?:(?:n|v|adj|adv|prep|conj|pron|num|int|art|aux|vt|vi)\.\s*|\d+[.、)]\s*|[①②③④⑤⑥⑦⑧⑨⑩]\s*)+/i;
+// 词性与序号前缀：n. v. adj./a. adv. prep. conj. pron. num. int. art. aux. 以及 1. ①
+// 注意 a. 是 adj. 的常见缩写，词表里到处都是，漏掉它整行释义会被判成「无中文」
+const POS_RE: RegExp = /^(?:(?:n|v|adj|adv|a|prep|conj|pron|num|int|art|aux|vt|vi)\.\s*|\d+[.、)]\s*|[①②③④⑤⑥⑦⑧⑨⑩]\s*)+/i;
 // 独占一行的音标：/.../ 或 [...]
 const PHONETIC_ONLY_RE: RegExp = /^[\/\[][^\/\[\]]{1,40}[\/\]]$/;
 // 单元标题等噪声行：Unit 1 / List 2 / Lesson 3 / Part A / Section / Chapter
 const HEADING_RE: RegExp = /^(?:unit|list|lesson|part|section|chapter)\b/i;
 
-/** 解析多行（多张图按顺序拼接后的行集合），返回去重后的候选行 */
-export function parseOcrLines(lines: string[]): OcrDraft[] {
+/**
+ * 解析多行（多张图按顺序拼接后的行集合），返回去重后的候选行。
+ * correct 可选：词书约束纠错回调（PRD-ocr-correction-v1 §6），在提取英文 head
+ * 之后应用；纠正只改 head 内容，rest 切分仍按原 head 长度，位置不受影响。
+ * 未传时行为与历史版本一致（suspect 恒 false）。
+ */
+export function parseOcrLines(lines: string[], correct?: (english: string) => CorrectResult): OcrDraft[] {
   const drafts: OcrDraft[] = [];
   const indexByWord: Map<string, number> = new Map();
 
   for (const rawLine of lines) {
-    const line: string = rawLine.trim().replace(/\s+/g, ' ');
+    let line: string = rawLine.trim().replace(/\s+/g, ' ');
+    if (line.length === 0) {
+      continue;
+    }
+    // 行首序号（词表里很常见："1. abandon v. 放弃"）：不剥掉的话英文头匹配不上，
+    // 整行会被当成上一条的续义或直接丢弃，用户拍的释义就白丢了
+    line = line.replace(/^(?:\d{1,3}[.、)]|[①②③④⑤⑥⑦⑧⑨⑩])\s*(?=[A-Za-z])/, '');
     if (line.length === 0) {
       continue;
     }
@@ -67,8 +87,17 @@ export function parseOcrLines(lines: string[]): OcrDraft[] {
       }
       continue;
     }
-    const english: string = headMatch[1].trim();
-    let rest: string = line.substring(english.length).trim();
+    const rawHead: string = headMatch[1].trim();
+    let rest: string = line.substring(rawHead.length).trim();
+    let english: string = rawHead;
+    let suspect: boolean = false;
+    if (correct) {
+      // 词书约束纠错（词库直命中/纠正/无候选标 suspect）；rest 按原 head 长度切分，
+      // 纠正词与原 head 长度可能不同，不能拿纠正词去 substring 原行
+      const cr: CorrectResult = correct(rawHead);
+      english = cr.english;
+      suspect = cr.suspect;
+    }
     let phonetic: string = '';
     const phMatch: RegExpMatchArray | null = rest.match(PHONETIC_RE);
     if (phMatch && phMatch.index !== undefined && phMatch.index < 12) {
@@ -88,10 +117,14 @@ export function parseOcrLines(lines: string[]): OcrDraft[] {
       if (phonetic.length > 0 && exist.phonetic.length === 0) {
         exist.phonetic = phonetic;
       }
+      // 后行纠错失败（suspect）不能被前行静默吞掉：合并时向上传播
+      if (suspect) {
+        exist.suspect = true;
+      }
       continue;
     }
     indexByWord.set(key, drafts.length);
-    drafts.push({ english, phonetic, meaning });
+    drafts.push({ english, phonetic, meaning, suspect });
   }
   return drafts;
 }

@@ -7,17 +7,23 @@
  * - 新词立即排期，首页数字同源；缺释义词只能手动闪卡、不进语音快过（F8 消费）。
  */
 import { promptAction } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { NavStore } from '../../viewmodel/NavStore';
 import { RouteName } from '../../common/RouteNames';
 import { DataStore } from '../../viewmodel/DataStore';
 import { Colors, TypeScale, Radius } from '../../common/DesignTokens';
 import type { OcrReviewRouteParam } from '../../common/RouteNames';
 import { OcrImageResult } from '../../service/OcrService';
-import { parseOcrLines, OcrDraft } from '../../service/OcrParser';
+import { parseOcrLines, OcrDraft, CorrectResult } from '../../service/OcrParser';
+import { ocrCorrector } from '../../service/OcrCorrector';
 import { PHOTO_BOOK_NAME } from '../../model/RepoCore';
 import type { WordDraft } from '../../model/RepoCore';
 import type { IntakeMode, WordBook } from '../../model/Types';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
+import { LocalDictService } from '../../service/LocalDictService';
+import type { DictEntry } from '../../service/LocalDictService';
+import { reconcileMeaning } from '../../model/MeaningFix';
+import type { ReconcileResult } from '../../model/MeaningFix';
 
 let rowSeq: number = 1;
 
@@ -30,14 +36,20 @@ class ReviewRow {
   /** OCR 原始行（区分来源：OCR 允许缺释义入库；手动添加行必须有释义） */
   @Trace fromOcr: boolean;
   @Trace highlight: boolean;
+  /** OCR 纠错失败（损毁/词库外）标 "!"；用户编辑英文后清除（PRD F-4） */
+  @Trace suspect: boolean;
+  /** 词库标准中文：与录入释义「完全不像」时才有值，供一键替换 */
+  @Trace suggest: string;
 
-  constructor(english: string, phonetic: string, meaning: string, fromOcr: boolean) {
+  constructor(english: string, phonetic: string, meaning: string, fromOcr: boolean, suspect: boolean = false) {
     this.id = 'row_' + (rowSeq++);
     this.english = english;
     this.phonetic = phonetic;
     this.meaning = meaning;
     this.fromOcr = fromOcr;
     this.highlight = false;
+    this.suspect = suspect;
+    this.suggest = '';
   }
 
   missing(): boolean {
@@ -72,10 +84,12 @@ export struct OcrReviewPage {
       return;
     }
     // 气泡选词页（#25）已选定并自动匹配中文的词条：直接作为校对初始数据
+    // （气泡路径纠错属 PRD F-7，V2 范围，本次不动）
     if (this.param.picks && this.param.picks.length > 0) {
       const picks: OcrDraft[] = this.param.picks as OcrDraft[];
       this.rows = picks.map((d: OcrDraft): ReviewRow =>
-        new ReviewRow(d.english, d.phonetic, d.meaning, true));
+        new ReviewRow(d.english, d.phonetic, d.meaning, true, d.suspect));
+      this.loadSuggestions();
       return;
     }
     const results: OcrImageResult[] = this.param.results as OcrImageResult[];
@@ -85,9 +99,56 @@ export struct OcrReviewPage {
         lines.push(line);
       }
     }
-    const drafts: OcrDraft[] = parseOcrLines(lines);
+    this.applyParse(lines);
+  }
+
+  /** 词书约束纠错（PRD-ocr-correction-v1）：corrector 未就绪时传 undefined（行为=现状） */
+  private async applyParse(lines: string[]): Promise<void> {
+    let correctFn: ((english: string) => CorrectResult) | undefined = undefined;
+    try {
+      const ctx: common.Context = getContext(this);
+      const ok: boolean = await ocrCorrector.init(ctx.resourceManager);
+      if (ok) {
+        correctFn = (english: string): CorrectResult => ocrCorrector.correct(english);
+      }
+    } catch (err) {
+      // init 失败：纠错降级停用，行为与现状一致
+    }
+    const parseT0 = Date.now();
+    const drafts: OcrDraft[] = parseOcrLines(lines, correctFn);
+    const st = ocrCorrector.stats;
+    // PRD 性能验收：单页 50 词纠错 ≤500ms
+    console.info(`[ocr-correct] tokens=${st.count} correctMs=${st.ms} parseTotalMs=${Date.now() - parseT0} ready=${correctFn !== undefined}`);
     this.rows = drafts.map((d: OcrDraft): ReviewRow =>
-      new ReviewRow(d.english, d.phonetic, d.meaning, true));
+      new ReviewRow(d.english, d.phonetic, d.meaning, true, d.suspect));
+    this.loadSuggestions();
+  }
+
+  /**
+   * 给「与词库完全不像」的行附上词库标准中文，由用户决定换不换。
+   * 只在这一步做：差一两个字的选词页已经直接改成词库原文了，
+   * 剩下的都是判断不准的，程序不替用户拿主意。
+   */
+  private async loadSuggestions(): Promise<void> {
+    try {
+      const ctx: common.Context = getContext(this);
+      await LocalDictService.ensureLoaded(ctx);
+    } catch (e) {
+      return;
+    }
+    for (const row of this.rows) {
+      if (row.meaning.trim().length === 0 || row.suggest.length > 0) {
+        continue;
+      }
+      const hit: DictEntry | null = LocalDictService.lookup(row.english);
+      if (hit === null) {
+        continue;
+      }
+      const rec: ReconcileResult = reconcileMeaning(row.meaning, hit.meaning);
+      if (rec.status === 'REVIEW') {
+        row.suggest = rec.suggestion;
+      }
+    }
   }
 
   aboutToDisappear(): void {
@@ -226,7 +287,20 @@ export struct OcrReviewPage {
           .backgroundColor(Color.Transparent).layoutWeight(1).height(40)
           .onChange((v: string): void => {
             row.english = v;
+            // 用户手改过该行英文即视为已确认，清除纠错失败徽标（PRD F-4）
+            if (row.suspect) {
+              row.suspect = false;
+            }
           })
+        if (row.suspect) {
+          // 纠错失败徽标：橙底圆 "!"（样式参考同行"补录中文"徽标）
+          Text('!')
+            .fontSize(12.5).fontColor(Color.White).fontWeight(FontWeight.Bold)
+            .textAlign(TextAlign.Center)
+            .backgroundColor(Colors.FUZZY_ORANGE)
+            .width(20).height(20).borderRadius(10)
+            .margin({ right: 2 })
+        }
         Button() {
           Path({ width: 20, height: 22 })
             .commands('M5 6 H19 M9 6 V4 H15 V6 M7 6 V20 H17 V6')
@@ -258,6 +332,26 @@ export struct OcrReviewPage {
             .padding({ left: 8, right: 8, top: 3, bottom: 3 })
         }
       }.width('100%')
+
+      // 录入释义与词库完全不一致：给出词库标准中文，换不换由用户决定
+      if (row.suggest.length > 0) {
+        Row() {
+          Text(`词库：${row.suggest}`)
+            .fontSize(12).fontColor(Colors.TEXT_SUB).layoutWeight(1).maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Button('换成词库')
+            .fontSize(11.5).height(26).padding({ left: 10, right: 10 })
+            .type(ButtonType.Normal).borderRadius(13)
+            .backgroundColor(Colors.FUZZY_ORANGE_SOFT).fontColor(Colors.FUZZY_ORANGE)
+            .onClick((): void => {
+              row.meaning = row.suggest;
+              row.suggest = '';
+            })
+        }
+        .width('100%').padding({ left: 8, right: 6, top: 4, bottom: 4 })
+        .backgroundColor(Colors.FUZZY_ORANGE_SOFT).borderRadius(8)
+        .margin({ top: 2 })
+      }
     }
     .width('100%')
     .padding({ left: 14, right: 10, top: 10, bottom: 10 })
