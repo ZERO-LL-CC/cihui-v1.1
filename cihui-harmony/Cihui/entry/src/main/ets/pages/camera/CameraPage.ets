@@ -56,6 +56,9 @@ export struct CameraPage {
   private surfaceId: string = '';
   private sessionStarted: boolean = false;
   private lastResults: OcrImageResult[] = [];
+  /** 取景层实际像素尺寸（onAreaChange 拿到，vp 转 px），用于按预览原比例排布 surface */
+  private viewW: number = 0;
+  private viewH: number = 0;
 
   aboutToAppear(): void {
     REFRESH_BUS.onNav(this.refreshWhenTop);
@@ -94,11 +97,50 @@ export struct CameraPage {
       await this.session.start(ctx, this.surfaceId);
       this.sessionStarted = true;
       this.cameraError = '';
+      // 按预览原比例铺满取景层（cover 裁剪），不再把画面拉伸成屏幕比例
+      this.applyPreviewAspect();
     } catch (err) {
       // 透出具体阶段 / 错误码（CameraSession 已分阶段打点），不白屏、不阻断相册与手动录入
       const msg: string = (err as Error)?.message ?? '相机启动失败';
       hilog.error(0x0000, TAG, 'startCamera failed: %{public}s', msg);
       this.cameraError = `${msg}，可改用相册选图或手动录入`;
+    }
+  }
+
+  /**
+   * 按预览原比例（宽/高）把 surface 显示区铺满取景层（cover：比例对不上的边被裁掉，不拉伸）。
+   * 依赖 session.previewAspect()（启动成功后非 0）与取景层像素尺寸（onAreaChange 提供）。
+   */
+  private applyPreviewAspect(): void {
+    const aspect: number = this.session.previewAspect();
+    if (aspect <= 0 || this.viewW <= 0 || this.viewH <= 0) {
+      return;
+    }
+    const cw: number = this.viewW;
+    const ch: number = this.viewH;
+    let sw: number;
+    let sh: number;
+    let ox: number;
+    let oy: number;
+    if (cw / ch > aspect) {
+      // 取景层比预览更「宽扁」：高度撑满，宽度按比例放大后左右裁剪
+      sh = ch;
+      sw = ch * aspect;
+      ox = (cw - sw) / 2;
+      oy = 0;
+    } else {
+      // 取景层比预览更「窄长」：宽度撑满，高度按比例放大后上下裁剪
+      sw = cw;
+      sh = cw / aspect;
+      ox = 0;
+      oy = (ch - sh) / 2;
+    }
+    try {
+      this.xcController.setXComponentSurfaceRect({
+        offsetX: ox, offsetY: oy, surfaceWidth: sw, surfaceHeight: sh
+      });
+    } catch (err) {
+      hilog.warn(0x0000, TAG, 'setXComponentSurfaceRect failed: %{public}s', (err as Error)?.message ?? String(err));
     }
   }
 
@@ -492,6 +534,12 @@ export struct CameraPage {
             .onLoad(() => {
               this.surfaceId = this.xcController.getXComponentSurfaceId();
               this.startCamera();
+            })
+            .onAreaChange((_old: Area, newArea: Area) => {
+              this.viewW = vp2px(newArea.width as number);
+              this.viewH = vp2px(newArea.height as number);
+              // 取景层尺寸变化（旋转/分屏等）时重算 surface 显示区，保持原比例
+              this.applyPreviewAspect();
             })
             .width('100%').height('100%').backgroundColor(Color.Black)
           if (this.cameraError.length > 0 && this.phase === 'viewfinder') {

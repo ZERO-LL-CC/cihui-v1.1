@@ -20,6 +20,24 @@ export class CameraSession {
   private photoOutput: camera.PhotoOutput | null = null;
   private pendingResolve: ((pm: image.PixelMap) => void) | null = null;
   private pendingReject: ((err: Error) => void) | null = null;
+  private previewProfile: camera.Profile | null = null;
+  /** 相机安装角（sensor 朝向，0/90/180/270，不随屏幕旋转变化） */
+  private sensorOrientation: number = 90;
+
+  /**
+   * 预览流的「显示宽高比」（宽/高）。预览是横向 sensor 输出，竖屏显示时需按安装角换算：
+   * 安装角 90°/270°（横置）→ 显示宽高比 = h/w；0°/180°（竖置）→ w/h。
+   * 页面据此把 XComponent 的 surface 显示区设成同一比例，取景即按原比例不拉伸。
+   * 未启动成功时返回 0。
+   */
+  previewAspect(): number {
+    const s: camera.Size | undefined = this.previewProfile?.size;
+    if (!s || s.width <= 0 || s.height <= 0) {
+      return 0;
+    }
+    const rot: number = this.sensorOrientation % 180;
+    return rot === 90 ? s.height / s.width : s.width / s.height;
+  }
 
   /** 初始化预览：surfaceId 来自 XComponent onLoad 后的 getXComponentSurfaceId */
   async start(context: common.UIAbilityContext, surfaceId: string): Promise<void> {
@@ -60,6 +78,8 @@ export class CameraSession {
       if (!previewProfile || !photoProfile) {
         throw new Error('当前设备不支持拍照输出配置');
       }
+      this.previewProfile = previewProfile;
+      this.sensorOrientation = device.cameraOrientation ?? 90;
 
       step = 'createPreviewOutput';
       const previewOutput: camera.PreviewOutput = manager.createPreviewOutput(previewProfile, surfaceId);
@@ -200,6 +220,7 @@ export class CameraSession {
       this.previewOutput = null;
       this.photoOutput = null;
       this.manager = null;
+      this.previewProfile = null;
     }
   }
 }
