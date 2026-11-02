@@ -110,6 +110,8 @@ import { REFRESH_BUS } from '../common/RefreshBus';
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LocalStateFiles } from '../service/LocalStateFiles';
+import { LocalDictService } from '../service/LocalDictService';
+import { MeaningFixService } from '../service/MeaningFixService';
 
 /** 持久化接口（F15 落地；当前为内存实现） */
 export interface Persistence {
@@ -253,7 +255,39 @@ export class DataStore {
       if (calibrated !== null) {
         this.persistence.save(calibrated);
       }
+      this.scheduleMeaningAudit(context);
     }
+  }
+
+  /**
+   * 释义质检（延后执行，不占启动关键路径）。
+   *
+   * 用户录进来的中文释义脏得离谱——`精精密的ladi`、`代表n)`、`竞争(1`。
+   * 匹配层不放宽（说错一字就是不过），靠这里把释义修对：
+   *   第一段纯清洗立即可跑（不依赖词库）；
+   *   第二段查词库，差 1 字的直接改成词库原文，差 2~3 字的留待用户一键确认。
+   */
+  private scheduleMeaningAudit(context: common.Context): void {
+    setTimeout((): void => {
+      const cleaned: AppData | null = MeaningFixService.cleanAll(this.data);
+      if (cleaned !== null) {
+        this.data = cleaned;
+        this.persistence.save(cleaned);
+        this.publish();
+        REFRESH_BUS.emitData();
+      }
+      LocalDictService.ensureLoaded(context).then((): void => {
+        const audited: AppData | null = MeaningFixService.auditAll(this.data);
+        if (audited !== null) {
+          this.data = audited;
+          this.persistence.save(audited);
+          this.publish();
+          REFRESH_BUS.emitData();
+        }
+      }).catch((e: Error): void => {
+        hilog.warn(0x0000, 'CihuiData', 'meaning audit skipped: %{public}s', e?.message ?? '');
+      });
+    }, 3000);
   }
 
   /** 统一提交：替换内存数据 → 持久化 → 发布给 UI */

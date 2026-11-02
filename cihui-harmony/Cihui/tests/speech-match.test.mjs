@@ -5,7 +5,7 @@
  * 1. 词性标注是 a. / ad.（不是 adj./adv.）→ 归一后残留 a 前缀，义项永远匹配不上
  * 2. 领域标签 [计] [经] [医] [法] → 归一后残留中文字，同样匹配不上
  */
-import { matchSpoken, normalizeMeaning, splitMeanings, withinOneEdit } from '../entry/src/main/ets/model/SpeechMatch.ts';
+import { matchSpoken, normalizeMeaning, splitMeanings } from '../entry/src/main/ets/model/SpeechMatch.ts';
 
 let pass = 0;
 let fail = 0;
@@ -108,15 +108,18 @@ check(splitMeanings(['n. DNA 脱氧核糖核酸']).indexOf('脱氧核糖核酸')
 
 console.log('[13] 连续重复字折叠（释义录成「精精密的」）');
 check(matchSpoken('精密的', ['精精密的ladi'], 'MID').known === true, '说「精密的」能对上「精精密的」');
-check(matchSpoken('精精密的', ['精精密的'], 'MID').known === true, '说「精精密的」也对');
+check(matchSpoken('精精密的', ['精精密的'], 'MID').known === true, '照卡片上的错释义复述也算对');
 
 console.log('[14] 单字容错（离线 ASR 错一个字）');
-check(withinOneEdit('阴密的', '精密的') === true, '「阴密的」与「精密的」只差一字');
-check(withinOneEdit('精密的', '精密的') === false, '完全相同不算「差一字」');
-check(withinOneEdit('重要的', '完全无关') === false, '长度差太大不算');
-check(matchSpoken('阴密的', ['精精密的ladi'], 'MID').known === true,
-  '真机实例：说「精密的」被 ASR 识别成「阴密的」，仍判过');
-check(matchSpoken('各种名样的', ['各种名样的lad))'], 'MID').known === true, '真机实例：错一字仍判过');
+// 反向死守：说错一个字绝不能判过。ASR 把「精密的」识别成「阴密的」时，
+// 正确反应是「不通过 + 提示」，而不是「放宽到错字也算对」——放过它等于教用户记错。
+check(matchSpoken('阴密的', ['精精密的ladi'], 'MID').known === false,
+  '真机实例：说「精密的」被 ASR 识别成「阴密的」，必须不过');
+check(matchSpoken('阴密的', ['精密的'], 'MID').known === false, '「阴密的」不能因形近判过「精密的」');
+check(matchSpoken('精密的', ['精精密的ladi'], 'MID').known === true,
+  '释义录成「精精密的」时，说「精密的」应判过（折叠在清洗侧做）');
+check(matchSpoken('各种名样的', ['各种名样的lad))'], 'MID').known === true,
+  '释义带 OCR 残渣时，说干净版本能过（残渣在匹配侧清除）');
 check(matchSpoken('我喜欢吃饭', ['精精密的'], 'MID').known === false, '不相干整句不误过');
 check(matchSpoken('随便说点什么', ['精精密的ladi'], 'MID').known === false, '不相干整句不误过（脏释义）');
 

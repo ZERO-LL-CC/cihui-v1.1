@@ -8,6 +8,8 @@
  * - 领域标签 [计][经][医] 删除，但正文里的补字括号（腹[部]）要去括号留字，
  *   否则「腹[部]」被整段删掉只剩「腹」，说「腹部」永远不通过；
  * - 多义词按义项拆分，命中任一核心义项即「认识」；
+ * - 不做单字容错：说错一个字就是不通过（「阴密的」≠「精密的」），
+ *   释义录错由 MeaningFix 修，判定标准不放宽；
  * - 严格度三档读 settings.asrStrictness：
  *   LEN 宽松：命中任一义项，或说出某义项前两字（容忍尾字丢失/口语化）；
  *   MID 标准：必须说出任一完整义项（允许省略「的/地/得」尾缀）；
@@ -172,29 +174,19 @@ export function matchSpoken(
     const folded: string = collapse(sense);
     return folded !== sense && folded.length >= 2 && spokenFolded.indexOf(folded) >= 0;
   };
-  /** 完整命中，或省略「的/地/得」尾缀后命中，或只差一个字（ASR 错字容错） */
+  /**
+   * 完整命中，或省略「的/地/得」尾缀后命中。
+   *
+   * 这里**不做**单字容错（曾经的 withinOneEdit）。「阴密的」和「精密的」只差一个字，
+   * 但那是一个完全不同的词——放过它等于教用户把错记进脑子。ASR 听错应由
+   * MeaningFix 把释义洗对、把提示给足，而不是把判定标准放宽。
+   */
   const hitLoose = (sense: string): boolean => {
     if (hit(sense)) {
       return true;
     }
-    let stem: string = sense;
     if (sense.length >= MIN_STEM && SUFFIX.test(sense)) {
-      stem = sense.substring(0, sense.length - 1);
-      if (hit(stem)) {
-        return true;
-      }
-    }
-    // 离线 ASR 错一个字就整句对不上（真机：说「精密的」被识别成「阴密的」）。
-    // 只对 ≥3 字的义项放开 1 字容错：2 字义项差 1 字信息量剩一半，容易误判。
-    // 义项本身有重复字（录成「精精密的」）时先折叠，否则「阴密的」vs「精精密」会差两个字。
-    if (stem.length >= MIN_STEM && spoken.length >= MIN_STEM) {
-      if (withinOneEdit(spoken, stem)) {
-        return true;
-      }
-      // 折叠要用完整义项：「精精密的」折成「精密的」还有 3 字，折 stem（已去「的」）只剩 2 字
-      const foldedSense: string = collapse(sense);
-      return foldedSense !== sense && foldedSense.length >= MIN_STEM
-        && withinOneEdit(spokenFolded, foldedSense);
+      return hit(sense.substring(0, sense.length - 1));
     }
     return false;
   };
@@ -229,52 +221,4 @@ export function matchSpoken(
 /** 供页面把匹配结果转成判定（只有「认识」由语音给出，模糊/不认识走手动） */
 export function verdictFromMatch(known: boolean): Verdict | null {
   return known ? 'KNOWN' : null;
-}
-
-/**
- * 两串是否「只差一个字」（编辑距离 ≤ 1）。
- * 离线 ASR 对中文的错字是常态（真机实例：说「精密的」被识别成「阴密的」），
- * 匹配层不能等 ASR 完全正确，否则用户说对了也过不了。
- * 只做 ≤1 的判定，不做完整 DP：长度差 >1 直接 false，等长比一处不同，差一比一处偏移。
- */
-export function withinOneEdit(a: string, b: string): boolean {
-  const la: number = a.length;
-  const lb: number = b.length;
-  if (la === 0 || lb === 0) {
-    return false;
-  }
-  if (Math.abs(la - lb) > 1) {
-    return false;
-  }
-  if (la === lb) {
-    let diff: number = 0;
-    for (let i: number = 0; i < la; i++) {
-      if (a.charCodeAt(i) !== b.charCodeAt(i)) {
-        diff += 1;
-        if (diff > 1) {
-          return false;
-        }
-      }
-    }
-    return diff === 1;
-  }
-  // 长度差 1：短的在前缀、中段、后缀任一处少一个字符即可
-  const short: string = la < lb ? a : b;
-  const long: string = la < lb ? b : a;
-  let i: number = 0;
-  let j: number = 0;
-  let skipped: number = 0;
-  while (i < short.length && j < long.length) {
-    if (short.charCodeAt(i) === long.charCodeAt(j)) {
-      i += 1;
-      j += 1;
-      continue;
-    }
-    skipped += 1;
-    if (skipped > 1) {
-      return false;
-    }
-    j += 1;
-  }
-  return true;
 }
