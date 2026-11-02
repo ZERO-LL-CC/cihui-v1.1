@@ -22,7 +22,7 @@ import type { AsrListener, AsrState } from '../../service/SpeechService';
 import { HmsSpeechService } from '../../service/SpeechService';
 import { TtsService } from '../../service/TtsService';
 import { PermissionUtil } from '../../service/PermissionUtil';
-import { matchSpoken } from '../../model/SpeechMatch';
+import { matchSpoken, splitMeanings } from '../../model/SpeechMatch';
 import type { Strictness } from '../../model/SpeechMatch';
 import type { RoundVerdict, Verdict, Word } from '../../model/Types';
 import { RoundDraftStore } from '../../service/RoundDraftStore';
@@ -78,6 +78,10 @@ export struct SpeechTestPage {
   @Local interim: string = '';
   @Local flash: string = ''; // '' | green | orange | red
   @Local flashLabel: string = '';
+  /** 本词连续未命中的次数：≥2 才把中文释义亮出来，否则等于直接给答案 */
+  @Local missCount: number = 0;
+  /** 连续没对上后亮出的中文释义（空串=不显示） */
+  @Local hintMeanings: string = '';
   @Local permDenied: boolean = false;
   @Local cursorVisible: boolean = true;
   /** 本次进入是从上次中断处续上的：onShown 后提示一次 */
@@ -495,6 +499,8 @@ export struct SpeechTestPage {
     this.interim = '';
     this.flash = '';
     this.flashLabel = '';
+    this.missCount = 0;
+    this.hintMeanings = '';
     this.wordErrorCount = 0;
     this.silentWarned = false;
     this.cancelSettle();
@@ -530,6 +536,8 @@ export struct SpeechTestPage {
     item.verdict = 'KNOWN';
     this.flash = 'green';
     this.flashLabel = `认识：${r.matched}`;
+    this.missCount = 0;
+    this.hintMeanings = '';
     this.cancelSettle();
     this.service.endWord();
     this.saveDraft();
@@ -552,12 +560,20 @@ export struct SpeechTestPage {
     if (item.verdict !== null) {
       return;
     }
+    // 排查「说了不通过」的唯一线索：hilog -x | grep SpeechTest 能看到 ASR 原话
+    console.warn(`[SpeechTest] final="${text}" word=${item.english} meanings=${JSON.stringify(item.meanings)}`);
     item.heard = text;
     // 听清了但没对上释义：以前是静默（用户以为没识别出来），这里明确告知并重开麦
     if (!this.tryAutoJudge(text)) {
       const spoken: string = text.trim();
       this.flash = 'orange';
       this.flashLabel = spoken.length > 0 ? `听到「${spoken}」，没对上释义` : '没听清';
+      // 连续两次没对上就把该词的中文亮出来：多数时候不是用户说错，是释义录错了/是脏数据，
+      // 不给中文用户永远只能干着急（真机实例：释义被录成「精精密的」，他说「精密的」怎么都不过）
+      this.missCount += 1;
+      if (this.missCount >= 2) {
+        this.hintMeanings = item.meanings.join('；');
+      }
       this.toast(spoken.length > 0
         ? '识别到了，但不在释义里：可以换个说法再说一次，或点下方三档'
         : '没听清，再说一次或点下方三档');
@@ -953,6 +969,19 @@ export struct SpeechTestPage {
           } else {
             Text('看英文，大声说出中文意思')
               .fontSize(13).fontColor(Colors.TEXT_WEAK).margin({ top: 18 })
+          }
+
+          // 连续没对上时亮出中文释义，让用户能判断是自己说错还是释义录错
+          if (this.hintMeanings.length > 0) {
+            Column() {
+              Text(`释义：${this.hintMeanings}`)
+                .fontSize(14).fontColor(Colors.FUZZY_ORANGE).textAlign(TextAlign.Center)
+              Text('说了两次都没对上，核对一下释义是不是录错了')
+                .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
+                .margin({ top: 4 })
+            }
+            .width('90%').padding(12).margin({ top: 10 })
+            .backgroundColor('#FFF7E6').borderRadius(Radius.CARD)
           }
 
           // 字幕区

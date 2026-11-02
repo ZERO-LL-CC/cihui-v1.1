@@ -5,7 +5,7 @@
  * 1. 词性标注是 a. / ad.（不是 adj./adv.）→ 归一后残留 a 前缀，义项永远匹配不上
  * 2. 领域标签 [计] [经] [医] [法] → 归一后残留中文字，同样匹配不上
  */
-import { matchSpoken, normalizeMeaning, splitMeanings } from '../entry/src/main/ets/model/SpeechMatch.ts';
+import { matchSpoken, normalizeMeaning, splitMeanings, withinOneEdit } from '../entry/src/main/ets/model/SpeechMatch.ts';
 
 let pass = 0;
 let fail = 0;
@@ -97,6 +97,28 @@ check(matchSpoken('副词', ['n. 副词'], 'MID').known === true, 'MID：说「�
 check(matchSpoken('副词', ['n. 副词'], 'STRICT').known === true, 'STRICT：说「副词」通过');
 check(matchSpoken('冠词', ['n. 文章, 冠词；[计] 信件'], 'MID').known === true, 'article：含正常义项时也能说「冠词」');
 check(splitMeanings(['n. 文章, 冠词']).indexOf('冠词') >= 0, 'article：「冠词」义项保留');
+
+console.log('[12] 中文释义里的 OCR 残渣清洗（真机录入实例）');
+check(normalizeMeaning('精精密的ladi') === '精精密的', '(adj) 识别成 ladi 的残渣被清掉');
+check(normalizeMeaning('代表n)') === '代表', '不配对的右括号残渣 n) 被清掉');
+check(normalizeMeaning('竞争(1') === '竞争', '不配对的左括号残渣 (1 被清掉');
+check(normalizeMeaning('各种名样的lad))') === '各种名样的', '尾部 lad)) 被清掉');
+check(normalizeMeaning('DNA') === 'dna', '纯英文释义不受影响');
+check(splitMeanings(['n. DNA 脱氧核糖核酸']).indexOf('脱氧核糖核酸') >= 0, '中英混排只留中文');
+
+console.log('[13] 连续重复字折叠（释义录成「精精密的」）');
+check(matchSpoken('精密的', ['精精密的ladi'], 'MID').known === true, '说「精密的」能对上「精精密的」');
+check(matchSpoken('精精密的', ['精精密的'], 'MID').known === true, '说「精精密的」也对');
+
+console.log('[14] 单字容错（离线 ASR 错一个字）');
+check(withinOneEdit('阴密的', '精密的') === true, '「阴密的」与「精密的」只差一字');
+check(withinOneEdit('精密的', '精密的') === false, '完全相同不算「差一字」');
+check(withinOneEdit('重要的', '完全无关') === false, '长度差太大不算');
+check(matchSpoken('阴密的', ['精精密的ladi'], 'MID').known === true,
+  '真机实例：说「精密的」被 ASR 识别成「阴密的」，仍判过');
+check(matchSpoken('各种名样的', ['各种名样的lad))'], 'MID').known === true, '真机实例：错一字仍判过');
+check(matchSpoken('我喜欢吃饭', ['精精密的'], 'MID').known === false, '不相干整句不误过');
+check(matchSpoken('随便说点什么', ['精精密的ladi'], 'MID').known === false, '不相干整句不误过（脏释义）');
 
 console.log(`[词慧语音匹配测试] 通过 ${pass} 项，失败 ${fail} 项`);
 process.exit(fail > 0 ? 1 : 0);

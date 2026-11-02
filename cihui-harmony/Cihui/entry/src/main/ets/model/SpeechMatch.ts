@@ -73,6 +73,12 @@ export function normalizeMeaning(raw: string, keepZhPos: boolean = false): strin
     s = replaceUntilStable(s.trim(), POS_ZH, '');
   }
   s = s.toLowerCase();
+  // 中文释义里混进来的拉丁字母/阿拉伯数字，都是 OCR 残渣（adj)→ladi、代表n)、竞争(1→竞争1），
+  // 留着会把义项污染成「精精密的ladi」，用户说「精密的」永远匹配不上。
+  // 纯英文义项（DNA / CPU 这类缩写词）没有中文字，不受影响。
+  if (/[\u4e00-\u9fa5]/.test(s)) {
+    s = s.replace(/[a-z0-9]/g, '');
+  }
   const kept: RegExpMatchArray | null = s.match(KEEP);
   return kept === null ? '' : kept.join('');
 }
@@ -155,14 +161,40 @@ export function matchSpoken(
   }
   spoken = noPos;
 
-  const hit = (sense: string): boolean => spoken.indexOf(sense) >= 0;
-  /** 完整命中，或省略「的/地/得」尾缀后命中 */
+  /** 连续重复字折叠：释义被录成「精精密的」时，用户说「精密的」也该认 */
+  const collapse = (s: string): string => s.replace(/(.)\1+/g, '$1');
+  const spokenFolded: string = collapse(spoken);
+
+  const hit = (sense: string): boolean => {
+    if (spoken.indexOf(sense) >= 0) {
+      return true;
+    }
+    const folded: string = collapse(sense);
+    return folded !== sense && folded.length >= 2 && spokenFolded.indexOf(folded) >= 0;
+  };
+  /** 完整命中，或省略「的/地/得」尾缀后命中，或只差一个字（ASR 错字容错） */
   const hitLoose = (sense: string): boolean => {
     if (hit(sense)) {
       return true;
     }
+    let stem: string = sense;
     if (sense.length >= MIN_STEM && SUFFIX.test(sense)) {
-      return hit(sense.substring(0, sense.length - 1));
+      stem = sense.substring(0, sense.length - 1);
+      if (hit(stem)) {
+        return true;
+      }
+    }
+    // 离线 ASR 错一个字就整句对不上（真机：说「精密的」被识别成「阴密的」）。
+    // 只对 ≥3 字的义项放开 1 字容错：2 字义项差 1 字信息量剩一半，容易误判。
+    // 义项本身有重复字（录成「精精密的」）时先折叠，否则「阴密的」vs「精精密」会差两个字。
+    if (stem.length >= MIN_STEM && spoken.length >= MIN_STEM) {
+      if (withinOneEdit(spoken, stem)) {
+        return true;
+      }
+      // 折叠要用完整义项：「精精密的」折成「精密的」还有 3 字，折 stem（已去「的」）只剩 2 字
+      const foldedSense: string = collapse(sense);
+      return foldedSense !== sense && foldedSense.length >= MIN_STEM
+        && withinOneEdit(spokenFolded, foldedSense);
     }
     return false;
   };
@@ -197,4 +229,52 @@ export function matchSpoken(
 /** 供页面把匹配结果转成判定（只有「认识」由语音给出，模糊/不认识走手动） */
 export function verdictFromMatch(known: boolean): Verdict | null {
   return known ? 'KNOWN' : null;
+}
+
+/**
+ * 两串是否「只差一个字」（编辑距离 ≤ 1）。
+ * 离线 ASR 对中文的错字是常态（真机实例：说「精密的」被识别成「阴密的」），
+ * 匹配层不能等 ASR 完全正确，否则用户说对了也过不了。
+ * 只做 ≤1 的判定，不做完整 DP：长度差 >1 直接 false，等长比一处不同，差一比一处偏移。
+ */
+export function withinOneEdit(a: string, b: string): boolean {
+  const la: number = a.length;
+  const lb: number = b.length;
+  if (la === 0 || lb === 0) {
+    return false;
+  }
+  if (Math.abs(la - lb) > 1) {
+    return false;
+  }
+  if (la === lb) {
+    let diff: number = 0;
+    for (let i: number = 0; i < la; i++) {
+      if (a.charCodeAt(i) !== b.charCodeAt(i)) {
+        diff += 1;
+        if (diff > 1) {
+          return false;
+        }
+      }
+    }
+    return diff === 1;
+  }
+  // 长度差 1：短的在前缀、中段、后缀任一处少一个字符即可
+  const short: string = la < lb ? a : b;
+  const long: string = la < lb ? b : a;
+  let i: number = 0;
+  let j: number = 0;
+  let skipped: number = 0;
+  while (i < short.length && j < long.length) {
+    if (short.charCodeAt(i) === long.charCodeAt(j)) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    skipped += 1;
+    if (skipped > 1) {
+      return false;
+    }
+    j += 1;
+  }
+  return true;
 }
