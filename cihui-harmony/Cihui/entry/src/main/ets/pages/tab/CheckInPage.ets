@@ -13,7 +13,8 @@ import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
 import { Colors, TypeScale, Radius, StageColors, FloatingTab } from '../../common/DesignTokens';
 import { RouteName } from '../../common/RouteNames';
-import type { ReviewRouteParam, MakeupRouteParam } from '../../common/RouteNames';
+import { DailyQuote } from '../../common/DailyQuote';
+import type { MakeupRouteParam, SpeechRouteParam } from '../../common/RouteNames';
 import type { Word } from '../../model/Types';
 import type { MonthCell, MonthGrid, PlannedDot } from '../../model/SchedulerCore';
 import { ShareService } from '../../service/ShareService';
@@ -43,13 +44,16 @@ class TaskStat {
   missed: number = 0; // 本月待补卡天数
 }
 
-/** 小米笔记风方形勾选框：对勾用 Path 描边动画 draw */
+/**
+ * 小米笔记风方形勾选框。
+ * 勾用 SVG 资源而不是 Path：真机实测 Path 会把超出自身包围盒的笔画裁掉，
+ * 勾越大裁得越狠（26 的框里只剩左上角一小段），换成 Image 才能稳定撑满、居中。
+ */
 @ComponentV2
 struct GateCheck {
   @Require @Param done: boolean;
   @Require @Param active: boolean;
-  @Local dash: number = 18;
-  @Local pop: number = 0.5;
+  @Local pop: number = 0.6;
 
   aboutToAppear(): void {
     this.applyState(true);
@@ -63,57 +67,48 @@ struct GateCheck {
   private applyState(initial: boolean): void {
     if (this.done) {
       if (initial || NavStore.INSTANCE.reducedMotion) {
-        this.dash = 0;
         this.pop = 1;
         return;
       }
-      this.dash = 18;
       this.pop = 0.4;
       this.getUIContext().animateTo({ duration: 240, curve: Curve.EaseOut }, () => {
-        this.dash = 0;
         this.pop = 1;
       });
     } else {
-      this.dash = 18;
-      this.pop = 0.5;
+      this.pop = 0.6;
     }
   }
 
   build() {
-    Stack() {
-      Path()
-        .width(15)
-        .height(15)
-        .commands('M2.5 8 L6.4 11.9 L12.6 3.9')
-        .fillOpacity(0)
-        .stroke(Color.White)
-        .strokeWidth(2.8)
-        .strokeLineCap(LineCapStyle.Round)
-        .strokeLineJoin(LineJoinStyle.Round)
-        .strokeDashArray([18])
-        .strokeDashOffset(this.dash)
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.done) {
+        Image($r('app.media.ic_check'))
+          .width(17)
+          .height(17)
+          .fillColor(Color.White)
+          .scale({ x: this.pop, y: this.pop })
+      }
     }
-    .width(23)
-    .height(23)
-    .borderRadius(7)
+    .width(26)
+    .height(26)
+    .borderRadius(8)
     .backgroundColor(this.done ? Colors.KNOW_GREEN : (this.active ? Colors.WHITE : '#F4F6FA'))
     .border(this.done
       ? { width: 0 }
       : { width: 1.5, color: this.active ? '#C6CDD9' : '#DDE2EA', style: BorderStyle.Solid })
-    .scale({ x: this.done ? this.pop : 1, y: this.done ? this.pop : 1 })
   }
 }
 
-/** 打卡成功弹层的 88 圆绿底描边大对勾 */
+/** 打卡成功页的 88 圆绿底大对勾（勾占圆内约 52%，绿色圆盘先弹入，勾再跟上） */
 @ComponentV2
 struct SuccessCheck {
   @Local ring: number = 0.5;
-  @Local dash: number = 42;
+  @Local pop: number = 0.5;
 
   aboutToAppear(): void {
     if (NavStore.INSTANCE.reducedMotion) {
       this.ring = 1;
-      this.dash = 0;
+      this.pop = 1;
       return;
     }
     this.getUIContext().animateTo({ duration: 300, curve: Curve.EaseOut }, () => {
@@ -121,30 +116,25 @@ struct SuccessCheck {
     });
     setTimeout(() => {
       this.getUIContext().animateTo({ duration: 320, curve: Curve.EaseOut }, () => {
-        this.dash = 0;
+        this.pop = 1;
       });
-    }, 170);
+    }, 150);
   }
 
   build() {
-    Stack() {
-      Path()
-        .width(42)
-        .height(42)
-        .commands('M11 25 L20 34 L39 14')
-        .fillOpacity(0)
-        .stroke(Color.White)
-        .strokeWidth(4.4)
-        .strokeLineCap(LineCapStyle.Round)
-        .strokeLineJoin(LineJoinStyle.Round)
-        .strokeDashArray([42])
-        .strokeDashOffset(this.dash)
+    Stack({ alignContent: Alignment.Center }) {
+      Image($r('app.media.ic_check'))
+        .width(46)
+        .height(46)
+        .fillColor(Color.White)
+        .scale({ x: this.pop, y: this.pop })
     }
     .width(88)
     .height(88)
     .borderRadius(44)
     .backgroundColor(Colors.KNOW_GREEN)
     .scale({ x: this.ring, y: this.ring })
+    .shadow({ radius: 18, color: 'rgba(31,191,107,0.32)', offsetY: 8 })
   }
 }
 
@@ -210,16 +200,12 @@ struct MiniCell {
 
   @Builder
   MiniCheck(white: boolean) {
-    Path()
-      .width(13)
-      .height(13)
-      .commands('M2.5 7 L5.6 10 L11 3.6')
-      .fillOpacity(0)
-      .stroke(white ? Color.White : Colors.KNOW_GREEN)
-      .strokeWidth(2.6)
-      .strokeLineCap(LineCapStyle.Round)
-      .strokeLineJoin(LineJoinStyle.Round)
-      .margin({ top: 2 })
+    // 13 的勾放在 42 高的格子里只剩一点绿，放到 16 才看得清
+    Image($r('app.media.ic_check'))
+      .width(16)
+      .height(16)
+      .fillColor(white ? Color.White : Colors.KNOW_GREEN)
+      .margin({ top: 1 })
   }
 
   @Builder
@@ -303,13 +289,16 @@ export struct CheckInPage {
   @Local enterTy: number = 8;
 
   @Local showSuccess: boolean = false;
-  @Local overlayOpacity: number = 0;
-  @Local cardScale: number = 0.8;
   @Local shareStreak: number = 0;
   @Local shareDateText: string = '';
   @Local shareNewDone: number = 0;
   @Local shareReviewDone: number = 0;
+  /** 分享卡/成功页底部那句：10 条名句按每 10 天轮换 */
+  @Local shareQuote: string = DailyQuote.current();
   @Local saving: boolean = false;
+  /** 已生成好的分享卡缓存路径（成功页出现时预生成） */
+  private cardPath: string = '';
+  private preparing: boolean = false;
   @Local pressBtn: boolean = false;
   /** 显式刷新版本号，学习/打卡/补卡等数据变化后强制重算 */
   @Local viewTick: number = 0;
@@ -317,6 +306,8 @@ export struct CheckInPage {
   @Local mini: MonthGrid = this.buildMini();
 
   private readonly weekNames: string[] = ['一', '二', '三', '四', '五', '六', '日'];
+  /** 水印行索引（只用来铺满 320×400 的斜向底纹） */
+  private readonly wmRows: number[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
   private refreshWhenActive: RefreshListener = (): void => {
     if (this.active) {
       this.viewTick++;
@@ -449,8 +440,8 @@ export struct CheckInPage {
         this.toast('复习任务已完成');
         return;
       }
-      const param: ReviewRouteParam = { wordIds: ids, title: '到期复习', mode: 'REVIEW' };
-      NavStore.INSTANCE.push(RouteName.REVIEW_CARDS, param);
+      const param: SpeechRouteParam = { wordIds: ids, reviewMode: 'REVIEW', title: '到期复习' };
+      NavStore.INSTANCE.push(RouteName.SPEECH_TEST, param);
       return;
     }
     NavStore.INSTANCE.push(RouteName.WRONG_BOOK);
@@ -556,7 +547,8 @@ export struct CheckInPage {
   }
 
   private doCheckin(): void {
-    if (DataStore.INSTANCE.isCheckedInToday()) {
+    // 已打卡但没有新任务（重新打卡态）时不重复弹成功页；重新打卡态放行
+    if (DataStore.INSTANCE.isCheckedInToday() && !DataStore.INSTANCE.needsRecheckToday()) {
       return;
     }
     DataStore.INSTANCE.checkInToday();
@@ -565,46 +557,63 @@ export struct CheckInPage {
     this.shareDateText = this.dateTitle();
     this.shareNewDone = stats.newDone;
     this.shareReviewDone = stats.reviewDone;
+    this.shareQuote = DailyQuote.current();
     this.reloadMini();
     this.showSuccess = true;
-    this.overlayOpacity = 0;
-    this.cardScale = 0.8;
-    const dur: number = NavStore.INSTANCE.reducedMotion ? 0 : 280;
-    this.getUIContext().animateTo({ duration: dur, curve: Curve.EaseOut }, () => {
-      this.overlayOpacity = 1;
-      this.cardScale = 1;
-    });
+    this.cardPath = '';
+    // 成功页与离屏分享卡挂载完成后预生成图片，用户点保存时无需等待
+    setTimeout(() => {
+      this.prepareCard();
+    }, 320);
   }
 
   private closeSuccess(): void {
-    const dur: number = NavStore.INSTANCE.reducedMotion ? 0 : 200;
-    this.getUIContext().animateTo({ duration: dur, curve: Curve.EaseIn }, () => {
-      this.overlayOpacity = 0;
-      this.cardScale = 0.85;
-    });
-    setTimeout(() => {
-      this.showSuccess = false;
-      this.reloadMini();
-      NavStore.INSTANCE.goTab(1);
-    }, dur + 20);
+    this.showSuccess = false;
+    this.cardPath = '';
+    this.reloadMini();
+    NavStore.INSTANCE.goTab(1);
   }
 
-  private async onSaveClick(result: SaveButtonOnClickResult): Promise<void> {
-    if (result !== SaveButtonOnClickResult.SUCCESS) {
-      this.toast('未获得相册授权，分享图未保存');
+  /**
+   * 预生成带水印的分享卡写进缓存。
+   * SaveButton 给的临时写权限只有几秒，截图本身要 2s 左右，
+   * 所以图片提前备好，点击时只做「写入相册」这一步。
+   */
+  private async prepareCard(): Promise<void> {
+    if (this.cardPath.length > 0 || this.preparing) {
       return;
     }
+    this.preparing = true;
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      const fileName: string = `shuoci_checkin_${this.todayKey().replace(/-/g, '')}`;
+      this.cardPath = await ShareService.snapshotByIdToJpg(ctx, 'shareCardHost', fileName);
+    } catch (_e) {
+      this.cardPath = '';
+    } finally {
+      this.preparing = false;
+    }
+  }
+
+  private async doSaveCard(): Promise<void> {
     if (this.saving) {
       return;
     }
     this.saving = true;
     try {
       const ctx = getContext(this) as common.UIAbilityContext;
-      const fileName: string = `cihui_checkin_${this.todayKey().replace(/-/g, '')}`;
-      await ShareService.saveCardToGallery(ctx, this.ShareCard, fileName);
-      this.toast('分享图已保存到相册');
-    } catch (_e) {
-      this.toast('保存失败，请重试');
+      if (this.cardPath.length === 0) {
+        await this.prepareCard();
+      }
+      if (this.cardPath.length === 0) {
+        throw new Error('卡片生成失败，请重试');
+      }
+      // 必须在 SaveButton 点击回调链里调用，此刻临时写权限有效
+      await ShareService.saveFileToGallery(ctx, this.cardPath);
+      this.toast('已保存到相册，带说词水印');
+    } catch (e) {
+      const msg: string = (e as Error)?.message ?? '';
+      this.toast(msg.indexOf('取消') >= 0 ? '已取消保存' : `保存失败：${msg || '请重试'}`);
     } finally {
       this.saving = false;
     }
@@ -686,10 +695,11 @@ export struct CheckInPage {
     })
   }
 
-  /** 卡内三态大按钮：还差 N 词（灰）/ 完成今日打卡（蓝渐变）/ 今日已打卡（浅绿） */
+  /** 卡内大按钮：已打卡（浅绿）/ 还差 N 词（灰）/ 完成今日打卡·重新打卡（蓝渐变）。
+   *  已打卡后又进了新词（拍照/梗句导入排到今天）→ 门控重新变红，按钮重开为「重新打卡」。 */
   @Builder
   GateButton() {
-    if (this.isChecked()) {
+    if (this.isChecked() && !DataStore.INSTANCE.needsRecheckToday()) {
       Row({ space: 8 }) {
         GateCheck({ done: true, active: true })
         Text('今日已打卡')
@@ -706,7 +716,9 @@ export struct CheckInPage {
       .margin({ top: 14 })
     } else if (this.missingCount(this.buildGates()) > 0) {
       Row() {
-        Text(`还差 ${this.taskStat().left} 词 · 完成后可打卡`)
+        Text(this.isChecked()
+          ? `还差 ${this.taskStat().left} 词 · 完成后重新打卡`
+          : `还差 ${this.taskStat().left} 词 · 完成后可打卡`)
           .fontSize(16)
           .fontWeight(FontWeight.Bold)
           .fontColor('#7E8798')
@@ -721,7 +733,7 @@ export struct CheckInPage {
       .onClick(() => this.jumpFirstGap())
     } else {
       Row() {
-        Text('完成今日打卡')
+        Text(this.isChecked() ? '重新打卡' : '完成今日打卡')
           .fontSize(17)
           .fontWeight(FontWeight.Bold)
           .fontColor(Color.White)
@@ -777,141 +789,245 @@ export struct CheckInPage {
     .margin({ right: 9 })
   }
 
+  /** 水印层：斜向平铺「说词 SHUOCI」，被裁切的边缘反而说明是底纹而不是贴纸 */
+  @Builder
+  ShareWatermark() {
+    Column({ space: 42 }) {
+      ForEach(this.wmRows, (i: number) => {
+        Text('说词 · SHUOCI · 说词 · SHUOCI · 说词')
+          .fontSize(12).fontColor(Colors.WHITE).letterSpacing(3).maxLines(1)
+      }, (i: number): string => `wm-${i}`)
+    }
+    .width(560)
+    .margin({ left: -110, top: -40 })
+    .rotate({ angle: -20 })
+    .opacity(0.11)
+  }
+
+  /** 印章：右上角斜盖的圆章，是这张图"出自说词"的唯一凭据 */
+  @Builder
+  ShareSeal() {
+    Stack() {
+      Circle({ width: 54, height: 54 })
+        .fill(Color.Transparent)
+        .stroke('rgba(255,255,255,0.55)')
+        .strokeWidth(1.2)
+      Circle({ width: 46, height: 46 })
+        .fill(Color.Transparent)
+        .stroke('rgba(255,255,255,0.28)')
+        .strokeWidth(0.8)
+      Column({ space: 0 }) {
+        Text('说').fontSize(13).fontColor('rgba(255,255,255,0.92)').fontWeight(FontWeight.Bold)
+        Text('词').fontSize(13).fontColor('rgba(255,255,255,0.92)').fontWeight(FontWeight.Bold)
+      }
+    }
+    .width(54).height(54)
+    .rotate({ angle: -11 })
+    .opacity(0.85)
+  }
+
   @Builder
   ShareCard() {
-    Column({ space: 16 }) {
-      Column({ space: 6 }) {
-        Text('词慧')
-          .fontSize(16)
-          .fontColor('#DCE7FF')
-          .fontWeight(FontWeight.Medium)
-          .letterSpacing(4)
-        Text('今日打卡成功')
-          .fontSize(30)
-          .fontColor(Colors.WHITE)
-          .fontWeight(FontWeight.Bold)
-      }
-      .alignItems(HorizontalAlign.Start)
-      .width('100%')
-      .margin({ top: 26 })
+    Stack({ alignContent: Alignment.TopStart }) {
+      this.ShareWatermark()
 
-      Column({ space: 4 }) {
-        Text(`连续打卡 ${this.shareStreak} 天`)
-          .fontSize(22)
-          .fontColor(Colors.WHITE)
-          .fontWeight(FontWeight.Bold)
-        Text(this.shareDateText)
-          .fontSize(12)
-          .fontColor('#DCE7FF')
-      }
-      .alignItems(HorizontalAlign.Start)
-      .width('100%')
-      .margin({ top: 24 })
-
-      Row({ space: 10 }) {
-        Column({ space: 4 }) {
-          Text(`${this.shareNewDone}`).fontSize(20).fontColor(Colors.WHITE).fontWeight(FontWeight.Bold)
-          Text('今日新词').fontSize(11).fontColor('#DCE7FF')
+      Column({ space: 16 }) {
+        Column({ space: 6 }) {
+          Text('说词')
+            .fontSize(16)
+            .fontColor('#DCE7FF')
+            .fontWeight(FontWeight.Medium)
+            .letterSpacing(4)
+          Text('今日打卡成功')
+            .fontSize(30)
+            .fontColor(Colors.WHITE)
+            .fontWeight(FontWeight.Bold)
         }
-        .layoutWeight(1)
-        .padding(12)
-        .borderRadius(14)
-        .backgroundColor('rgba(255,255,255,0.14)')
         .alignItems(HorizontalAlign.Start)
-
-        Column({ space: 4 }) {
-          Text(`${this.shareReviewDone}`).fontSize(20).fontColor(Colors.WHITE).fontWeight(FontWeight.Bold)
-          Text('完成复习').fontSize(11).fontColor('#DCE7FF')
-        }
-        .layoutWeight(1)
-        .padding(12)
-        .borderRadius(14)
-        .backgroundColor('rgba(255,255,255,0.14)')
-        .alignItems(HorizontalAlign.Start)
-      }
-      .width('100%')
-      .margin({ top: 10 })
-
-      Blank()
-      Text('按艾宾浩斯节奏，今天又记住了一点')
-        .fontSize(12)
-        .fontColor('#C9DAFF')
         .width('100%')
-        .textAlign(TextAlign.Center)
-        .margin({ bottom: 24 })
+        .margin({ top: 26 })
+
+        Column({ space: 4 }) {
+          Text(`连续打卡 ${this.shareStreak} 天`)
+            .fontSize(22)
+            .fontColor(Colors.WHITE)
+            .fontWeight(FontWeight.Bold)
+          Text(this.shareDateText)
+            .fontSize(12)
+            .fontColor('#DCE7FF')
+        }
+        .alignItems(HorizontalAlign.Start)
+        .width('100%')
+        .margin({ top: 24 })
+
+        Row({ space: 10 }) {
+          Column({ space: 4 }) {
+            Text(`${this.shareNewDone}`).fontSize(20).fontColor(Colors.WHITE).fontWeight(FontWeight.Bold)
+            Text('今日新词').fontSize(11).fontColor('#DCE7FF')
+          }
+          .layoutWeight(1)
+          .padding(12)
+          .borderRadius(14)
+          .backgroundColor('rgba(255,255,255,0.14)')
+          .alignItems(HorizontalAlign.Start)
+
+          Column({ space: 4 }) {
+            Text(`${this.shareReviewDone}`).fontSize(20).fontColor(Colors.WHITE).fontWeight(FontWeight.Bold)
+            Text('完成复习').fontSize(11).fontColor('#DCE7FF')
+          }
+          .layoutWeight(1)
+          .padding(12)
+          .borderRadius(14)
+          .backgroundColor('rgba(255,255,255,0.14)')
+          .alignItems(HorizontalAlign.Start)
+        }
+        .width('100%')
+        .margin({ top: 10 })
+
+        Blank()
+
+        // 底部署名：左边一句话名句（10 天轮换一次），右边字标，形成「品牌落款」而不是随便一行小字
+        Row() {
+          Text(this.shareQuote)
+            .fontSize(11.5)
+            .fontColor('#C9DAFF')
+            .layoutWeight(1)
+          Text('SHUOCI')
+            .fontSize(9)
+            .fontColor('rgba(255,255,255,0.6)')
+            .letterSpacing(2.5)
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+        .margin({ bottom: 22 })
+      }
+      .width('100%')
+      .height('100%')
+      .padding({ left: 26, right: 26 })
+
+      // 印章压在右上，和标题错开不打架
+      Column() {
+        this.ShareSeal()
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.End)
+      .padding({ right: 20, top: 20 })
     }
     .width(320)
     .height(400)
-    .padding({ left: 26, right: 26 })
     .borderRadius(24)
+    .clip(true)
     .linearGradient({
       angle: 160,
       colors: [['#2F74FF', 0], ['#0A59F7', 0.55], ['#0846C0', 1]]
     })
   }
 
+  /** 成功页的数字块 */
   @Builder
-  SuccessModal() {
-    Stack() {
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor('rgba(0,0,0,0.45)')
-        .opacity(this.overlayOpacity)
-        .onClick(() => this.closeSuccess())
+  StatTile(value: number, label: string) {
+    Column({ space: 3 }) {
+      Text(`${value}`)
+        .fontSize(26).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
+      Text(label).fontSize(11).fontColor(Colors.TEXT_WEAK)
+    }
+    .layoutWeight(1)
+    .padding({ top: 16, bottom: 16 })
+    .backgroundColor(Colors.WHITE).borderRadius(16)
+    .border({ width: 1, color: Colors.DIVIDER })
+  }
 
-      Column({ space: 12 }) {
-        Column() {
-          SuccessCheck()
-        }
-        .margin({ top: 30 })
-
-        Text('打卡成功')
-          .fontSize(22)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Colors.TEXT_MAIN)
-          .margin({ top: 4 })
-
-        Text('今日新词与到期复习已全部完成')
-          .fontSize(13)
-          .fontColor(Colors.TEXT_SUB)
-        Row() {
-          Text('连续打卡 ').fontSize(13).fontColor(Colors.TEXT_SUB)
-          Text(`${this.shareStreak}`).fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.FUZZY_ORANGE)
-          Text(' 天，继续保持').fontSize(13).fontColor(Colors.TEXT_SUB)
-        }
-        .margin({ bottom: 8 })
-
-        Column() {
-          SaveButton({ icon: SaveIconStyle.FULL_FILLED, text: SaveDescription.SAVE_IMAGE, buttonType: ButtonType.Capsule })
-            .onClick((event: ClickEvent, result: SaveButtonOnClickResult) => {
-              this.onSaveClick(result);
-            })
-            .width('100%')
-            .height(50)
-        }
-        .width('100%')
-        .padding({ left: 22, right: 22 })
-
-        Button('返回')
-          .width('100%')
-          .height(50)
-          .fontSize(16)
-          .fontColor(Colors.TEXT_SUB)
-          .backgroundColor(Colors.WHITE)
-          .borderRadius(16)
-          .border({ width: 1, color: '#E2E6EE' })
-          .margin({ left: 22, right: 22, bottom: 26, top: 2 })
-          .onClick(() => this.closeSuccess())
+  /** 打卡成功：整页成功态（不覆盖在原页面上，覆盖层的点击会被页面图层吃掉） */
+  @Builder
+  SuccessPage() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      // 分享卡离屏宿主：截图要求节点真实挂载并渲染，
+      // 所以压在不透明页面层下面（用户看不见），而不是丢到屏幕外（可能被渲染层裁掉）
+      Column() {
+        this.ShareCard()
       }
-      .width('80%')
-      .backgroundColor(Colors.WHITE)
-      .borderRadius(28)
-      .scale({ x: this.cardScale, y: this.cardScale })
-      .opacity(this.overlayOpacity)
+      .width(320)
+      .height(400)
+      .id('shareCardHost')
+
+      this.SuccessBody()
     }
     .width('100%')
     .height('100%')
+  }
+
+  @Builder
+  SuccessBody() {
+    Column() {
+      Blank()
+
+      Column() {
+        SuccessCheck()
+      }
+
+      Text('打卡成功')
+        .fontSize(30).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
+        .margin({ top: 20 })
+      if (this.shareDateText.length > 0) {
+        Text(this.shareDateText)
+          .fontSize(12.5).fontColor(Colors.TEXT_WEAK).margin({ top: 8 })
+      }
+
+      Row() {
+        Text('连续打卡 ').fontSize(13).fontColor(Colors.TEXT_SUB)
+        Text(`${this.shareStreak}`)
+          .fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.FUZZY_ORANGE)
+        Text(' 天').fontSize(13).fontColor(Colors.TEXT_SUB)
+      }
+      .alignItems(VerticalAlign.Bottom)
+      .margin({ top: 14 })
+
+      Row({ space: 10 }) {
+        this.StatTile(this.shareNewDone, '今日新词')
+        this.StatTile(this.shareReviewDone, '完成复习')
+      }
+      .width('100%').margin({ top: 26 })
+
+      // 名句上移到内容区，底部只留可点区域 —— 底部要留给「保存图片 / 返回首页」足够的空气
+      Text(this.shareQuote)
+        .fontSize(12).fontColor(Colors.TEXT_WEAK).margin({ top: 18 })
+        .textAlign(TextAlign.Center)
+
+      Blank()
+
+      // 写相册走安全控件 SaveButton：点击的瞬间系统临时授予 WRITE_IMAGEVIDEO，
+      // 既不用申请受限权限，也不弹「保存确认框」（本机型上 showAssetsCreationDialog 稳定返回 14000011）
+      SaveButton({ text: SaveDescription.SAVE_IMAGE, buttonType: ButtonType.Capsule })
+        .iconSize(19)
+        .fontSize(16)
+        .fontColor(Colors.WHITE)
+        .backgroundColor(this.saving ? Colors.TEXT_WEAK : Colors.BRAND)
+        .width('100%')
+        .height(52)
+        .borderRadius(Radius.BUTTON)
+        .enabled(!this.saving)
+        .onClick((event: ClickEvent, result: SaveButtonOnClickResult) => {
+          if (result === SaveButtonOnClickResult.SUCCESS) {
+            this.doSaveCard();
+          } else {
+            this.toast('未获得相册写入授权，请再点一次');
+          }
+        })
+
+      Text(this.saving ? '正在生成带水印的卡片…' : '保存的是带「说词」水印的卡片')
+        .fontSize(10.5).fontColor(Colors.TEXT_WEAK).margin({ top: 8 })
+
+      Text('返回首页')
+        .fontSize(14).fontColor(Colors.TEXT_SUB)
+        .width('100%').height(48).margin({ top: 4 })
+        .textAlign(TextAlign.Center).borderRadius(Radius.BUTTON)
+        .onClick(() => this.closeSuccess())
+    }
+    .width('100%').height('100%')
+    // CLEARANCE 已含悬浮 Tab 的栏体高与手势条安全间距，再留 10 的呼吸位：
+    // 底部按钮必须停在 Tab 胶囊上沿之上，手指不会滑进系统手势区
+    .padding({ left: 24, right: 24, top: 20, bottom: FloatingTab.CLEARANCE + 10 })
+    .backgroundColor(Colors.PAGE_BG)
   }
 
   /** 待机整页：无词本时整页只有空卡 + 导入入口，不渲染任务卡/日历/规则 */
@@ -1217,9 +1333,12 @@ export struct CheckInPage {
       }
       .width('100%')
       .height('100%')
+      .visibility(this.showSuccess ? Visibility.None : Visibility.Visible)
 
+      // 打卡成功：换成整页成功态而不是覆盖层。
+      // 覆盖层在这个页面里会被页面的 opacity/translate 图层吃掉点击（真机上表现为「按钮点了没反应」）。
       if (this.showSuccess) {
-        this.SuccessModal()
+        this.SuccessPage()
       }
     }
     .width('100%')

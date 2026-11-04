@@ -334,7 +334,7 @@ export struct MyBooksPage {
       Stack({ alignContent: Alignment.BottomEnd }) {
         Column() {
           this.TopBar()
-          Text('拍下 / 下载的词本保存在本地，登录后自动上云备份')
+          Text('拍下 / 下载的词本保存在本地')
             .fontSize(12).fontColor(Colors.TEXT_WEAK)
             .width('100%').padding({ left: 20, right: 20, bottom: 10 })
 

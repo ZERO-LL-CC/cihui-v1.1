@@ -4,18 +4,17 @@
  * - 两种数据源：bookId 走本地词本（云书已导入 / 拍照 / 手动 DIY / 梗句），
  *   cloudBookId 走随包云书（未导入也可只读浏览全书，底部可下载导入）；
  * - 顶部搜索（英文 / 中文即时过滤）、总数统计、LazyForEach 懒加载（整本 3846 词不卡）；
- * - 本地 DIY/拍照词本右上「编辑」进 DiyBookPage；梗句词本右上「背诵」进梗句背诵。
+ * - 本地 DIY/拍照词本右上「编辑」进 DiyBookPage；梗句词本不再有专用背诵入口（背诵并入统一流程）。
  */
 import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
-import { AuthStore } from '../../viewmodel/AuthStore';
 import { RouteName } from '../../common/RouteNames';
-import type { BookWordsRouteParam, DiyBookRouteParam, MemeReviewRouteParam } from '../../common/RouteNames';
+import type { BookWordsRouteParam, DiyBookRouteParam } from '../../common/RouteNames';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
 import { CloudBookLoader } from '../../service/CloudBookLoader';
 import { findCloudBook } from '../../service/CloudCatalog';
 import type { CloudBookMeta, CloudSampleWord } from '../../service/CloudCatalog';
-import type { MemeSentence, Word, WordBook } from '../../model/Types';
+import type { Word, WordBook } from '../../model/Types';
 import { promptAction } from '@kit.ArkUI';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 import { resetTodaySession } from '../../viewmodel/StudyEntry';
@@ -204,9 +203,6 @@ export struct BookWordsPage {
     if (b.source === 'DIY_PHOTO' || b.source === 'DIY_MANUAL') {
       return '编辑';
     }
-    if (b.source === 'MEME') {
-      return '背诵';
-    }
     return '';
   }
 
@@ -218,13 +214,6 @@ export struct BookWordsPage {
     if (b.source === 'DIY_PHOTO' || b.source === 'DIY_MANUAL') {
       const p: DiyBookRouteParam = { bookId: b.id };
       NavStore.INSTANCE.push(RouteName.DIY_BOOK, p);
-    } else if (b.source === 'MEME') {
-      const meme: MemeSentence | null = DataStore.INSTANCE.memeByBook(b.id);
-      if (meme === null) {
-        return;
-      }
-      const p: MemeReviewRouteParam = { memeId: meme.id };
-      NavStore.INSTANCE.push(RouteName.MEME_REVIEW, p);
     }
   }
 
@@ -264,17 +253,9 @@ export struct BookWordsPage {
     }, 700);
   }
 
-  private isComing(): boolean {
-    return this.meta !== null && this.meta.coming === true;
-  }
-
   private onDownloadTap(): void {
     if (this.cloudImported()) {
       this.toast('已在我的词本中');
-      return;
-    }
-    if (!AuthStore.INSTANCE.isLoggedIn()) {
-      this.gate = true;
       return;
     }
     this.startDownload();
@@ -504,7 +485,7 @@ export struct BookWordsPage {
                   .margin({ top: 10, bottom: 6 })
                   .onClick(() => this.switchToThisCloud())
               }
-            } else if (!this.isComing()) {
+            } else {
               Button(`下载导入这本书（共 ${this.allRows.length} 词）`)
                 .width('100%').height(48).borderRadius(Radius.BUTTON)
                 .fontSize(15).fontColor(Colors.WHITE).backgroundColor(Colors.BRAND)

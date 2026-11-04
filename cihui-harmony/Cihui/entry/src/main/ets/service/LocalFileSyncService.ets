@@ -159,8 +159,8 @@ export class LocalFileSyncService implements SyncService {
       const now: number = Date.now();
       const content: string = this.backupJson(now);
       const options: picker.DocumentSaveOptions = new picker.DocumentSaveOptions();
-      options.newFileNames = [`词慧备份-${stampOf(now)}.json`];
-      options.fileSuffixChoices = ['词慧备份|.json'];
+      options.newFileNames = [`说词备份-${stampOf(now)}.json`];
+      options.fileSuffixChoices = ['说词备份|.json'];
       const viewPicker: picker.DocumentViewPicker = new picker.DocumentViewPicker();
       const uris: string[] = await viewPicker.save(options);
       if (!uris || uris.length === 0) {
@@ -202,7 +202,7 @@ export class LocalFileSyncService implements SyncService {
     try {
       const options: picker.DocumentSelectOptions = new picker.DocumentSelectOptions();
       options.maxSelectNumber = 1;
-      options.fileSuffixFilters = ['词慧备份|.json'];
+      options.fileSuffixFilters = ['说词备份|.json'];
       const viewPicker: picker.DocumentViewPicker = new picker.DocumentViewPicker();
       uris = await viewPicker.select(options);
     } catch (e) {

@@ -5,15 +5,14 @@
  * F7 新词首学 / F9 复习闪卡 / F10 错词本已接通；F12 计划大表/补卡/果冻日历已接通。
  */
 import { promptAction } from '@kit.ArkUI';
-import { vibrator } from '@kit.SensorServiceKit';
 import { Colors, TypeScale, Radius, Motion, FloatingTab } from '../../common/DesignTokens';
 import { RouteName } from '../../common/RouteNames';
 import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
 import { AuthStore } from '../../viewmodel/AuthStore';
 import { dayKeyFromTs, type HomeStats } from '../../model/SchedulerCore';
-import type { Word, StudySession } from '../../model/Types';
-import type { CameraRouteParam, MemeReviewRouteParam, ReviewRouteParam } from '../../common/RouteNames';
+import type { Word } from '../../model/Types';
+import type { CameraRouteParam, SpeechRouteParam } from '../../common/RouteNames';
 import { openTodayNewWords, entryLabel, taskSubLabel as studySubLabel } from '../../viewmodel/StudyEntry';
 import { MIN_WORDS_FOR_SENTENCE } from '../../model/SentenceCore';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
@@ -46,16 +45,13 @@ export struct HomePage {
   @Local pressedSentence: boolean = false;
   /** F20 例句入口一次性蓝色脉冲缩放（只在置灰→可用瞬间播一次） */
   @Local sentencePulse: number = 1;
-  /** F20 续背蓝点淡入透明度 */
-  @Local memeDotOpacity: number = 0;
   /** 动态QA：显式刷新版本号，导航/数据事件到达且本 Tab 可见时自增强制重绘（BUG-02） */
   @Local viewTick: number = 0;
   /** 今日新词主按钮文案与副标题（刷新点算一次并缓存，构建期不读文件） */
   @Local entryLabelText: string = '';
   @Local studySubText: string = '';
-  /** 上一次例句是否已解锁、蓝点是否已出现，用于捕捉"状态翻转瞬间" */
+  /** 上一次例句是否已解锁，用于捕捉"状态翻转瞬间" */
   private lastSentenceReady: boolean = false;
-  private lastMemeInProgress: boolean = false;
   private scroller: Scroller = new Scroller();
   private refreshWhenActive: RefreshListener = (): void => {
     if (this.active) {
@@ -95,7 +91,7 @@ export struct HomePage {
   onActiveChange(): void {
     if (this.active) {
       this.viewTick++;
-      // 从其他 Tab/二级页回到首页时，捕捉例句解锁、续背会话出现的状态翻转
+      // 从其他 Tab/二级页回到首页时，捕捉例句解锁的状态翻转
       this.syncFunStates(false);
       this.syncResume();
     }
@@ -105,10 +101,8 @@ export struct HomePage {
     REFRESH_BUS.onNav(this.refreshWhenActive);
     REFRESH_BUS.onData(this.refreshWhenActive);
     this.syncResume();
-    // 首次进入只记录初始状态，不播"解锁脉冲/蓝点淡入"（脉冲只属于状态翻转瞬间）
+    // 首次进入只记录初始状态，不播"解锁脉冲"（脉冲只属于状态翻转瞬间）
     this.lastSentenceReady = this.sentenceReady();
-    this.lastMemeInProgress = DataStore.INSTANCE.hasMemeInProgress();
-    this.memeDotOpacity = this.lastMemeInProgress ? 1 : 0;
     setTimeout(() => {
       this.bucketsShown = true;
     }, 90);
@@ -156,17 +150,11 @@ export struct HomePage {
     return `${base}，同学`;
   }
 
-  /** 下拉刷新：本期只重算本地数据并轻震动；云同步 F15 接入 */
+  /** 下拉刷新：本期只重算本地数据；云同步 F15 接入 */
   private onPullRefresh(): void {
     this.refreshing = true;
     setTimeout(() => {
       this.refreshing = false;
-      try {
-        vibrator.startVibration({ type: 'preset', effectId: 'haptic.clock.timer', count: 1 },
-          { id: 0, usage: 'unknown' });
-      } catch (e) {
-        // 设备不支持震动时静默
-      }
       this.toast('本地数据已刷新，云同步将在后续版本接入');
     }, 320);
   }
@@ -207,8 +195,8 @@ export struct HomePage {
       return;
     }
     const ids: string[] = words.map((w: Word): string => w.id);
-    const param: ReviewRouteParam = { wordIds: ids, title: '到期复习', mode: 'REVIEW' };
-    NavStore.INSTANCE.push(RouteName.REVIEW_CARDS, param);
+    const param: SpeechRouteParam = { wordIds: ids, reviewMode: 'REVIEW', title: '到期复习' };
+    NavStore.INSTANCE.push(RouteName.SPEECH_TEST, param);
   }
 
   private openCamera(): void {
@@ -312,11 +300,6 @@ export struct HomePage {
   }
 
   private memeSubtitle(): string {
-    const session: StudySession | null = DataStore.INSTANCE.resumableSession();
-    if (session !== null) {
-      const left: number = DataStore.INSTANCE.memePendingCount(session.memeId);
-      return `上次还差 ${left} 个词，继续`;
-    }
     return '用喜欢的句子背单词';
   }
 
@@ -330,30 +313,18 @@ export struct HomePage {
 
   /**
    * 数据/导航变化时同步趣味区状态：
-   * - 例句从置灰翻转为可用：一次性 300ms 蓝色脉冲（1→1.06→1，不循环）；
-   * - 出现进行中的梗句会话：蓝点 200ms 淡入。
+   * - 例句从置灰翻转为可用：一次性 300ms 蓝色脉冲（1→1.06→1，不循环）。
    * initial=true 时只落最终态不播动画（首帧）。
    */
   private syncFunStates(initial: boolean): void {
     const reduced: boolean = NavStore.INSTANCE.reducedMotion;
     const readyNow: boolean = this.sentenceReady();
-    const memeNow: boolean = DataStore.INSTANCE.hasMemeInProgress();
 
     if (!initial && !this.lastSentenceReady && readyNow && !reduced) {
       this.playSentencePulse();
     }
-    if (!initial && !this.lastMemeInProgress && memeNow) {
-      this.getUIContext().animateTo({ duration: Motion.SHEET, curve: Curve.EaseOut }, () => {
-        this.memeDotOpacity = 1;
-      });
-    } else if (!memeNow) {
-      this.memeDotOpacity = 0;
-    } else if (initial) {
-      this.memeDotOpacity = 1;
-    }
 
     this.lastSentenceReady = readyNow;
-    this.lastMemeInProgress = memeNow;
   }
 
   private playSentencePulse(): void {
@@ -368,14 +339,8 @@ export struct HomePage {
   }
 
   private tapMemeEntry(): void {
-    const session: StudySession | null = DataStore.INSTANCE.resumableSession();
-    if (session !== null) {
-      // 续背：直接进入上一场未完成会话
-      const param: MemeReviewRouteParam = { memeId: session.memeId, sessionId: session.id };
-      NavStore.INSTANCE.push(RouteName.MEME_REVIEW, param);
-    } else {
-      NavStore.INSTANCE.push(RouteName.MEME_IMPORT);
-    }
+    // 梗句背诵已并入统一背词流程：入口恒进导入页，不再续背专用闪卡会话
+    NavStore.INSTANCE.push(RouteName.MEME_IMPORT);
   }
 
   private tapSentenceEntry(): void {
@@ -403,14 +368,6 @@ export struct HomePage {
         .width(46).height(46).borderRadius(15)
         .backgroundColor(enabled ? Colors.BRAND_SOFT : Colors.PAGE_BG)
         .justifyContent(FlexAlign.Center)
-
-        if (isMeme) {
-          Circle({ width: 9, height: 9 })
-            .fill(Colors.BRAND)
-            .stroke(Colors.WHITE).strokeWidth(1.5)
-            .position({ x: 33, y: -2 })
-            .opacity(this.memeDotOpacity)
-        }
       }
       .width(46).height(46)
 

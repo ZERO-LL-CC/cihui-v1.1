@@ -2,13 +2,13 @@
  * F12 补卡日详情：
  * - 从计划大表红格进入，按 R7/R15/新词/错词等节点分组列出当天欠的任务与词数；
  * - 每组给彩色节点标签 + 前若干个单词预览；
- * - 底部按钮生成「M月D日 补卡」词本并进入闪卡逐张补（复用 ReviewCardsPage mode='MAKEUP'）；
+ * - 底部按钮生成「M月D日 补卡」词本并进入语音快过逐词补（F19 reviewMode='MAKEUP'，完成 completeMakeup 同步计划表）；
  * - 补卡资格在进页与点击时各校验一次（严格顺序：今天先打卡、由近及远逐天补）。
  */
 import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
 import { RouteName } from '../../common/RouteNames';
-import type { MakeupRouteParam, ReviewRouteParam } from '../../common/RouteNames';
+import type { MakeupRouteParam, SpeechRouteParam } from '../../common/RouteNames';
 import { Colors, TypeScale, Radius, Motion, StageColors } from '../../common/DesignTokens';
 import { promptAction } from '@kit.ArkUI';
 import type { MakeupGroup } from '../../model/RepoCore';
@@ -108,13 +108,13 @@ export struct MakeupDetailPage {
       promptAction.showToast({ message: '该日没有待补的学习任务', duration: 1800 });
       return;
     }
-    const p: ReviewRouteParam = {
+    const p: SpeechRouteParam = {
       wordIds: ids,
-      title: `${this.dayLabel()} 补卡`,
-      mode: 'MAKEUP',
+      reviewMode: 'MAKEUP',
       makeupDay: this.param.day,
+      title: `${this.dayLabel()} 补卡`,
     };
-    NavStore.INSTANCE.push(RouteName.REVIEW_CARDS, p);
+    NavStore.INSTANCE.push(RouteName.SPEECH_TEST, p);
   }
 
   @Builder

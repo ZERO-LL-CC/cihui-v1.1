@@ -199,7 +199,7 @@ export struct AccountPage {
     try {
       promptAction.showDialog({
         title: '退出登录',
-        message: '退出后本机词本、学习进度与打卡记录将清空，新账号空起步；需要保留请先在「备份与恢复」导出 JSON。',
+        message: '退出后本账号的词本、学习进度与打卡记录会保留在本机，重新登录即可恢复；未登录状态下看到的是本机公用数据。',
         buttons: [
           { text: '取消', color: Colors.TEXT_SUB },
           { text: '退出', color: Colors.UNKNOWN_RED },

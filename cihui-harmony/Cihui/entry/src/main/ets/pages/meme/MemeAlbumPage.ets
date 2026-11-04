@@ -1,7 +1,7 @@
 /**
  * F18 梗卡册
  *
- * - 展示全部已解锁梗卡，按解锁时间倒序；默认空列表，背完梗句弹卡后才有数据；
+ * - 展示全部已解锁梗卡，按解锁时间倒序；默认空列表，梗句关联词全部掌握后自动落卡才有数据；
  * - 每行：4:5 缩略卡（Canvas PNG；Canvas 失败时显示同构 ArkUI 降级卡）+ 原句/掌握数/日期/徽章；
  * - 点行打开大图浮层，浮层内可「再分享」（Share Kit 系统面板）；
  * - 行左滑露出删除，松手弹二次确认；只删卡，不删梗句、词与会话记录；
@@ -172,7 +172,7 @@ export struct MemeAlbumPage {
         path = await ShareService.snapshotBuilderToJpg(ctx, this.SnapshotFallback,
           `meme_album_${row.card.id}`);
       }
-      const text: string = `我在词慧解锁了一个梗，已掌握 ${row.card.masteredCount} 个词！`;
+      const text: string = `我在说词解锁了一个梗，已掌握 ${row.card.masteredCount} 个词！`;
       await MemeCardService.shareImage(ctx, path, text);
       DataStore.INSTANCE.bumpMemeCardShare(row.card.id);
       this.reload();
@@ -221,7 +221,7 @@ export struct MemeAlbumPage {
     Stack() {
       Column() {
         Row() {
-          Text('词慧 · 梗句卡').fontSize(big ? 12 : 9).fontColor('rgba(255,255,255,0.72)')
+          Text('说词 · 梗句卡').fontSize(big ? 12 : 9).fontColor('rgba(255,255,255,0.72)')
           Blank()
           Text(MemeCardService.badgeShort(row.card.badgeLevel))
             .fontSize(big ? 12 : 9).fontWeight(FontWeight.Bold)
@@ -336,7 +336,7 @@ export struct MemeAlbumPage {
       Text('还没有梗卡')
         .fontSize(TypeScale.TITLE_LARGE).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
         .margin({ top: 18 })
-      Text('从我的词本进入「梗句」背完一场，就会解锁一张梗卡')
+      Text('梗句词本里的词全部掌握后，就会解锁一张梗卡')
         .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_SUB)
         .textAlign(TextAlign.Center).width('72%').margin({ top: 8 })
       Blank()

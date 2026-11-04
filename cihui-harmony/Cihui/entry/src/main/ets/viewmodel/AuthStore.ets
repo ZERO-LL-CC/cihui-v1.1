@@ -7,7 +7,7 @@
  * qa19 BUG-B：账号资料随学习数据一起自动落盘沙箱（profile.json），杀进程不丢登录。
  */
 import { common } from '@kit.AbilityKit';
-import { LocalStateFiles } from '../service/LocalStateFiles';
+import { LocalStateFiles, GUEST_ACCOUNT } from '../service/LocalStateFiles';
 
 /** 账号资料持久化文件中的纯数据形态 */
 interface ProfileSnapshot {
@@ -66,12 +66,19 @@ export class AuthStore {
   private constructor() {
   }
 
-  /** qa19 BUG-B：启动时从沙箱读回登录资料 */
+  /** qa19 BUG-B：启动时从沙箱读回登录资料，并把数据分区切到该账号 */
   attachContext(context: common.Context): void {
     LocalStateFiles.boot(context);
-    const raw: string | null = LocalStateFiles.read(AuthStore.FILE);
+    const accountId: string = this.restoreProfile();
+    // DataStore 随后 attachContext，读的就是这里绑定的分区
+    LocalStateFiles.bindAccount(accountId === '' ? GUEST_ACCOUNT : accountId);
+  }
+
+  /** 读回 profile.json；返回 accountId，未登录或损坏返回空串 */
+  private restoreProfile(): string {
+    const raw: string | null = LocalStateFiles.readGlobal(AuthStore.FILE);
     if (raw === null) {
-      return;
+      return '';
     }
     try {
       const snap = JSON.parse(raw) as ProfileSnapshot;
@@ -94,14 +101,16 @@ export class AuthStore {
       if (snap.accountId === undefined || snap.accountId === '') {
         this.persist();
       }
+      return p.accountId;
     } catch (_e) {
       // 损坏资料忽略，保持未登录
+      return '';
     }
   }
 
   private persist(): void {
     if (this.profile === null) {
-      LocalStateFiles.remove(AuthStore.FILE);
+      LocalStateFiles.removeGlobal(AuthStore.FILE);
       return;
     }
     const p: UserProfile = this.profile;
@@ -116,7 +125,7 @@ export class AuthStore {
       accountId: p.accountId,
       loginChannel: p.loginChannel,
     };
-    LocalStateFiles.write(AuthStore.FILE, JSON.stringify(snap));
+    LocalStateFiles.writeGlobal(AuthStore.FILE, JSON.stringify(snap));
   }
 
   isLoggedIn(): boolean {

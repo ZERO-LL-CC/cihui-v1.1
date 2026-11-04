@@ -1,20 +1,22 @@
 /**
- * F14 账号纯逻辑：注册 / 字段编辑校验（可 Node 单测，不依赖 ArkUI）。
- * 规则来自功能卡 F14：
- * - 名称必填；
- * - 手机号、邮箱至少填一项；
- * - 手机号必须为 11 位大陆手机号（1 开头，第二位 3–9）；
- * - 邮箱格式错误拦截；
- * - 微信选填。
+ * F14 账号纯逻辑：邮箱注册 / 字段编辑校验（可 Node 单测，不依赖 ArkUI）。
+ *
+ * 规则（2026-11 调整：手机号验证码暂不做，改邮箱 + 密码为主通道）：
+ * - 昵称必填；
+ * - 邮箱必填且格式正确（本机账号的唯一标识）；
+ * - 密码至少 6 位、不能全同字符（校验细节在 PasswordHash.validatePassword）；
+ * - 手机号 / 微信 / QQ 为选填资料，可在账号页补填。
+ *
+ * 华为账号登录不走这里（一键授权，无表单）。
  */
+import { validatePassword } from './PasswordHash';
 
-export type AccountField = 'name' | 'phone' | 'email' | 'wechat' | 'qq';
+export type AccountField = 'name' | 'phone' | 'email' | 'wechat' | 'qq' | 'password';
 
 export interface RegisterForm {
   name: string;
-  phone: string;
   email: string;
-  wechat: string;
+  password: string;
 }
 
 export interface FieldError {
@@ -23,12 +25,12 @@ export interface FieldError {
 }
 
 export function emptyRegisterForm(): RegisterForm {
-  return { name: '', phone: '', email: '', wechat: '' };
+  return { name: '', email: '', password: '' };
 }
 
 export function isValidPhone(v: string): boolean {
   if (v === '') {
-    return true; // 空值由「手机/邮箱至少一项」规则处理
+    return true; // 选填
   }
   return /^1[3-9]\d{9}$/.test(v.trim());
 }
@@ -47,23 +49,41 @@ export function isValidEmail(v: string): boolean {
 /** 注册表单校验：返回第一个错误；全部通过返回 null */
 export function validateRegister(form: RegisterForm): FieldError | null {
   if (form.name.trim() === '') {
-    return { field: 'name', message: '请填写名称' };
+    return { field: 'name', message: '请填写昵称' };
   }
-  if (form.phone.trim() === '' && form.email.trim() === '') {
-    return { field: 'phone', message: '手机号和邮箱至少填写一项' };
+  if (form.email.trim() === '') {
+    return { field: 'email', message: '请填写邮箱' };
   }
-  if (form.phone.trim() !== '' && !isValidPhone(form.phone)) {
-    return { field: 'phone', message: '请输入正确的 11 位手机号' };
-  }
-  if (form.email.trim() !== '' && !isValidEmail(form.email)) {
+  if (!isValidEmail(form.email)) {
     return { field: 'email', message: '邮箱格式不正确' };
+  }
+  if (form.password === '') {
+    return { field: 'password', message: '请设置密码' };
+  }
+  const pwdError: string | null = validatePassword(form.password);
+  if (pwdError !== null) {
+    return { field: 'password', message: pwdError };
+  }
+  return null;
+}
+
+/** 登录表单校验（邮箱 + 密码） */
+export function validateLogin(email: string, password: string): FieldError | null {
+  if (email.trim() === '') {
+    return { field: 'email', message: '请填写邮箱' };
+  }
+  if (!isValidEmail(email)) {
+    return { field: 'email', message: '邮箱格式不正确' };
+  }
+  if (password === '') {
+    return { field: 'password', message: '请填写密码' };
   }
   return null;
 }
 
 /**
  * 账号页字段编辑校验。
- * current 为编辑前的完整资料（phone/email 至少一项的跨字段约束需要它）。
+ * 邮箱是账号标识，不允许清空；手机号 / 微信 / QQ 选填。
  */
 export function validateFieldEdit(
   field: AccountField,
@@ -73,25 +93,22 @@ export function validateFieldEdit(
   const value: string = rawValue.trim();
   if (field === 'name') {
     if (value === '') {
-      return { field, message: '名称不能为空' };
+      return { field, message: '昵称不能为空' };
+    }
+    return null;
+  }
+  if (field === 'email') {
+    if (value === '') {
+      return { field, message: '邮箱是账号标识，不能清空' };
+    }
+    if (!isValidEmail(value)) {
+      return { field, message: '邮箱格式不正确' };
     }
     return null;
   }
   if (field === 'phone') {
     if (value !== '' && !isValidPhone(value)) {
       return { field, message: '请输入正确的 11 位手机号' };
-    }
-    if (value === '' && current.email.trim() === '') {
-      return { field, message: '手机号和邮箱至少保留一项' };
-    }
-    return null;
-  }
-  if (field === 'email') {
-    if (value !== '' && !isValidEmail(value)) {
-      return { field, message: '邮箱格式不正确' };
-    }
-    if (value === '' && current.phone.trim() === '') {
-      return { field, message: '手机号和邮箱至少保留一项' };
     }
     return null;
   }

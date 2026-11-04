@@ -135,18 +135,26 @@ export struct LoginPage {
             .height(50)
 
           Button() {
-            Text('手机号 / 邮箱登录').fontSize(16).fontColor(Colors.BRAND)
+            Text('邮箱账号登录').fontSize(16).fontColor(Colors.BRAND)
           }
           .type(ButtonType.Capsule).width('100%').height(50)
           .backgroundColor(Color.Transparent)
           .border({ width: 1.5, color: Colors.BRAND })
-          .onClick(() => NavStore.INSTANCE.push(RouteName.REGISTER))
+          .onClick(() => NavStore.INSTANCE.push(RouteName.EMAIL_LOGIN))
         }
         .width('100%').padding({ left: 8, right: 8, bottom: 16 })
 
+        Row() {
+          Text('首次使用？').fontSize(12).fontColor(Colors.TEXT_SUB)
+          Text('注册邮箱账号')
+            .fontSize(12).fontColor(Colors.BRAND).fontWeight(FontWeight.Medium)
+            .onClick(() => NavStore.INSTANCE.push(RouteName.REGISTER))
+        }
+        .margin({ top: 4 })
+
         Text('登录即代表同意《用户协议》与《隐私政策》，未登录也可先体验本机功能')
           .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
-          .width('100%').padding({ bottom: 6 })
+          .width('100%').padding({ top: 14, bottom: 6 })
         Text('学习数据保存在本机，换机请在「账号与云备份」中导出备份后导入恢复')
           .fontSize(10).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
           .width('100%').padding({ bottom: 22 })

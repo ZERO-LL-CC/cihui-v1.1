@@ -26,8 +26,6 @@ export enum RouteName {
   NEW_WORDS = 'NewWordsPage',
   /** F8 语音快过（字幕式 ASR + 手动三档降级） */
   SPEECH_TEST = 'SpeechTestPage',
-  /** F9 到期复习闪卡（三档判定 + 手势；F10 错词强化复用） */
-  REVIEW_CARDS = 'ReviewCardsPage',
   /** F10 错词本（列表 + 左滑移出 + 开始错词强化复习） */
   WRONG_BOOK = 'WrongBookPage',
   /** F12 艾宾浩斯计划大表（月历 + 彩点 + 翻月 + 红格补卡入口 + 果冻入场） */
@@ -53,7 +51,9 @@ export enum RouteName {
   /** F19 今日例句（离线词库逐词例句 + 高亮 + TTS + 收藏） */
   TODAY_SENTENCE = 'TodaySentencePage',
   /** F19 我的例句本（收藏例句回看） */
-  SENTENCE_FAVORITES = 'SentenceFavoritesPage'
+  SENTENCE_FAVORITES = 'SentenceFavoritesPage',
+  /** 隐私与关于 */
+  PRIVACY = 'PrivacyPage'
 }
 
 /** F14 字段编辑入参 */
@@ -81,16 +81,12 @@ export interface SpeechRouteParam {
   retest?: boolean;
   batchIndex?: number;
   batchTotal?: number;
-}
-
-/** F9/F10/F12 闪卡入参：本轮要过的词 id、标题与模式（复习 / 错词强化 / 补卡） */
-export interface ReviewRouteParam {
-  wordIds: string[];
-  title: string;
-  /** REVIEW=到期复习（P2）；WRONG=错词强化（P3）；MAKEUP=补卡词本（完成后同步计划表） */
-  mode: string;
-  /** MAKEUP 模式必填：补卡日 yyyy-mm-dd */
+  /** F19 复习快过模式：'REVIEW' 到期复习 | 'WRONG' 错词强化 | 'MAKEUP' 补卡。缺省=新词流程（现行为不变） */
+  reviewMode?: string;
+  /** MAKEUP 必填：补卡日 yyyy-mm-dd */
   makeupDay?: string;
+  /** 复习模式页顶标题（到期复习 / 错词强化复习 / x月x日 补卡） */
+  title?: string;
 }
 
 /** F12 补卡日详情入参 */

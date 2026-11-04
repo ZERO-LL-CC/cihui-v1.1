@@ -91,17 +91,18 @@ import type {
 import type { DayGateStatus } from '../model/RepoCore';
 import { genId } from '../model/RepoCore';
 import {
-  advanceSession,
+  backfillMemeMeanings,
   buildCandidates,
   bumpMemeCardShareInto,
-  createMemeImport,
-  createRestudySession,
-  findResumableSession,
+  createMemeBook,
+  createMemeRecord,
+  memeWordDrafts,
   removeMemeCardInto,
-  sessionPendingCount,
+  resolveMemeWordIds,
   sortMemeCardsDesc,
   toggleMemeCardFavoriteInto,
   tokenizeEnglish,
+  unlockMemeCards,
   upsertMemeCardInto,
 } from '../model/MemeCore';
 import type { MemeCandidate } from '../model/MemeCore';
@@ -119,18 +120,10 @@ export interface Persistence {
   load(): AppData | null;
 }
 
-/** F17 导入梗句后返回的跳转句柄 */
-export interface MemeStartInfo {
+/** F17 导入梗句后的句柄（梗句背诵已并入统一背词流程，不再创建背诵会话） */
+export interface MemeImportedInfo {
   memeId: string;
-  sessionId: string;
-}
-
-/** F17 一次会话判定后的页面所需信息 */
-export interface MemeAdvanceInfo {
-  completed: boolean;
-  knownCount: number;
-  total: number;
-  memeId: string;
+  bookId: string;
 }
 
 /** F18 落梗卡入参 */
@@ -213,6 +206,9 @@ export class DataStore {
     if (out.sessions === undefined) {
       out.sessions = [];
     }
+    // 梗句背诵已并入统一背词流程：加载时丢弃历史遗留的未完成梗句会话，
+    // 已完成会话记录与已解锁梗卡全部保留（旧版「续背」入口已删除）
+    out.sessions = out.sessions.filter((s: StudySession): boolean => s.status !== 'in_progress');
     if (out.memeCards === undefined) {
       out.memeCards = [];
     }
@@ -241,7 +237,6 @@ export class DataStore {
 
   /** qa19 BUG-B：EntryAbility.onCreate 调用，切换为沙箱文件持久化并读回本机数据 */
   attachContext(context: common.Context): void {
-    LocalStateFiles.boot(context);
     this.persistence = new FilePersistence();
     const restored: AppData | null = this.persistence.load();
     if (restored) {
@@ -257,6 +252,17 @@ export class DataStore {
       }
       this.scheduleMeaningAudit(context);
     }
+  }
+
+  /**
+   * 切换账号后重新加载该账号分区。
+   * 调用前必须先 LocalStateFiles.bindAccount(newId)，否则会读到上一个账号的文件。
+   */
+  reload(): void {
+    const restored: AppData | null = this.persistence.load();
+    this.data = restored !== null ? this.normalize(restored) : emptyData();
+    this.publish();
+    REFRESH_BUS.emitData();
   }
 
   /**
@@ -427,7 +433,8 @@ export class DataStore {
   applyJudge(wordId: string, phase: LearnPhase, verdict: Verdict): JudgeResult {
     const out: ApplyJudgeResult =
       applyJudgeToData(this.data, wordId, phase, verdict, Date.now());
-    this.commit(out.data);
+    // F18 解锁：判定落库后检查「梗句关联全部词 mastered」（纯函数幂等，未满足原样返回）
+    this.commit(unlockMemeCards(out.data, Date.now()));
     return out.result;
   }
 
@@ -445,7 +452,8 @@ export class DataStore {
       const out: ApplyJudgeResult = applyJudgeToData(data, item.wordId, 'FIRST', item.verdict, now);
       data = out.data;
     });
-    this.commit(data);
+    // F18 解锁：整轮首测落库后统一检查梗句解锁
+    this.commit(unlockMemeCards(data, now));
   }
 
   /* ---------- F10 错词本 ---------- */
@@ -484,9 +492,6 @@ export class DataStore {
     }
     if (patch.asrStrictness !== undefined) {
       next.settings.asrStrictness = patch.asrStrictness;
-    }
-    if (patch.hapticEnabled !== undefined) {
-      next.settings.hapticEnabled = patch.hapticEnabled;
     }
     if (patch.reminderEnabled !== undefined) {
       next.settings.reminderEnabled = patch.reminderEnabled;
@@ -590,6 +595,30 @@ export class DataStore {
     return this.data.checkins.some((c: CheckInRecord): boolean => c.day === day && c.checkedIn);
   }
 
+  /**
+   * F11 重新打卡：今天已打卡后又出现未完成任务（拍照/梗句/词书导入的新词排到今天，
+   * 或当天又判出要强化的错词）→ 打卡按钮从「今日已打卡」重开，完成后可再打一次卡。
+   *
+   * 双信号判断：
+   * 1) reopened 标记（导入落今天时由 reopenTodayIfNeeded 置位）：把「再打一次卡」的入口
+   *    钉住，即使新词已经学完、门控重新全绿也不丢失；
+   * 2) 派生兜底（已打卡 && 门控未全过）：覆盖历史旧数据（无 reopened 字段）或当天判出
+   *    新错词等未走导入路径的缺口。
+   */
+  needsRecheckToday(): boolean {
+    const day: string = dayKeyFromTs(Date.now());
+    const rec: CheckInRecord | undefined =
+      this.data.checkins.find((c: CheckInRecord): boolean => c.day === day);
+    if (rec === undefined || !rec.checkedIn) {
+      return false;
+    }
+    if (rec.reopened === true) {
+      return true;
+    }
+    const gates: DayGateStatus = this.gatesToday();
+    return !(gates.p1 && gates.p2 && (!gates.p3Required || gates.p3));
+  }
+
   /* ---------- 打卡 ---------- */
 
   gatesToday(): DayGateStatus {
@@ -662,74 +691,40 @@ export class DataStore {
   }
 
   /**
-   * 导入梗句并创建首场背诵会话（单次事务）。
-   * 返回 memeId / sessionId 供页面直接跳转。
+   * 导入梗句（单次提交，梗句背诵已并入统一背词流程）：
+   * 1) createMemeBook 建 MEME 词本；2) 新词以 WordDraft 走统一导入事务
+   * importTransaction（QUEUE/TODAY 与拍照导入同口径）；3) 已有词缺释义补齐；
+   * 4) resolveMemeWordIds 解析梗句词 id（旧词复用）；5) createMemeRecord 落梗句记录。
+   * 不再创建背诵会话；新词背诵走首页统一流程，梗卡由 unlockMemeCards 自动解锁。
    */
-  importMeme(chinese: string, english: string, candidates: MemeCandidate[]): MemeStartInfo {
-    const out = createMemeImport(this.data, { chinese, english, candidates }, Date.now());
-    this.commit(out.data);
-    return { memeId: out.meme.id, sessionId: out.session.id };
+  importMeme(chinese: string, english: string, candidates: MemeCandidate[],
+    intake: IntakeMode): MemeImportedInfo {
+    const chosen: number = candidates.filter((c: MemeCandidate): boolean => c.selected).length;
+    if (chosen < 2) {
+      throw new Error('至少保留 2 个有效词才能开始背诵');
+    }
+    if (english.trim().length === 0) {
+      throw new Error('英文句子不能为空');
+    }
+    const now: number = Date.now();
+    const booked = createMemeBook(this.data, chinese.trim(), now);
+    const drafts: WordDraft[] = memeWordDrafts(candidates, booked.bookId);
+    let next: AppData = drafts.length > 0
+      ? importTransaction(booked.data, drafts, now, intake)
+      : booked.data;
+    next = backfillMemeMeanings(next, candidates);
+    const wordIds: string[] = resolveMemeWordIds(next, candidates, booked.bookId);
+    if (wordIds.length < 2) {
+      throw new Error('至少保留 2 个有效词才能开始背诵');
+    }
+    const record = createMemeRecord(next, chinese.trim(), english.trim(), booked.bookId, wordIds, now);
+    this.commit(record.data);
+    return { memeId: record.meme.id, bookId: booked.bookId };
   }
 
   memeById(memeId: string): MemeSentence | null {
     const found: MemeSentence | undefined = this.data.memes.find((m: MemeSentence): boolean => m.id === memeId);
     return found ?? null;
-  }
-
-  /** F5 梗句词本卡片点击：由 bookId 找梗句 */
-  memeByBook(bookId: string): MemeSentence | null {
-    const found: MemeSentence | undefined =
-      this.data.memes.find((m: MemeSentence): boolean => m.bookId === bookId);
-    return found ?? null;
-  }
-
-  sessionById(sessionId: string): StudySession | null {
-    const found: StudySession | undefined =
-      this.data.sessions.find((s: StudySession): boolean => s.id === sessionId);
-    return found ?? null;
-  }
-
-  /** 续背：找指定梗句（或全局）最近一场未完成会话 */
-  resumableSession(memeId?: string): StudySession | null {
-    return findResumableSession(this.data, memeId);
-  }
-
-  /** 再背一遍：同梗句全部词重新洗牌建新会话 */
-  restudyMeme(memeId: string): string {
-    const meme: MemeSentence | null = this.memeById(memeId);
-    if (meme === null) {
-      throw new Error('梗句不存在');
-    }
-    const out = createRestudySession(this.data, meme, Date.now());
-    this.commit(out.data);
-    return out.session.id;
-  }
-
-  /**
-   * 判定梗句会话中的一个词并落盘（新词走 F2 首测；学习中词只进会话不改排期）。
-   * 返回是否完成、本轮认识数与总会话词数，供页面决定飞出/重插/完成弹卡。
-   */
-  advanceMemeSession(sessionId: string, wordId: string, verdict: Verdict): MemeAdvanceInfo {
-    const out = advanceSession(this.data, sessionId, wordId, verdict, Date.now());
-    this.commit(out.data);
-    const total: number = out.session.items.length;
-    return {
-      completed: out.completed,
-      knownCount: out.knownCount,
-      total,
-      memeId: out.session.memeId,
-    };
-  }
-
-  /** 会话剩余未背词数（F20 蓝点副标题用） */
-  memePendingCount(memeId: string): number {
-    const s: StudySession | null = findResumableSession(this.data, memeId);
-    return s === null ? 0 : sessionPendingCount(s);
-  }
-
-  /** 是否存在任意进行中的梗句会话（F20 梗句入口蓝点） */
-  hasMemeInProgress(): boolean {
-    return findResumableSession(this.data) !== null;
   }
 
   /* ---------- F18 梗卡片 ---------- */

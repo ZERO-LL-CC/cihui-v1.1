@@ -4,6 +4,7 @@ import { window } from '@kit.ArkUI';
 import { NavStore } from '../viewmodel/NavStore';
 import { DataStore } from '../viewmodel/DataStore';
 import { AuthStore } from '../viewmodel/AuthStore';
+import { LocalAccountService } from '../service/LocalAccountService';
 import { LAUNCH_TARGET_KEY, TARGET_CHECKIN } from '../service/ReminderService';
 import { CloudBookLoader } from '../service/CloudBookLoader';
 import { TtsService } from '../service/TtsService';
@@ -20,10 +21,12 @@ export default class EntryAbility extends UIAbility {
   private devPage: string = '';
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    // qa19 BUG-B：先接沙箱持久化并读回本机数据/登录态，再加载页面
+    // qa19 BUG-B：先接沙箱持久化并读回本机数据/登录态，再加载页面。
+    // 顺序不可调换：AuthStore 负责 boot + 绑定账号分区，DataStore 只能读已绑定的分区。
     try {
-      DataStore.INSTANCE.attachContext(this.context);
       AuthStore.INSTANCE.attachContext(this.context);
+      LocalAccountService.INSTANCE.attachContext(this.context);
+      DataStore.INSTANCE.attachContext(this.context);
       CloudBookLoader.attachContext(this.context);
     } catch (err) {
       hilog.warn(DOMAIN, 'Cihui', 'attach local state failed: %{public}s', JSON.stringify(err));

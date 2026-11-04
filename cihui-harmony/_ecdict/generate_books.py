@@ -25,16 +25,23 @@ RAW_DIR = r'F:\PORJECT\cihui-harmony\Cihui\entry\src\main\resources\rawfile\clou
 TS_OUT = r'F:\PORJECT\cihui-harmony\Cihui\entry\src\main\ets\service\CloudBookData.generated.ts'
 
 BOOKS = [
-    # (book id, display name, version, category, grade, hot, ECDICT tag)
+    # (book id, display name, version, category, grade, hot, ECDICT tag or pseudo tag)
+    ('oxford3000', '牛津3000核心', '牛津3000高频核心', '基础核心', '', True, 'oxford'),
     ('cet4', '四级词汇', 'CET-4 最新大纲版', '大学词书', '', True, 'cet4'),
     ('cet6', '六级词汇', 'CET-6 最新大纲版', '大学词书', '', True, 'cet6'),
     ('kaoyan', '考研词汇', '考研大纲词', '大学词书', '', True, 'ky'),
+    ('ielts', '雅思词汇', 'IELTS 核心词', '出国词书', '', True, 'ielts'),
+    ('toefl', '托福词汇', 'TOEFL 核心词', '出国词书', '', True, 'toefl'),
+    ('gre', 'GRE 词汇', 'GRE 核心词', '出国词书', '', False, 'gre'),
+    ('collins', '柯林斯高频', '柯林斯1-2星高频', '基础核心', '', False, 'collins12'),
     ('gaokao', '高考词汇', '新课标高考词', '高中词书', '', False, 'gk'),
     ('zhongkao', '中考词汇', '中考核心词', '初中 / 小学', '中考', False, 'zk'),
 ]
 
 # 级别链：低 → 高。排序时用于把「与更低级词书共有」的词放到后面
-LEVEL_CHAIN = ['zk', 'gk', 'cet4', 'cet6', 'ky']
+# oxford/collins12 是伪标签（来自 oxford/collins 列，不是 tag 列），oxford 最基础故排最前
+LEVEL_CHAIN = ['oxford', 'zk', 'gk', 'cet4', 'cet6', 'ky', 'collins12', 'ielts', 'toefl', 'gre']
+PSEUDO_TAGS = {'oxford', 'collins12'}  # 不在 tag 列，按列值筛选
 
 import re
 WORD_RE = re.compile(r"^[a-zA-Z][a-zA-Z'\- ]{0,32}$")
@@ -116,8 +123,17 @@ def main():
             for t in LEVEL_CHAIN:
                 if t in tags:
                     sets_by_tag[t].add(wl)
+            # 伪标签（列筛选）：oxford=1 / collins 1-2 星
+            is_oxford = (row.get('oxford') or '').strip() == '1'
+            is_collins12 = (row.get('collins') or '').strip() in ('1', '2')
+            if is_oxford:
+                sets_by_tag['oxford'].add(wl)
+            if is_collins12:
+                sets_by_tag['collins12'].add(wl)
             for bid, ecdict_tag in tag_of_book.items():
-                if ecdict_tag in tags and wl not in seen[bid]:
+                hit = ecdict_tag in tags or (ecdict_tag == 'oxford' and is_oxford) \
+                    or (ecdict_tag == 'collins12' and is_collins12)
+                if hit and wl not in seen[bid]:
                     seen[bid].add(wl)
                     buckets[bid].append({'w': word, 'p': phon, 'm': meaning, '_frq': frq})
 

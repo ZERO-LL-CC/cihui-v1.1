@@ -483,10 +483,10 @@ export struct CameraPage {
   RecognizingCard() {
     Column() {
       if (this.percent >= 100) {
-        Stack() {
+        Stack({ alignContent: Alignment.Center }) {
           Circle({ width: 56, height: 56 }).fill(Colors.KNOW_GREEN)
-          Path({ width: 30, height: 30 }).commands('M8 15 L13 20 L22 10')
-            .stroke(Colors.WHITE).strokeWidth(3).fill(Color.Transparent).strokeLineCap(LineCapStyle.Round)
+          // 用 SVG 而不是 Path：Path 会裁掉超出自身包围盒的笔画，勾只剩左上角一小段
+          Image($r('app.media.ic_check')).width(30).height(30).fillColor(Colors.WHITE)
         }
       } else {
         LoadingProgress().width(48).height(48).color(Colors.BRAND)

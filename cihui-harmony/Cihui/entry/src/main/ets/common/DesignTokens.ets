@@ -104,8 +104,10 @@ export class FloatingTab {
   static readonly HEIGHT: number = 64;
   /** 胶囊内层内容高度 */
   static readonly CONTENT_HEIGHT: number = 56;
-  static readonly MARGIN: number = 10;
+  static readonly MARGIN: number = 24;
   static readonly SAFE_GAP: number = 8;
-  /** 内容底部需预留的避让高度（实测反推，非理论值） */
-  static readonly CLEARANCE: number = 82;
+  /** 说明：MARGIN 从 10 提到 24 —— 真机实测（1080×2406 / 3x）取 10 时胶囊底边距屏底仅 18vp，
+   *  与系统手势条（小白条）几乎贴合，点「我的」极易滑进手势区；抬到 32vp 才有手指缓冲。 */
+  /** 内容底部需预留的避让高度 = 栏体高 + 外距 + 安全间距（实测反推，非理论值） */
+  static readonly CLEARANCE: number = 96;
 }

@@ -75,3 +75,11 @@ desktop.ini
 # ===== 智能体工作目录（设备截图 / 临时脚本 / 计划，非源码） =====
 .workbuddy/
 .mattpocock-skills-tmp/
+
+# ===== 一次性临时文件（2026-11-05 v3.0 提交前清理） =====
+_trocr_spike/
+logo_gallery/
+cihui-ui/
+_*.jpeg
+_icon_backup_*/
+软著-说词单词学习软件/

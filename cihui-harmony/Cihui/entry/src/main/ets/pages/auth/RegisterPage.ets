@@ -1,7 +1,8 @@
 /**
- * F14 注册 / 登录表单页：
- * 名称必填；手机号 / 邮箱至少一项；手机号 11 位；邮箱格式；微信选填。
- * 校验失败：对应行左右轻摇 + 红框 + Toast 原因；通过即本地登录并返回（LoginPage 自动关）。
+ * F14 邮箱注册页：昵称 / 邮箱 / 密码。
+ *
+ * 不发验证码也不发邮件：账号只登记在本机 accounts.json，密码存盐化 SHA256。
+ * 校验失败：对应行左右轻摇 + 红框 + Toast 原因；通过即登录并返回（LoginPage 自动关）。
  */
 import { NavStore } from '../../viewmodel/NavStore';
 import { RouteName } from '../../common/RouteNames';
@@ -58,10 +59,9 @@ export struct RegisterPage {
   @Local errorField: AccountField | '' = '';
   @Local shakeX: number = 0;
   private specs: FieldSpec[] = [
-    new FieldSpec('name', '名称', '怎么称呼你？', InputType.Normal),
-    new FieldSpec('phone', '手机号', '11 位手机号（与邮箱至少填一项）', InputType.PhoneNumber),
-    new FieldSpec('email', '邮箱', '邮箱地址（与手机号至少填一项）', InputType.Email),
-    new FieldSpec('wechat', '微信', '选填，便于微信好友同步', InputType.Normal, true),
+    new FieldSpec('name', '昵称', '怎么称呼你？', InputType.Normal),
+    new FieldSpec('email', '邮箱', '作为登录账号', InputType.Email),
+    new FieldSpec('password', '密码', '至少 6 位', InputType.Password),
   ];
 
   private animateCovered(covered: boolean): void {
@@ -84,12 +84,10 @@ export struct RegisterPage {
   private setField(field: AccountField, v: string): void {
     if (field === 'name') {
       this.form.name = v;
-    } else if (field === 'phone') {
-      this.form.phone = v;
     } else if (field === 'email') {
       this.form.email = v;
-    } else if (field === 'wechat') {
-      this.form.wechat = v;
+    } else if (field === 'password') {
+      this.form.password = v;
     }
     if (this.errorField === field) {
       this.errorField = '';
@@ -114,6 +112,15 @@ export struct RegisterPage {
   }
 
   private submit(): void {
+    try {
+      this.doSubmit();
+    } catch (e) {
+      // 不吞异常：注册链路的真实错误要能在界面看到，而不是白屏
+      this.toast(`注册异常：${JSON.stringify(e)}`);
+    }
+  }
+
+  private doSubmit(): void {
     const r = LocalAuthService.INSTANCE.register(this.form);
     if (!r.ok) {
       this.toast(r.message);
@@ -122,7 +129,7 @@ export struct RegisterPage {
       }
       return;
     }
-    this.toast('注册成功，已登录，云备份已开启');
+    this.toast('注册成功，已登录');
     // F15：登录后静默完成首次本地备份（失败不阻断注册流程，状态在账号页可见）
     try {
       const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
@@ -137,13 +144,13 @@ export struct RegisterPage {
     if (field === 'name') {
       return this.form.name;
     }
-    if (field === 'phone') {
-      return this.form.phone;
-    }
     if (field === 'email') {
       return this.form.email;
     }
-    return this.form.wechat;
+    if (field === 'password') {
+      return this.form.password;
+    }
+    return '';
   }
 
   @Builder
@@ -205,7 +212,7 @@ export struct RegisterPage {
         this.TopBar()
         Scroll() {
           Column() {
-            Text('填写基础信息完成注册，资料保存在本机，可在「账号与云备份」中导出备份文件')
+            Text('邮箱仅作为本机登录账号，不会发送任何邮件；密码只在本机保存加密结果')
               .fontSize(12).fontColor(Colors.TEXT_WEAK).width('100%')
               .margin({ top: 8, bottom: 16 })
 
@@ -219,7 +226,7 @@ export struct RegisterPage {
               .margin({ top: 14 })
               .onClick(() => this.submit())
 
-            Text('微信 / QQ 一键登录需对应开放平台资质，当前版本暂未接入')
+            Text('也可返回上一页使用华为账号一键登录，免填表单')
               .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
               .width('100%').margin({ top: 16 })
           }

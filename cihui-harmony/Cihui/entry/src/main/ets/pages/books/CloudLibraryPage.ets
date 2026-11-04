@@ -1,6 +1,6 @@
 /**
- * F5 云词本库页：分类分组（大学 / 高中 / 初中小学）+ 年级横排换行 chip + 顶部搜索栏。
- * 大学/高考/中考词书为随包真实词库（开源 ECDICT，MIT）；分年级词书内容接入中标注「筹备中」。
+ * F5 云词本库页：分类分组（基础核心 / 大学 / 出国 / 高中 / 初中小学）+ 年级横排换行 chip + 顶部搜索栏。
+ * 10 本词书全部为随包真实词库（开源 ECDICT，MIT）。
  */
 import { NavStore } from '../../viewmodel/NavStore';
 import { RouteName } from '../../common/RouteNames';
@@ -88,8 +88,18 @@ export struct CloudLibraryPage {
       .justifyContent(FlexAlign.Center)
 
       Column() {
-        Text(meta.name).fontSize(16).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
-          .width('100%').textAlign(TextAlign.Start)
+        Row() {
+          Text(meta.name).fontSize(16).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (meta.hot) {
+            Text('热门')
+              .fontSize(10).fontColor(Colors.FUZZY_ORANGE)
+              .backgroundColor(Colors.FUZZY_ORANGE_SOFT).borderRadius(8)
+              .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+              .margin({ left: 6 })
+          }
+        }
+        .width('100%').alignItems(VerticalAlign.Center)
         Text(`${meta.version} · ${meta.totalCount} 词`)
           .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_SUB).margin({ top: 5 })
           .width('100%').textAlign(TextAlign.Start)
@@ -108,7 +118,7 @@ export struct CloudLibraryPage {
     Column() {
       Text(meta.grade.length > 0 ? meta.grade : meta.name)
         .fontSize(14).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
-      Text(meta.coming === true ? '筹备中' : `${meta.totalCount} 词`)
+      Text(`${meta.totalCount} 词`)
         .fontSize(11).fontColor(Colors.TEXT_WEAK).margin({ top: 2 })
     }
     .padding({ left: 16, right: 16, top: 9, bottom: 9 })
@@ -145,7 +155,7 @@ export struct CloudLibraryPage {
             ForEach(this.groups, (group: CloudGroup) => {
               this.GroupSection(group)
             }, (group: CloudGroup): string => group.title)
-            Text('已接入词库来自开源 ECDICT（MIT 许可）；分年级教材词书筹备中')
+            Text('已接入 10 本词库，全部来自开源 ECDICT（MIT 许可），随包内置，导入不耗流量')
               .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
               .width('100%').margin({ top: 16, bottom: 24 })
           }

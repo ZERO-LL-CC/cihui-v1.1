@@ -4,7 +4,7 @@
  * - 新词快过（F8）与复习闪卡（F9）判「不认识」的词自动进入错词本（status=WRONG，清零转明天新词）；
  *   判「模糊」且本轮未清账（forceNextDay）的词以「模糊 · 次日强制复习」标签出现；
  * - 列表显示英文、中文释义、原因标签；行左滑露出「移出」（系统 SwipeAction，松手在删除区自动收起）；
- * - 底部「开始错词强化复习」复用 F9 同一套闪卡与调度（mode='WRONG'），
+ * - 底部「开始错词强化复习」复用 F8 语音快过（F19 reviewMode='WRONG'），
  *   通过后按新词重新进入艾宾浩斯 R1 节点；
  * - 首页错词角标与本列表同源（buildWrongEntries），移出 / 强化通过后实时减少；
  * - 空态给鼓励性图标与文案，不展示空列表。
@@ -13,7 +13,7 @@ import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
 import { RouteName } from '../../common/RouteNames';
-import type { ReviewRouteParam } from '../../common/RouteNames';
+import type { SpeechRouteParam } from '../../common/RouteNames';
 import type { Word } from '../../model/Types';
 import type { WrongEntry } from '../../model/SchedulerCore';
 import { promptAction } from '@kit.ArkUI';
@@ -103,14 +103,14 @@ export struct WrongBookPage {
     this.toast(`已将「${row.english}」移出错词本`);
   }
 
-  /** 开始错词强化复习：复用 F9 闪卡，通过后按新词重新进入艾宾浩斯节点 */
+  /** 开始错词强化复习：复用 F8 语音快过（F19），通过后按新词重新进入艾宾浩斯节点 */
   private startStrengthen(): void {
     if (this.rows.length === 0) {
       return;
     }
     const ids: string[] = this.rows.map((r: WrongRow): string => r.wordId);
-    const param: ReviewRouteParam = { wordIds: ids, title: '错词强化复习', mode: 'WRONG' };
-    NavStore.INSTANCE.push(RouteName.REVIEW_CARDS, param);
+    const param: SpeechRouteParam = { wordIds: ids, reviewMode: 'WRONG', title: '错词强化复习' };
+    NavStore.INSTANCE.push(RouteName.SPEECH_TEST, param);
   }
 
   @Builder

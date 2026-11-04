@@ -1,20 +1,26 @@
 /**
- * F14 账号服务：统一 AuthService 接口 + 本地模拟实现。
+ * F14 账号服务：统一 AuthService 接口 + 本机实现。
  *
- * ⚠️ 微信 / QQ 一键登录的真实授权需要开放平台注册、App 资质、原生 SDK 与后端，
- *    本期没有凭证：loginByThird 生成本机演示账号跑通登录闭环，
- *    UI 明确标注「演示登录」，禁止声称已完成真实授权（资质与 SDK 接入列入待核验清单）。
- * 本地注册 / 登录 / 字段编辑 / 退出全部走 AuthStore 内存态跑通；
- * 退出登录会清空本机学习数据（无后端，账号间不共享内存仓库）；
- * F15 在此接口上扩展云备份与多端资料同步。
+ * 三条通道：
+ * - 华为账号（主）：Account Kit 客户端直取 unionID，零后端零密码；
+ * - 邮箱 + 密码（兜底）：本机 accounts.json 存盐化哈希，不发邮件；
+ * - 旧版本地账号：profile.json 里已有、但不在账号表中的老用户，允许继续用设备。
+ *
+ * 微信 / QQ 一键登录需企业资质与开放平台审核，个人开发者走不通，已下线。
+ *
+ * 账号切换与数据隔离：每个账号落到 files/cihui/state/u/<accountId>/ 独立分区，
+ * 退出登录**不再清空学习数据**——切回上一个账号即可看到原有进度。
  */
 import { AuthStore, UserProfile } from '../viewmodel/AuthStore';
 import { SyncStore } from '../viewmodel/SyncStore';
 import { DataStore } from '../viewmodel/DataStore';
+import { LocalStateFiles, GUEST_ACCOUNT } from './LocalStateFiles';
+import { LocalAccountService, AccountRecord, CHANNEL_EMAIL } from './LocalAccountService';
 import { AccountKitService, CHANNEL_HUAWEI, CHANNEL_LOCAL } from './AccountKitService';
 import {
   emptyRegisterForm,
   validateFieldEdit,
+  validateLogin,
   validateRegister,
 } from '../model/AuthCore';
 import type { AccountField, FieldError, RegisterForm } from '../model/AuthCore';
@@ -28,8 +34,8 @@ export interface AuthResult {
 export interface AuthService {
   isLoggedIn(): boolean;
   register(form: RegisterForm): AuthResult;
+  loginByEmail(email: string, password: string): AuthResult;
   loginByHuawei(unionID: string): AuthResult;
-  loginByThird(channel: string): AuthResult;
   updateField(field: AccountField, value: string): AuthResult;
   logout(): void;
 }
@@ -49,39 +55,83 @@ export class LocalAuthService implements AuthService {
   private constructor() {
   }
 
+  /** 切换到目标账号的数据分区，并让 DataStore 重读该分区 */
+  private activate(accountId: string): void {
+    LocalStateFiles.bindAccount(accountId === '' ? GUEST_ACCOUNT : accountId);
+    DataStore.INSTANCE.reload();
+  }
+
+  /** 已登录其他账号时拒绝切换，避免把 B 的进度写进 A 的分区 */
+  private blockedByOther(accountId: string): AuthResult | null {
+    const cur: UserProfile | null = this.store.profile;
+    if (cur !== null && cur.accountId !== '' && cur.accountId !== accountId) {
+      return fail('当前已登录其他账号，请先退出后再登录', null);
+    }
+    return null;
+  }
+
   isLoggedIn(): boolean {
     return this.store.isLoggedIn();
   }
 
+  /** 邮箱注册（不发邮件，纯本机登记） */
   register(form: RegisterForm): AuthResult {
     const error: FieldError | null = validateRegister(form);
     if (error !== null) {
       return fail(error.message, error);
     }
+    const r = LocalAccountService.INSTANCE.register(form.email, form.password, form.name);
+    if (!r.ok || r.record === null) {
+      return fail(r.message, null);
+    }
+    const blocked: AuthResult | null = this.blockedByOther(r.record.accountId);
+    if (blocked !== null) {
+      return blocked;
+    }
     const profile: UserProfile = new UserProfile();
-    profile.name = form.name.trim();
-    profile.phone = form.phone.trim();
-    profile.email = form.email.trim();
-    profile.wechat = form.wechat.trim();
-    profile.accountId = `local-${Date.now()}`;
-    profile.loginChannel = CHANNEL_LOCAL;
-    // F15：注册即开启云备份（首次本地备份由注册页在登录后静默触发）
+    profile.name = r.record.name;
+    profile.email = r.record.email;
+    profile.accountId = r.record.accountId;
+    profile.loginChannel = CHANNEL_EMAIL;
     profile.cloudEnabled = true;
     this.store.login(profile);
+    this.activate(r.record.accountId);
+    return success('注册成功');
+  }
+
+  /** 邮箱 + 密码登录 */
+  loginByEmail(email: string, password: string): AuthResult {
+    const error: FieldError | null = validateLogin(email, password);
+    if (error !== null) {
+      return fail(error.message, error);
+    }
+    const r = LocalAccountService.INSTANCE.login(email, password);
+    if (!r.ok || r.record === null) {
+      return fail(r.message, null);
+    }
+    const blocked: AuthResult | null = this.blockedByOther(r.record.accountId);
+    if (blocked !== null) {
+      return blocked;
+    }
+    const profile: UserProfile = new UserProfile();
+    profile.name = r.record.name;
+    profile.email = r.record.email;
+    profile.accountId = r.record.accountId;
+    profile.loginChannel = CHANNEL_EMAIL;
+    profile.cloudEnabled = true;
+    this.store.login(profile);
+    this.activate(r.record.accountId);
     return success('登录成功');
   }
 
-  /**
-   * 华为账号登录（Account Kit 拿到的 unionID 直接当账号标识，无后端）。
-   * 已登录其他账号时拒绝，避免两台设备/两个账号的学习数据串到同一分区。
-   */
+  /** 华为账号登录（Account Kit 拿到的 unionID 直接当账号标识，无后端） */
   loginByHuawei(unionID: string): AuthResult {
     if (unionID === '') {
       return fail('未获取到华为账号标识，请重试', null);
     }
-    const cur: UserProfile | null = this.store.profile;
-    if (cur !== null && cur.accountId !== '' && cur.accountId !== unionID) {
-      return fail('当前已登录其他账号，请先退出后再登录本账号', null);
+    const blocked: AuthResult | null = this.blockedByOther(unionID);
+    if (blocked !== null) {
+      return blocked;
     }
     const profile: UserProfile = new UserProfile();
     profile.accountId = unionID;
@@ -89,38 +139,19 @@ export class LocalAuthService implements AuthService {
     profile.name = AccountKitService.INSTANCE.defaultNickname(unionID);
     profile.cloudEnabled = true;
     this.store.login(profile);
+    this.activate(unionID);
     return success('登录成功');
   }
 
-  loginByThird(channel: string): AuthResult {
-    // TODO(F14+)：接入微信开放平台 / 腾讯互联 QQ SDK（需 App 资质、appid、签名、授权回调与后端）。
-    // 本期无凭证：生成本机演示账号，把登录后的全部页面闭环跑通；UI 标注为演示登录。
-    const isWechat: boolean = channel === 'wechat';
-    const label: string = isWechat ? '微信' : 'QQ';
-    const suffix: string = `${Math.floor(1000 + Math.random() * 9000)}`;
-    const profile: UserProfile = new UserProfile();
-    profile.name = `${isWechat ? '微信用户' : 'QQ用户'}${suffix}`;
-    if (isWechat) {
-      profile.wechat = `wx_demo_${suffix}`;
-    } else {
-      profile.qq = suffix;
-    }
-    // 演示第三方登录没有云端资料，不默认开启云备份，避免与 F15 文案冲突
-    profile.cloudEnabled = false;
-    this.store.login(profile);
-    return success(`${label}演示登录成功`);
-  }
-
   updateField(field: AccountField, value: string): AuthResult {
-    if (this.store.profile === null) {
+    const p: UserProfile | null = this.store.profile;
+    if (p === null) {
       return fail('尚未登录', null);
     }
-    const p = this.store.profile;
     const current: RegisterForm = {
       name: p.name,
-      phone: p.phone,
       email: p.email,
-      wechat: p.wechat,
+      password: '',
     };
     const error: FieldError | null = validateFieldEdit(field, value, current);
     if (error !== null) {
@@ -141,16 +172,27 @@ export class LocalAuthService implements AuthService {
     return success('已保存');
   }
 
+  /**
+   * 退出登录：切回未登录分区，**不清空原账号数据**。
+   * 重新登录同一账号即可恢复原有词本与进度。
+   */
   logout(): void {
     this.store.logout();
     SyncStore.INSTANCE.reset();
-    // P4/P5：本期无后端，学习数据是本机内存仓库，不随账号隔离；
-    // 退出即清空，避免 A 账号打卡/学习进度被新账号看到。需要保留请先导出备份 JSON。
-    DataStore.INSTANCE.resetLearningData();
+    this.activate(GUEST_ACCOUNT);
   }
 
-  /** 注册页初始值（已登录预填场景复用） */
+  /** 注册页初始值 */
   emptyForm(): RegisterForm {
     return emptyRegisterForm();
+  }
+
+  /** 当前账号在本机账号表中的记录（华为账号无记录，返回 null） */
+  currentRecord(): AccountRecord | null {
+    const p: UserProfile | null = this.store.profile;
+    if (p === null || p.email === '') {
+      return null;
+    }
+    return LocalAccountService.INSTANCE.findByEmail(p.email);
   }
 }

@@ -126,6 +126,9 @@ export interface CheckInRecord {
   makeup: boolean;
   /** 打卡时计算出的连续天数（补卡默认不恢复连续天数，开放项） */
   streak: number;
+  /** F11 重新打卡：打卡后又进新词（拍照/梗句导入排到今天）或又学习了 → 置位，
+   *  打卡按钮从「今日已打卡」重开为「重新打卡」；重新打卡达标后清掉。可选＝旧数据兼容。 */
+  reopened?: boolean;
 }
 
 /** 设置（轻量 KV，后续接 preferences） */
@@ -142,8 +145,6 @@ export interface Settings {
   /** TTS 语速，1.0 为常速 */
   ttsRate: number;
   asrStrictness: AsrStrictness;
-  /** 触感总开关 */
-  hapticEnabled: boolean;
   /** 学习提醒开关（F16） */
   reminderEnabled: boolean;
   /** 每日提醒时间（小时 0–23，默认 20 点；策略常量占位，待用户确认） */
@@ -159,7 +160,6 @@ export const DEFAULT_SETTINGS: Settings = {
   p3Strict: true,
   ttsRate: 1.0,
   asrStrictness: 'MID',
-  hapticEnabled: true,
   reminderEnabled: false,
   reminderHour: 20,
   reminderMinute: 0,

@@ -6,8 +6,16 @@
  *   最终结果走 SpeechMatch 按 settings.asrStrictness 三档匹配；
  * - 命中核心义项：绿闪 + 约 1s 自动过词；静音/没说对不自动过，可用底部三档手动判定；
  * - 红色麦克风暂停/继续；一键切手动；权限拒绝给「去设置 / 手动模式」，进度不丢；
- * - 一轮结束进复核清单，可逐词改判，确认后一次性落 FIRST 判定并回首页；
- * - 中途退出不丢：每次判定/推进即时写断点草稿（RoundDraftStore），
+ * - 一轮结束进复核清单，可逐词改判，确认后落判定并回首页
+ *   （新词=applyFirstRound 一次性落 FIRST；复习快过=逐词 applyJudge 落 REVIEW，见 F19）；
+ * - F19 复习快过（reviewMode='REVIEW'|'WRONG'|'MAKEUP'）：到期复习/错词强化/补卡统一复用本页，
+ *   直接进语音 round 无浏览环节；模糊词移队尾本轮重考（对齐闪卡 planNext）；
+ *   记账与原闪卡同口径（applyJudge(wordId,'REVIEW',verdict)），MAKEUP 完成后 completeMakeup 同步计划表；
+ *   复习模式不写断点草稿、不走新词会话、不做 todayReviewWordList 链式转接（防递归）；
+ * - F19b 错词强化无限循环（reviewMode='WRONG' 专用）：模糊/不认识一律回队尾重考（不翻面停留），
+ *   判「认识」立即 applyJudge 落库一次并出队，全队出队即完成（「错词强化完成」）；
+ *   中途退出：已认识的已落库保留，不会的词无变化（明天自然还在错词本）；
+ * - 中途退出不丢：每次判定/推进即时写断点草稿（RoundDraftStore，仅新词流程），
  *   重进按 wordId 回填判定并从上次那个词继续，确认后才清草稿。
  *
  * TODO(待真机核验)：TTS 播报与麦克风采集的音频焦点/回声；识别引擎可用性与中文识别率。
@@ -19,7 +27,6 @@ import { LocalDictService } from '../../service/LocalDictService';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
 import type { SpeechRouteParam } from '../../common/RouteNames';
-import type { ReviewRouteParam } from '../../common/RouteNames';
 import type { AsrListener, AsrState } from '../../service/SpeechService';
 import { HmsSpeechService } from '../../service/SpeechService';
 import { TtsService } from '../../service/TtsService';
@@ -221,6 +228,11 @@ export struct SpeechTestPage {
     }, 8000);
   }
 
+  /** 复习快过分支（F19）：reviewMode 非空即走，与新词会话/草稿完全隔离 */
+  private isReviewMode(): boolean {
+    return (this.param.reviewMode ?? '').length > 0;
+  }
+
   aboutToAppear(): void {
     REFRESH_BUS.onNav(this.refreshWhenTop);
     REFRESH_BUS.onData(this.refreshWhenTop);
@@ -236,20 +248,29 @@ export struct SpeechTestPage {
       .map((w: Word | undefined): Word => w as Word);
     this.items = words.map((w: Word): RoundItem => new RoundItem(w));
     if (this.items.length === 0) {
-      // 会话钉住的那批词已被删词本 / 切书作废（真机 BUG：页面只剩「没有要测试的单词」）。
-      // 清掉失效会话与草稿，回首页按当前计划重排今日任务，避免死胡同。
-      RoundDraftStore.clear(RoundDraftStore.SPEECH);
-      StudySessionStore.clear();
-      this.toast('这批词已不在今日计划，已按当前计划重排');
+      if (this.isReviewMode()) {
+        // 复习入口在进页前都校验过非空；真被清空（词本删除等）就静默回首页，
+        // 不清新词的会话/草稿桶（那不是本轮的数据，动了会毁掉用户的新词进度）
+        this.toast('没有要复习的单词');
+      } else {
+        // 会话钉住的那批词已被删词本 / 切书作废（真机 BUG：页面只剩「没有要测试的单词」）。
+        // 清掉失效会话与草稿，回首页按当前计划重排今日任务，避免死胡同。
+        RoundDraftStore.clear(RoundDraftStore.SPEECH);
+        StudySessionStore.clear();
+        this.toast('这批词已不在今日计划，已按当前计划重排');
+      }
       setTimeout((): void => {
         NavStore.INSTANCE.finishToHome();
       }, 400);
       return;
     }
-    // 断点续做：上次退出时存的判定与位置（跨天/换批自动作废）
-    const resumed: boolean = this.restoreDraft();
-    if (resumed) {
-      this.pendingResumeTip = true;
+    // 断点续做：仅新词流程支持（F19 复习快过不写草稿，进入即全新一轮，退出即丢弃）；
+    // 复习模式必须跳过 restoreDraft——SPEECH 桶里的新词草稿可能含同 wordId 的旧判定，回填会串数据
+    if (!this.isReviewMode()) {
+      const resumed: boolean = this.restoreDraft();
+      if (resumed) {
+        this.pendingResumeTip = true;
+      }
     }
 
     this.cursorTimer = setInterval(() => {
@@ -364,9 +385,10 @@ export struct SpeechTestPage {
     return true;
   }
 
-  /** 保存本轮草稿：每次判定/推进后调用，退出与杀进程都不丢（确认后才清） */
+  /** 保存本轮草稿：每次判定/推进后调用，退出与杀进程都不丢（确认后才清；复习快过不写） */
   private saveDraft(): void {
-    if (this.items.length === 0) {
+    // F19 复习快过不写断点草稿：避免污染新词 SPEECH 桶（PRD 允许复习不支持断点恢复）
+    if (this.isReviewMode() || this.items.length === 0) {
       return;
     }
     const entries: RoundDraftEntry[] = this.items.map((it: RoundItem): RoundDraftEntry => {
@@ -501,6 +523,17 @@ export struct SpeechTestPage {
     }
   }
 
+  /** 取消滞留的识别重开定时器：换词/重排队必须清，否则它会与 startWord 的 micStartTimer
+   *  并发 beginWord（同引擎两个 startListening 会话），HMS 离线引擎直接报错/死锁，
+   *  麦克风从此不再识别——正是「错词强化判模糊后卡死」的根因
+   *  （requeue 把 verdict 清成 null，reopenMic 的 verdict===null 守卫反而放行了滞留定时器）。 */
+  private cancelAsrRetry(): void {
+    if (this.asrRetryTimer !== -1) {
+      clearTimeout(this.asrRetryTimer);
+      this.asrRetryTimer = -1;
+    }
+  }
+
   /** 进词：先播报英文，再开麦克风（避免 TTS 被识别入口述） */
   private startWord(): void {
     this.interim = '';
@@ -511,6 +544,7 @@ export struct SpeechTestPage {
     this.wordErrorCount = 0;
     this.silentWarned = false;
     this.cancelSettle();
+    this.cancelAsrRetry();
     const word: RoundItem = this.items[this.index];
     TtsService.speak(word.english);
     if (this.mode === 'asr' && !this.micPaused && this.asrState !== 'unavailable') {
@@ -636,6 +670,25 @@ export struct SpeechTestPage {
       }, 360);
       return;
     }
+    if (this.isReviewMode()) {
+      if (this.param.reviewMode === 'WRONG') {
+        // F19b 错词强化=无限循环到会：模糊/不认识一律回队尾重考（不翻面停留），
+        // 判「认识」走 KNOWN 分支的 autoTimer → advance → dequeueKnownWrong 立即落库出队
+        this.requeueCurrent(verdict === 'VAGUE' ? '模糊，稍后再考一次' : '没读出来，稍后再读');
+        return;
+      }
+      if (verdict === 'VAGUE') {
+        // F19 复习口径（对齐闪卡 planNext）：模糊词移到队尾本轮重考，不留在复核清单
+        this.requeueCurrent('模糊，稍后再考一次');
+        return;
+      }
+      // 不认识（REVIEW/MAKEUP）：toast 对齐闪卡；记账在确认时统一落
+      this.toast('已加入错词本');
+      // 翻面看一眼中文再走（与闪卡判后看释义同款体验）
+      this.revealVerdict = verdict;
+      this.revealVisible = true;
+      return;
+    }
     // 模糊 / 不认识：先翻到反面把中文给出来，看一眼再走（判定已记账，这里只是记住它）
     this.revealVerdict = verdict;
     this.revealVisible = true;
@@ -656,7 +709,49 @@ export struct SpeechTestPage {
     }
   }
 
+  /**
+   * 复习快过：把当前判「模糊/不认识」的词移到队尾本轮重考。
+   * - REVIEW/MAKEUP（F19）：模糊词移队尾（对齐闪卡 planNext）；
+   * - WRONG（F19b）：模糊/不认识都移队尾，无限循环直到判「认识」出队。
+   * 判定先清空——重考时按新题重新判；WRONG 模式只有 KNOWN 会落库，天然防重
+   * （applyJudge 对 REVIEW+KNOWN 不幂等，每词只在出队那一刻调一次）。
+   */
+  private requeueCurrent(flashLabel: string): void {
+    const item: RoundItem = this.items[this.index];
+    item.verdict = null;
+    item.heard = '';
+    const removed: RoundItem[] = this.items.splice(this.index, 1);
+    this.items.push(removed[0]);
+    this.items = this.items.slice();
+    // splice 后 index 已指向原下一个词；若重排的是最后一个词，index 正好落在队尾的重考词上
+    this.startWord();
+    this.flash = 'orange';
+    this.flashLabel = flashLabel;
+  }
+
+  /** 复核清单里的「模糊」改判（复习模式）：该词移到队尾并切回 round 语音重考 */
+  private requeueFromReview(item: RoundItem): void {
+    const idx: number = this.items.indexOf(item);
+    if (idx < 0) {
+      return;
+    }
+    item.verdict = null;
+    item.heard = '';
+    const removed: RoundItem[] = this.items.splice(idx, 1);
+    this.items.push(removed[0]);
+    this.items = this.items.slice();
+    this.phase = 'round';
+    this.index = idx;
+    this.micPaused = false;
+    this.startWord();
+    this.toast('已移到队尾，稍后重考');
+  }
+
   private advance(): void {
+    if (this.isReviewMode()) {
+      this.advanceReview();
+      return;
+    }
     if (this.index < this.items.length - 1) {
       this.index += 1;
       this.saveDraft();
@@ -664,6 +759,65 @@ export struct SpeechTestPage {
     } else {
       this.enterReview();
     }
+  }
+
+  /**
+   * F19/F19b 复习快过推进。
+   * - WRONG（F19b 无限循环到会）：只有判「认识」的词才会走到这里——立即 applyJudge
+   *   落库一次并出队，队列空即完成；模糊/不认识在判定入口已回队尾，不可能推进。
+   * - REVIEW / MAKEUP（F19 口径）：线性推进，判完进复核清单，confirmReviewRound 统一落库。
+   * 手动三档与 ASR 自动判定两条路径都在此汇合，行为一致。
+   */
+  private advanceReview(): void {
+    const item: RoundItem = this.items[this.index];
+    if (this.param.reviewMode === 'WRONG') {
+      if (item.verdict === 'KNOWN') {
+        this.dequeueKnownWrong(item);
+        return;
+      }
+      // 防御：未判定/模糊/不认识的词不应推进，停在原词等用户操作
+      this.startWord();
+      return;
+    }
+    if (this.index < this.items.length - 1) {
+      this.index += 1;
+      this.saveDraft();
+      this.startWord();
+      return;
+    }
+    this.enterReview();
+  }
+
+  /**
+   * F19b：判「认识」的错词立即按复习口径落库（与原闪卡 applyVerdict 同款）并出队。
+   * 出队后该词不再出现在本轮，每词恰好 applyJudge 一次，天然防重
+   * （applyJudge 对 REVIEW+KNOWN 不幂等：每调一次推进一个节点，严禁 confirm 时重复调）。
+   */
+  private dequeueKnownWrong(item: RoundItem): void {
+    DataStore.INSTANCE.applyJudge(item.wordId, 'REVIEW', 'KNOWN');
+    if (this.items.length <= 1) {
+      // 最后一个词：直接完成（保留数组不清空，避免回首页前闪现一帧空态）
+      this.finishWrongRound();
+      return;
+    }
+    const idx: number = this.items.indexOf(item);
+    if (idx >= 0) {
+      this.items.splice(idx, 1);
+      this.items = this.items.slice();
+    }
+    if (this.index >= this.items.length) {
+      this.index = this.items.length - 1;
+    }
+    this.startWord();
+  }
+
+  /** F19b：错词强化全部判「认识」后的完成态（KNOWN 已即时落库，这里只做收尾，不再落库） */
+  private finishWrongRound(): void {
+    this.clearTimers();
+    this.service.release();
+    TtsService.stop();
+    this.toast('错词强化完成');
+    NavStore.INSTANCE.finishToHome();
   }
 
   private enterReview(): void {
@@ -726,6 +880,16 @@ export struct SpeechTestPage {
   }
 
   private setReviewVerdict(item: RoundItem, verdict: Verdict): void {
+    if (this.isReviewMode() && verdict === 'VAGUE') {
+      // F19 复习口径：复核清单里改判「模糊」同样移到队尾回 round 重考，不留在清单里
+      this.requeueFromReview(item);
+      return;
+    }
+    if (this.param.reviewMode === 'WRONG' && verdict === 'UNKNOWN') {
+      // F19b 无限循环到会：错词强化里「不认识」也回队尾重考（防御：WRONG 模式正常到不了复核清单）
+      this.requeueFromReview(item);
+      return;
+    }
     item.verdict = verdict;
     this.saveDraft();
   }
@@ -742,6 +906,10 @@ export struct SpeechTestPage {
     const verdicts: RoundVerdict[] = this.items.map((it: RoundItem): RoundVerdict => {
       return { wordId: it.wordId, verdict: it.verdict, heard: it.heard };
     });
+    if (this.isReviewMode()) {
+      this.confirmReviewRound(verdicts);
+      return;
+    }
     DataStore.INSTANCE.applyFirstRound(verdicts);
     this.clearTimers();
     this.service.release();
@@ -777,9 +945,9 @@ export struct SpeechTestPage {
       if (remainAll.length > 0) {
         this.toast(`新学完成，进入复习模式（${remainAll.length} 个待复习）`);
         const ids: string[] = remainAll.map((w: Word): string => w.id);
-        const p: ReviewRouteParam = { wordIds: ids, title: '到期复习', mode: 'REVIEW' };
+        const p: SpeechRouteParam = { wordIds: ids, reviewMode: 'REVIEW', title: '到期复习' };
         NavStore.INSTANCE.finishToHome();
-        NavStore.INSTANCE.push(RouteName.REVIEW_CARDS, p);
+        NavStore.INSTANCE.push(RouteName.SPEECH_TEST, p);
       } else {
         this.toast('今日新词已全部完成，调度已更新');
         NavStore.INSTANCE.finishToHome();
@@ -796,13 +964,46 @@ export struct SpeechTestPage {
     if (remain.length > 0) {
       this.toast(`新学完成，进入复习模式（${remain.length} 个待复习）`);
       const ids: string[] = remain.map((w: Word): string => w.id);
-      const param: ReviewRouteParam = { wordIds: ids, title: '到期复习', mode: 'REVIEW' };
+      const param: SpeechRouteParam = { wordIds: ids, reviewMode: 'REVIEW', title: '到期复习' };
       NavStore.INSTANCE.finishToHome();
-      NavStore.INSTANCE.push(RouteName.REVIEW_CARDS, param);
+      NavStore.INSTANCE.push(RouteName.SPEECH_TEST, param);
     } else {
       this.toast('本轮完成，调度已更新');
       NavStore.INSTANCE.finishToHome();
     }
+  }
+
+  /**
+   * F19 复习快过确认（REVIEW / MAKEUP 走这里；WRONG 已改为出队即时落库，正常到不了本方法）：
+   * 与原闪卡同口径，逐词 applyJudge(wordId, 'REVIEW', verdict) 实时语义等价
+   * （UNKNOWN 进错词本次日重学）。items 中 wordId 唯一（模糊词是移队尾而非复制），
+   * 每词恰好落一次，天然防重（applyJudge 对 REVIEW 不幂等，重复调用会连跳节点）。
+   * 不走 applyFirstRound / StudySessionStore.finishStep，
+   * 也不做 todayReviewWordList 链式转接（复习完再拉复习会自我递归）。
+   */
+  private confirmReviewRound(verdicts: RoundVerdict[]): void {
+    verdicts.forEach((v: RoundVerdict): void => {
+      if (v.verdict !== null) {
+        DataStore.INSTANCE.applyJudge(v.wordId, 'REVIEW', v.verdict);
+      }
+    });
+    this.clearTimers();
+    this.service.release();
+    TtsService.stop();
+    const reviewMode: string = this.param.reviewMode ?? '';
+    if (reviewMode === 'MAKEUP') {
+      // 补卡：词本过完即同步计划表（该日欠账清零）；makeupDay 由入口必填，防御性判空
+      const day: string = this.param.makeupDay ?? '';
+      if (day.length > 0) {
+        DataStore.INSTANCE.completeMakeup(day);
+      }
+      this.toast('补卡词本已过完，已同步计划表');
+    } else if (reviewMode === 'WRONG') {
+      this.toast('错词强化完成');
+    } else {
+      this.toast('本轮复习完成');
+    }
+    NavStore.INSTANCE.finishToHome();
   }
 
   /** 本轮是否存在未提交的判定：round 已过至少一题，或已进入复核清单 */
@@ -818,9 +1019,13 @@ export struct SpeechTestPage {
       return;
     }
     const total: number = this.items.length;
-    const message: string = this.phase === 'review'
-      ? `本轮 ${total} 个词已判定完，进度已保存，下次进入直接回到复核清单。`
-      : `已背到第 ${this.index + 1} / ${total} 个词，进度已保存，下次进入从这里继续。`;
+    const message: string = this.isReviewMode()
+      ? (this.phase === 'review'
+        ? `本轮 ${total} 个词已判定完，复习快过不做断点保存，退出后重新进入为全新一轮。`
+        : `已背到第 ${this.index + 1} / ${total} 个词，复习快过不做断点保存，退出后重新开始。`)
+      : (this.phase === 'review'
+        ? `本轮 ${total} 个词已判定完，进度已保存，下次进入直接回到复核清单。`
+        : `已背到第 ${this.index + 1} / ${total} 个词，进度已保存，下次进入从这里继续。`);
     try {
       promptAction.showDialog({
         title: '退出本轮？',
@@ -855,8 +1060,12 @@ export struct SpeechTestPage {
     return true;
   }
 
-  /** 顶栏标题：分组/重考时带批次信息 */
+  /** 顶栏标题：复习快过用入口标题（到期复习/错词强化复习/x月x日 补卡），分组/重考带批次信息 */
   private pageTitle(): string {
+    if (this.isReviewMode()) {
+      const t: string = this.param.title ?? '';
+      return t.length > 0 ? t : '语音复习';
+    }
     if (this.param.retest === true) {
       const n: number = this.param.batchTotal ?? 0;
       return n > 0 ? `模糊重考 · ${n} 个` : '模糊重考';

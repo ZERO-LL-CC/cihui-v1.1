@@ -373,14 +373,16 @@ def harvest_tatoeba(pairs, best, srcs, all_words, phrases):
 
 
 def harvest_ai(ai_pairs, best, srcs):
-    """AI 只填 Tatoeba 没覆盖的词（真人语料优先，质量更高）"""
+    """AI 只填 Tatoeba 没覆盖的词（真人语料优先，质量更高）。
+    敏感判定与 harvest_tatoeba 同规则：目标词自身属敏感词家族时放行
+    （ward 被 war+d 误命中、bomber/shooter/slaver 等同族词要能进）。"""
     n = 0
     for w, en, zh in ai_pairs:
         if w in best:
             continue
         if not en_ok(en) or not zh_ok(zh):
             continue
-        if en_soft(en) or zh_soft(zh):
+        if not sensitive_ok(w, en, zh):
             continue
         best[w] = (score(en, True), en, zh, True)
         srcs[w] = 'ai'

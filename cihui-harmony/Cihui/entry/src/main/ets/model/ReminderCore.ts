@@ -43,6 +43,6 @@ export function nextReminderDateTime(now: Date, hour: number, minute: number): R
 
 /** 提醒文案（固定汇总口径；到期词数依赖后台任务才能在触发时刻动态计算，本期不做） */
 export const REMINDER_TITLE: string = '该背单词啦';
-export const REMINDER_CONTENT: string = '今天的新词与到期复习还没完成，打开词慧学完再打卡';
-export const REMINDER_TEST_TITLE: string = '词慧提醒已开启';
+export const REMINDER_CONTENT: string = '今天的新词与到期复习还没完成，打开说词学完再打卡';
+export const REMINDER_TEST_TITLE: string = '说词提醒已开启';
 export const REMINDER_TEST_CONTENT: string = '这是一条测试通知，点击可直达今日打卡页';

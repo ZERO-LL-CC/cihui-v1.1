@@ -1,0 +1,147 @@
+PAGE_A status
+PAGE_A 身你,地位(n)
+PAGE_A witter 作家n)
+PAGE_A inspsrnatton
+PAGE_A 憨(n)
+PAGE_A retiremint
+PAGE_A 退体段(2)
+PAGE_A assistant 助手教n)
+PAGE_A width
+PAGE_A 宽度(n)
+PAGE_A cue
+PAGE_A 提示,结索们)
+PAGE_A scheme
+PAGE_A 方案(n)
+PAGE_A assign
+PAGE_A 指派,分配(V)
+PAGE_A mixer
+PAGE_A 搅拌器(n)
+PAGE_A wountary
+PAGE_A 自愿的0d))
+PAGE_A spill
+PAGE_A 愿出洒出,溢出(v)
+PAGE_A companion
+PAGE_A 同伴(n)
+PAGE_A purify
+PAGE_A 使净化(V)
+PAGE_A destination 灯终点(n)目的地
+PAGE_A spot
+PAGE_A 位置(n)都(v)
+PAGE_A bulk
+PAGE_A infectious 传等的(ad))
+PAGE_A 大部外n)
+PAGE_A caracity
+PAGE_A 能力1)容量
+PAGE_A curve
+PAGE_A 曲线,孤线(n)
+PAGE_A detect
+PAGE_A 发现,掌党V)测
+PAGE_A specify 具体统明(aU)
+PAGE_A gemerally
+PAGE_A 大多数情况下,总的来说lad
+PAGE_A desterate 绝望的(adi)
+PAGE_A elegant
+PAGE_A 优雅的,精美的adi)
+PAGE_A niwersal
+PAGE_A 普痛的(ad))
+PAGE_A porttou
+PAGE_A 一部外,食物的)一份(n)
+PAGE_A entire
+PAGE_A 全部的(ndi)
+PAGE_A numerous
+PAGE_A 众多的,许多的(adi)
+PAGE_A dossil
+PAGE_A 化万n)
+PAGE_A shed
+PAGE_A glartous
+PAGE_A competitor
+PAGE_A 流泪,血);去除V)
+PAGE_A 光军煌的(adj)
+PAGE_A 竟敏手(n)
+PAGE_A 装品n)
+PAGE_A ornament
+PAGE_A architect
+PAGE_A 建笼师(n)
+PAGE_A enrich
+PAGE_A 使丰富(V)
+PAGE_A weave
+PAGE_A 编1
+PAGE_A squeeze
+PAGE_A 榨取,该入心
+PAGE_A democratic 民主的(adi)
+PAGE_B sophisticated
+PAGE_B 精精密的ladi
+PAGE_B govern
+PAGE_B 控制(1)
+PAGE_B imitation
+PAGE_B 魔品,模仿(n)
+PAGE_B innovatzon
+PAGE_B 亲仿法(n)
+PAGE_B impressive
+PAGE_B 给人切象深的d
+PAGE_B 存货,暗备物(n)
+PAGE_B 竞争(V
+PAGE_B wompete
+PAGE_B revenne
+PAGE_B 收入(n)
+PAGE_B distribute
+PAGE_B 分
+PAGE_B representative 代表(n)
+PAGE_B conduilct
+PAGE_B 组织(V)
+PAGE_B Various
+PAGE_B 各种名样的
+PAGE_B studio
+PAGE_B 工作室(n)
+PAGE_B grasp
+PAGE_B 理解,领会(Vn)
+PAGE_B seuure
+PAGE_B 获得1
+PAGE_B exceed
+PAGE_B 超过(V)
+PAGE_B occasion
+PAGE_B 场,时刻n)
+PAGE_B precision
+PAGE_B 维确性(n)
+PAGE_B originate
+PAGE_B 发源(1)
+PAGE_B enthusiasm
+PAGE_B 热忱(n)
+PAGE_B appeal
+PAGE_B 有功(n)
+PAGE_B version
+PAGE_B 版本(n)
+PAGE_B charm
+PAGE_B 吸引力(n)
+PAGE_B underneath
+PAGE_B 在下面(n)
+PAGE_B critical
+PAGE_B 极重要的(a)
+PAGE_B bearing关系(n)
+PAGE_B collaborate 合作V
+PAGE_B strategy 策略(n)
+PAGE_B statement 声明,陈述(n)
+PAGE_B dim减弱(地v)
+PAGE_B maximum 最大数量的(ad)
+PAGE_B aontinuous连续的(ad))
+PAGE_B bereficial 有利的ad)
+PAGE_B medium 中身的ad))
+PAGE_B seal 封住,蜜(V
+PAGE_B toss 扔,抛(V)
+PAGE_B fragment (使破裂(1)
+PAGE_B efftient 交事高的(ad))
+PAGE_B exemtive 主管(n)
+PAGE_B consume 吃吃喝1)
+PAGE_B identify 发现(v)认出
+PAGE_B lompel 强迫(V)
+PAGE_B abundant 大量的(adi)
+PAGE_B trigger 引起(V)
+PAGE_B bold 大胆的(adi)
+PAGE_B profit 利泪(n)
+PAGE_B hardware 硬件(n)
+PAGE_B pack 包盒
+PAGE_B Visson
+PAGE_B lgic
+PAGE_B 愿寻,视力野(1)
+PAGE_B 逻辑(1)
+PAGE_B stock

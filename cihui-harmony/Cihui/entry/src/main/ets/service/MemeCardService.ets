@@ -53,10 +53,10 @@ export class MemeCardService {
   /** 默认分享文案（原句过长截断，避免系统分享面板文案溢出） */
   static shareText(spec: MemeCardSpec | null, fallback?: string): string {
     if (spec === null) {
-      return fallback ?? '我在词慧解锁了一个梗卡！';
+      return fallback ?? '我在说词解锁了一个梗卡！';
     }
     const sentence: string = spec.chinese.length > 18 ? `${spec.chinese.slice(0, 18)}…` : spec.chinese;
-    return `我在词慧解锁了一个梗：${sentence}，已掌握 ${spec.masteredCount} 个词！`;
+    return `我在说词解锁了一个梗：${sentence}，已掌握 ${spec.masteredCount} 个词！`;
   }
 
   /** 保存缓存图片（快照 JPEG）到系统相册（页面需先经 SaveButton 安全控件授权） */
@@ -73,7 +73,7 @@ export class MemeCardService {
     const shareData: systemShare.SharedData = new systemShare.SharedData({
       utd: utd.UniformDataType.JPEG,
       uri: fileUri.getUriFromPath(path),
-      title: '词慧梗卡',
+      title: '说词梗卡',
       description: text,
     });
     shareData.addRecord({

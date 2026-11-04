@@ -227,10 +227,10 @@ export function addWord(data: AppData, draft: WordDraft, now: number, intake: In
     schedules: [...data.schedules, schedule],
   };
   // F-D：scope 限制 = 背诵中词本 + 拍照/梗句例外词本
-  return {
+  return reopenTodayIfNeeded({
     ...next,
     schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next), exceptionWordIds(next)),
-  };
+  }, now);
 }
 
 export function updateWord(data: AppData, wordId: string, patch: Partial<WordDraft>): AppData {
@@ -315,10 +315,10 @@ export function importTransaction(data: AppData, drafts: WordDraft[], now: numbe
   const next: AppData = { ...data, words, records, schedules };
   // TODAY 分支也走 planNewWords：给可能存在的未排期词补排期；TODAY 词因 intake 标记不占配额。
   // F-D：scope 限制 = 背诵中词本 + 拍照/梗句例外词本。
-  return {
+  return reopenTodayIfNeeded({
     ...next,
     schedules: planNewWords(schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next), exceptionWordIds(next)),
-  };
+  }, now);
 }
 
 /* ================= 云词书下载导入（F5，mock 目录见 service/CloudCatalog.ts） ================= */
@@ -569,11 +569,45 @@ export function upsertCheckin(data: AppData, day: string, now: number, makeup: b
     p2ReviewDone: gates.p2,
     p3WrongDone: gates.p3,
     p3Required: gates.p3Required,
-    checkedIn: existing ? existing.checkedIn : canCheck,
+    // 达标即打上；已打卡保持不掉（重新打卡不回退、不重复计连击）
+    checkedIn: (existing !== undefined && existing.checkedIn) || canCheck,
     makeup: existing ? existing.makeup : false,
     streak: existing && existing.checkedIn ? existing.streak : streak,
+    // 重新打卡命中后清掉 reopened，按钮回到「今日已打卡」
+    reopened: false,
   };
   return { ...data, checkins: [...streakBase, record] };
+}
+
+/**
+ * F11 重新打卡：导入新词（拍照/梗句/云词书/手动）落今天后调用。
+ * 今天已打卡、且本次导入导致今日门控出现缺口（有新词落到今天还没学）时，
+ * 把今天的打卡记录置 reopened=true——打卡按钮从「今日已打卡」重开为「重新打卡」，
+ * 让用户把新词学完后能再打一次卡、刷新分享卡数字。
+ * 幂等：今天未打卡 / 门控仍全过 / 已置 reopened 时原样返回。
+ *
+ * 为什么需要落标记而不是纯派生：新词刚导入时门控确实会变红（纯派生能识别），
+ * 但用户把新词学完后门控又全绿，纯派生会误判成「无需重新打卡」，导致按钮直接跳回
+ * 「今日已打卡」、用户失去「再打一次卡」的入口。reopened 就是把这个入口钉住，
+ * 直到用户真正重新打卡（upsertCheckin 达标时清掉）。
+ */
+export function reopenTodayIfNeeded(data: AppData, now: number): AppData {
+  const day: string = dayKeyFromTs(now);
+  const rec: CheckInRecord | undefined =
+    data.checkins.find((c: CheckInRecord): boolean => c.day === day);
+  if (rec === undefined || !rec.checkedIn || rec.reopened === true) {
+    return data;
+  }
+  const gates: CheckinGateStatus =
+    evaluateGates({ schedules: data.schedules, records: data.records, settings: data.settings }, day);
+  if (gates.p1 && gates.p2 && (!gates.p3Required || gates.p3)) {
+    return data;
+  }
+  return {
+    ...data,
+    checkins: data.checkins.map((c: CheckInRecord): CheckInRecord =>
+      c.day === day ? { ...c, reopened: true } : c),
+  };
 }
 
 /** 当日前置达标状态（按钮置灰文案用），不落数据 */

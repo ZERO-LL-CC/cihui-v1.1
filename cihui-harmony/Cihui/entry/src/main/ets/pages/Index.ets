@@ -24,33 +24,31 @@ import { CloudBookDetailPage } from './books/CloudBookDetailPage';
 import { BookWordsPage } from './books/BookWordsPage';
 import { NewWordsPage } from './study/NewWordsPage';
 import { SpeechTestPage } from './study/SpeechTestPage';
-import { ReviewCardsPage } from './study/ReviewCardsPage';
 import { WrongBookPage } from './study/WrongBookPage';
-import { PlanTablePage } from './plan/PlanTablePage';
-import { MakeupDetailPage } from './plan/MakeupDetailPage';
-import { DailyNewPage } from './plan/DailyNewPage';
 import { LoginPage } from './auth/LoginPage';
+import { EmailLoginPage } from './auth/EmailLoginPage';
 import { RegisterPage } from './auth/RegisterPage';
 import { AccountPage } from './auth/AccountPage';
 import { FieldEditPage } from './auth/FieldEditPage';
+import { PlanTablePage } from './plan/PlanTablePage';
+import { MakeupDetailPage } from './plan/MakeupDetailPage';
+import { DailyNewPage } from './plan/DailyNewPage';
 import { MemeImportPage } from './meme/MemeImportPage';
-import { MemeReviewPage } from './meme/MemeReviewPage';
 import { MemeAlbumPage } from './meme/MemeAlbumPage';
 import { TodaySentencePage } from './study/TodaySentencePage';
 import { SentenceFavoritesPage } from './study/SentenceFavoritesPage';
+import { PrivacyPage } from './about/PrivacyPage';
 import type {
   BookWordsRouteParam,
   CameraRouteParam,
   CloudBookDetailRouteParam,
   DiyBookRouteParam,
-  FieldEditRouteParam,
   MakeupRouteParam,
-  MemeReviewRouteParam,
   NewWordsRouteParam,
   OcrPickRouteParam,
   OcrReviewRouteParam,
-  ReviewRouteParam,
-  SpeechRouteParam
+  SpeechRouteParam,
+  FieldEditRouteParam
 } from '../common/RouteNames';
 
 class TabSpec {
@@ -145,8 +143,6 @@ struct Index {
       NewWordsPage({ param: param as NewWordsRouteParam })
     } else if (name === RouteName.SPEECH_TEST) {
       SpeechTestPage({ param: param as SpeechRouteParam })
-    } else if (name === RouteName.REVIEW_CARDS) {
-      ReviewCardsPage({ param: param as ReviewRouteParam })
     } else if (name === RouteName.WRONG_BOOK) {
       WrongBookPage()
     } else if (name === RouteName.PLAN_TABLE) {
@@ -157,6 +153,8 @@ struct Index {
       DailyNewPage()
     } else if (name === RouteName.LOGIN) {
       LoginPage()
+    } else if (name === RouteName.EMAIL_LOGIN) {
+      EmailLoginPage()
     } else if (name === RouteName.REGISTER) {
       RegisterPage()
     } else if (name === RouteName.ACCOUNT) {
@@ -165,14 +163,14 @@ struct Index {
       FieldEditPage({ param: param as FieldEditRouteParam })
     } else if (name === RouteName.MEME_IMPORT) {
       MemeImportPage()
-    } else if (name === RouteName.MEME_REVIEW) {
-      MemeReviewPage({ param: param as MemeReviewRouteParam })
     } else if (name === RouteName.MEME_ALBUM) {
       MemeAlbumPage()
     } else if (name === RouteName.TODAY_SENTENCE) {
       TodaySentencePage()
     } else if (name === RouteName.SENTENCE_FAVORITES) {
       SentenceFavoritesPage()
+    } else if (name === RouteName.PRIVACY) {
+      PrivacyPage()
     }
   }
 

@@ -1,9 +1,9 @@
 /**
  * F11 打卡分享图服务
  *
- * - componentSnapshot.createFromBuilder 离屏快照分享卡片 @Builder → PixelMap；
+ * - componentSnapshot 快照分享卡片 → PixelMap；
  * - imagePacker 打包 JPEG 写入应用缓存目录；
- * - 通过安全组件 SaveButton 的点击授权（无需手动申请相册权限），
+ * - 通过安全组件 SaveButton 的点击授权（临时授予 WRITE_IMAGEVIDEO，无需申请受限权限），
  *   MediaAssetChangeRequest.createImageAssetRequest 保存到系统相册。
  * 任一步失败都向上抛错，由页面 Toast 提示，不假装成功。
  */
@@ -48,17 +48,41 @@ export class ShareService {
   }
 
   /**
-   * 生成分享卡片并保存到相册。
-   * @param context UIAbility 上下文
-   * @param builder 分享卡片 @Builder（CustomBuilder）
-   * @param fileName 文件名（不含扩展名）
+   * 按组件 id 截图并打包成 JPEG（组件需真实挂载）。
+   * createFromBuilder 对未挂载的 @Builder 会抛 observeComponentCreation2 of undefined，
+   * 所以分享卡改为「真实挂载 + 按 id 取图」，宿主压在不透明页面层下面，用户看不见。
    */
-  static async saveCardToGallery(context: common.Context, builder: CustomBuilder, fileName: string): Promise<void> {
-    const path: string = await ShareService.snapshotBuilderToJpg(context, builder, fileName);
-    await ShareService.saveFileToGallery(context, path);
+  static async snapshotByIdToJpg(context: common.Context, id: string, fileName: string): Promise<string> {
+    const pixelMap: image.PixelMap = await componentSnapshot.get(id);
+    try {
+      const packer: image.ImagePacker = image.createImagePacker();
+      let buffer: ArrayBuffer = new ArrayBuffer(0);
+      try {
+        const packOptions: image.PackingOption = {
+          format: 'image/jpeg',
+          quality: 95,
+        } as image.PackingOption;
+        buffer = await packer.packing(pixelMap, packOptions);
+      } finally {
+        packer.release();
+      }
+      const path: string = `${context.cacheDir}/${fileName}.jpg`;
+      const file = fs.openSync(path, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+      try {
+        fs.writeSync(file.fd, buffer);
+      } finally {
+        fs.closeSync(file);
+      }
+      return path;
+    } finally {
+      pixelMap.release();
+    }
   }
 
-  /** 把缓存目录里的图片文件保存到系统相册 */
+  /**
+   * 把缓存目录里的图片文件保存到系统相册。
+   * 依赖 SaveButton 点击时授予的临时 WRITE_IMAGEVIDEO，必须在点击回调链里调用。
+   */
   static async saveFileToGallery(context: common.Context, path: string): Promise<void> {
     const uri: string = `file://${path}`;
     const request: photoAccessHelper.MediaAssetChangeRequest =

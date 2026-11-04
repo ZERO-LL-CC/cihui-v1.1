@@ -92,16 +92,12 @@ struct CalendarCell {
 
   @Builder
   BigCheck(white: boolean) {
-    Path()
-      .width(16)
-      .height(16)
-      .commands('M2.5 9 L6.6 13 L13.8 4.6')
-      .fillOpacity(0)
-      .stroke(white ? Color.White : Colors.BRAND)
-      .strokeWidth(3)
-      .strokeLineCap(LineCapStyle.Round)
-      .strokeLineJoin(LineJoinStyle.Round)
-      .margin({ top: 4 })
+    // 勾要撑满格子下半部才像「打勾」，16 时只剩一点，扩到 19
+    Image($r('app.media.ic_check'))
+      .width(19)
+      .height(19)
+      .fillColor(white ? Color.White : Colors.BRAND)
+      .margin({ top: 2 })
   }
 
   @Builder

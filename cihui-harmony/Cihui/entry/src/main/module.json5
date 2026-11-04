@@ -26,16 +26,6 @@
         ]
       }
     ],
-    // Account Kit 华为账号一键登录所需的 OAuth 2.0 客户端 ID。
-    // 取值：AGC「项目设置 > 常规 > 应用 > OAuth 2.0 客户端ID」。
-    // 若 AGC 中 Client ID 与 APP ID 相同，可删除整段 metadata。
-    // 未替换占位符时，点击登录按钮会报 1001502003（clientId 无效）。
-    "metadata": [
-      {
-        "name": "client_id",
-        "value": "REPLACE_WITH_AGC_CLIENT_ID"
-      }
-    ],
     "requestPermissions": [
       // 注：本应用已全离线（例句来自 rawfile，AI 造句已下线），
       // 故不再申请 ohos.permission.INTERNET；上架时隐私声明与备案口径都更简单。
@@ -43,13 +33,6 @@
       {
         "name": "ohos.permission.CAMERA",
         "reason": "$string:perm_camera_reason",
-        "usedScene": {
-          "abilities": ["EntryAbility"],
-          "when": "inuse"
-        }
-      },
-      {
-        "name": "ohos.permission.VIBRATE",
         "usedScene": {
           "abilities": ["EntryAbility"],
           "when": "inuse"

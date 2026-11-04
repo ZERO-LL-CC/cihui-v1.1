@@ -1,34 +1,25 @@
 /**
- * 词慧 · F17 梗句导入与背诵 / F18 徽章分级 —— 纯逻辑层。
+ * 词慧 · F17 梗句导入 / F18 徽章与梗卡 —— 纯逻辑层。
  *
  * 不依赖任何 ArkUI / 系统 API，可被 Node 直接 import 做单元测试。
- * 口径来源：F17-F20 功能卡（_f17_f20_spec.txt）：
+ * 口径来源：F17-F20 功能卡（_f17_f20_spec.txt）+「梗句背诵并入统一背词流程」重构：
  * - 拆词：小写化 → 按空格与标点分词 → 停用词过滤 → 去重 → 丢纯数字；
  * - 候选三态：已掌握（绿，默认不勾且置灰）/ 学习中（黄，默认勾）/ 新词（蓝，默认勾）；
- * - 有效词 < 2 拦截；全部已掌握给「再背一遍强化」；
- * - 新词走 F2 正常排期，学习中词只进本次会话、不改排期；
- * - 会话每判一词落盘可恢复，全部 reviewed 即 completed（背完=每词完成过一次三档判定，不要求全对）。
+ * - 有效词 < 2 拦截；
+ * - 背诵不再有专用会话：新词走 RepoCore.importTransaction 统一排期（QUEUE/TODAY），
+ *   F18 梗卡在「梗句关联全部词 mastered」后由 unlockMemeCards 自动落卡。
  */
 import type {
   MemeBadgeLevel,
   MemeCard,
   MemeSentence,
   ReviewSchedule,
-  StudyRecord,
-  StudySession,
-  SessionItem,
-  Verdict,
   Word,
   WordBook,
 } from './Types';
-import type { AppData } from './RepoCore';
-import {
-  activeScopeWordIds,
-  applyJudgeToData,
-  exceptionWordIds,
-  genId,
-} from './RepoCore';
-import { newImportedSchedule, newStudyRecord, planNewWords } from './SchedulerCore';
+import type { AppData, WordDraft } from './RepoCore';
+import { genId } from './RepoCore';
+import { dayKeyFromTs } from './SchedulerCore';
 
 /* ================= 拆词与停用词 ================= */
 
@@ -227,19 +218,117 @@ export function shuffleList<T>(input: T[], rng?: () => number): T[] {
   return out;
 }
 
-/* ================= 导入事务：建梗句词本 + 新词入库 + 建会话 ================= */
+/* ================= 导入事务：建梗句词本 + 新词走统一导入 + 建梗句记录 ================= */
 
-export interface MemeImportInput {
-  chinese: string;
-  english: string;
-  /** 确认页最终勾选的候选（顺序无所谓，内部洗牌） */
-  candidates: MemeCandidate[];
+/**
+ * 导入第一步：只建 MEME 词本（重名自动加序号）。
+ * 新词入库由调用方走 RepoCore.importTransaction（与拍照/云书同一事务、同一 intake 口径），
+ * 梗句记录由 createMemeRecord 在词 id 解析后补上。
+ */
+export function createMemeBook(data: AppData, chinese: string, now: number):
+  { data: AppData; bookId: string } {
+  const bookId: string = genId('memebook');
+  const book: WordBook = {
+    id: bookId,
+    name: uniqueMemeBookName(data, chinese),
+    source: 'MEME',
+    createdAt: now,
+  };
+  return { data: { ...data, books: [...data.books, book] }, bookId };
 }
 
-export interface MemeImportResult {
-  data: AppData;
-  meme: MemeSentence;
-  session: StudySession;
+/**
+ * 拆词候选 → 统一导入的 WordDraft（只转新词；已有词复用原 id 不重复入库）。
+ * 词典查到的音标/释义随 draft 带走；未收录的词允许缺释义入库（source=MEME）。
+ * 未勾选的词也入库并排期（与旧版口径一致：整句拆出的词都归梗句词本）。
+ */
+export function memeWordDrafts(candidates: MemeCandidate[], bookId: string): WordDraft[] {
+  const out: WordDraft[] = [];
+  for (const c of candidates) {
+    if (c.existingWordId !== '') {
+      continue;
+    }
+    out.push({
+      bookId,
+      english: c.token,
+      phonetic: (c.phonetic ?? '').trim(),
+      meanings: splitMeanings(c.meaning),
+      source: 'MEME',
+      diySupplement: false,
+    });
+  }
+  return out;
+}
+
+/**
+ * 已有词但词库释义为空的（老版本梗句导入的遗留数据）：查到释义就顺手补上，
+ * 不覆盖用户手填的释义；音标同理（已有音标优先）。
+ */
+export function backfillMemeMeanings(data: AppData, candidates: MemeCandidate[]): AppData {
+  const backfill: Map<string, MemeCandidate> = new Map<string, MemeCandidate>();
+  for (const c of candidates) {
+    if (c.existingWordId !== '' && splitMeanings(c.meaning).length > 0) {
+      backfill.set(c.existingWordId, c);
+    }
+  }
+  if (backfill.size === 0) {
+    return data;
+  }
+  return {
+    ...data,
+    words: data.words.map((w: Word): Word => {
+      if (w.meanings.length > 0) {
+        return w;
+      }
+      const c: MemeCandidate | undefined = backfill.get(w.id);
+      if (c === undefined) {
+        return w;
+      }
+      const meanings: string[] = splitMeanings(c.meaning);
+      if (meanings.length === 0) {
+        return w;
+      }
+      return {
+        ...w,
+        phonetic: w.phonetic.length > 0 ? w.phonetic : (c.phonetic ?? '').trim(),
+        meanings,
+        missingMeaning: false,
+      };
+    }),
+  };
+}
+
+/** 解析梗句关联词 id：已有词用 existingWordId，新词按词本 + 小写英文回查导入结果 */
+export function resolveMemeWordIds(data: AppData, candidates: MemeCandidate[],
+  bookId: string): string[] {
+  const out: string[] = [];
+  for (const c of candidates) {
+    if (c.existingWordId !== '') {
+      out.push(c.existingWordId);
+      continue;
+    }
+    const hit: Word | undefined = data.words.find((w: Word): boolean =>
+      w.bookId === bookId && w.english.toLowerCase() === c.token);
+    if (hit !== undefined) {
+      out.push(hit.id);
+    }
+  }
+  return out;
+}
+
+/** 导入最后一步：建梗句记录（词 id 已全部解析；梗卡相册与 F5 词本都依赖它） */
+export function createMemeRecord(data: AppData, chinese: string, english: string,
+  bookId: string, wordIds: string[], now: number): { data: AppData; meme: MemeSentence } {
+  const meme: MemeSentence = {
+    id: genId('meme'),
+    chinese,
+    english,
+    bookId,
+    wordIds,
+    createdAt: now,
+    lastStudiedAt: 0,
+  };
+  return { data: { ...data, memes: [...data.memes, meme] }, meme };
 }
 
 /**
@@ -270,267 +359,59 @@ function uniqueMemeBookName(data: AppData, chinese: string): string {
   return name;
 }
 
-/**
- * 一次性事务导入梗句并创建首场背诵会话：
- * 1) 建 MEME 词本；2) 新词建 Word+Record+Schedule（source=MEME，允许缺释义）；
- * 3) 已存在的学习中词复用 id；4) 统一 planNewWords 排期；5) 建 meme_sentence；
- * 6) 勾选词洗牌后建 in_progress 会话。任一步异常整体不产生半截数据（调用方持原数据）。
- */
-export function createMemeImport(data: AppData, input: MemeImportInput, now: number,
-  rng?: () => number): MemeImportResult {
-  const chinese: string = input.chinese.trim();
-  const english: string = input.english.trim();
-  if (english.length === 0) {
-    throw new Error('英文句子不能为空');
-  }
-  const chosen: MemeCandidate[] = input.candidates.filter((c: MemeCandidate): boolean => c.selected);
-  if (chosen.length < 2) {
-    throw new Error('至少保留 2 个有效词才能开始背诵');
-  }
-
-  let next: AppData = JSON.parse(JSON.stringify(data)) as AppData;
-
-  // 1) 梗句词本
-  const bookId: string = genId('memebook');
-  const book: WordBook = {
-    id: bookId,
-    name: uniqueMemeBookName(next, chinese),
-    source: 'MEME',
-    createdAt: now,
-  };
-  next = { ...next, books: [...next.books, book] };
-
-  // 2) 逐词：新词入库，旧词复用（P20 性能口径：先收集再一次性追加，
-  //    避免循环内每个新词都全量复制 words/records/schedules 数组）
-  const sessionWordIds: string[] = [];
-  const allTokenIds: string[] = [];
-  const newWords: Word[] = [];
-  const newRecords: StudyRecord[] = [];
-  const newSchedules: ReviewSchedule[] = [];
-  // 已有词但词库里释义为空的（老版本梗句导入的遗留数据）：查到释义就顺手补上，不覆盖用户手填
-  const backfill: Map<string, MemeCandidate> = new Map<string, MemeCandidate>();
-  for (const c of input.candidates) {
-    let wordId: string = c.existingWordId;
-    if (wordId === '') {
-      wordId = genId('memeword');
-      const meanings: string[] = splitMeanings(c.meaning);
-      newWords.push({
-        id: wordId,
-        bookId,
-        english: c.token,
-        phonetic: (c.phonetic ?? '').trim(),
-        meanings,
-        source: 'MEME',
-        missingMeaning: meanings.length === 0,
-        diySupplement: false,
-        createdAt: now,
-      });
-      newRecords.push(newStudyRecord(wordId));
-      newSchedules.push(newImportedSchedule(wordId));
-    } else if (splitMeanings(c.meaning).length > 0) {
-      backfill.set(wordId, c);
-    }
-    allTokenIds.push(wordId);
-    if (c.selected) {
-      sessionWordIds.push(wordId);
-    }
-  }
-  let mergedWords: Word[] = [...next.words, ...newWords];
-  if (backfill.size > 0) {
-    mergedWords = mergedWords.map((w: Word): Word => {
-      if (w.meanings.length > 0) {
-        return w;
-      }
-      const c: MemeCandidate | undefined = backfill.get(w.id);
-      if (c === undefined) {
-        return w;
-      }
-      const meanings: string[] = splitMeanings(c.meaning);
-      if (meanings.length === 0) {
-        return w;
-      }
-      return {
-        ...w,
-        phonetic: w.phonetic.length > 0 ? w.phonetic : (c.phonetic ?? '').trim(),
-        meanings,
-        missingMeaning: false,
-      };
-    });
-  }
-  next = {
-    ...next,
-    words: mergedWords,
-    records: [...next.records, ...newRecords],
-    schedules: [...next.schedules, ...newSchedules],
-  };
-
-  // 3) 新词按每日新词量统一排期（与 F4/F5 同口径）
-  next = {
-    ...next,
-    // F-D：梗句词本属例外词本，但重排口径须与全局一致（scope 外暂停词不排期）
-    schedules: planNewWords(next.schedules, now, next.settings.dailyNewCount, activeScopeWordIds(next), exceptionWordIds(next)),
-  };
-
-  // 4) 梗句记录
-  const memeId: string = genId('meme');
-  const meme: MemeSentence = {
-    id: memeId,
-    chinese,
-    english,
-    bookId,
-    wordIds: allTokenIds,
-    createdAt: now,
-    lastStudiedAt: 0,
-  };
-  next = { ...next, memes: [...next.memes, meme] };
-
-  // 5) 首场会话（洗牌）
-  const order: string[] = shuffleList(sessionWordIds, rng);
-  const items: SessionItem[] = order.map((id: string): SessionItem => ({
-    wordId: id,
-    state: 'pending',
-    verdict: null,
-  }));
-  const session: StudySession = {
-    id: genId('memsess'),
-    memeId,
-    items,
-    createdAt: now,
-    completedAt: 0,
-    status: 'in_progress',
-  };
-  next = { ...next, sessions: [...next.sessions, session] };
-
-  return { data: next, meme, session };
-}
-
-/** 为同一梗句「再背一遍」：全部词（含已掌握）重新洗牌建会话 */
-export function createRestudySession(data: AppData, meme: MemeSentence, now: number,
-  rng?: () => number): { data: AppData; session: StudySession } {
-  const order: string[] = shuffleList(meme.wordIds, rng);
-  const items: SessionItem[] = order.map((id: string): SessionItem => ({
-    wordId: id,
-    state: 'pending',
-    verdict: null,
-  }));
-  const session: StudySession = {
-    id: genId('memsess'),
-    memeId: meme.id,
-    items,
-    createdAt: now,
-    completedAt: 0,
-    status: 'in_progress',
-  };
-  return { data: { ...data, sessions: [...data.sessions, session] }, session };
-}
-
-/* ================= 会话推进（每判一词落盘，强杀可恢复） ================= */
-
-export interface SessionAdvance {
-  data: AppData;
-  session: StudySession;
-  /** 本次判定后是否全部完成（背完=每词都 reviewed 一次，不要求全对） */
-  completed: boolean;
-  /** 本轮判「认识」的词数（F18 徽章用） */
-  knownCount: number;
-}
-
-/**
- * 判定会话中的一个词：
- * - 新词（调度仍是 NEW / 记录未首学）走 F2 首测判定，正常排期、不认识入错词本；
- * - 学习中词只进本次会话、不改排期（功能卡 Q 口径），仅记录会话内 verdict；
- * - VAGUE 的本轮重排在 UI 层把词插回队尾（state 仍置 reviewed？——不：
- *   模糊要求重考，重考通过才算 reviewed，因此 VAGUE 保持 pending，仅记 verdict）。
- */
-export function advanceSession(
-  data: AppData,
-  sessionId: string,
-  wordId: string,
-  verdict: Verdict,
-  now: number,
-): SessionAdvance {
-  const idx: number = data.sessions.findIndex((s: StudySession): boolean => s.id === sessionId);
-  if (idx < 0) {
-    throw new Error('背诵会话不存在：' + sessionId);
-  }
-  const session0: StudySession = data.sessions[idx];
-
-  let next: AppData = data;
-  const schedule: ReviewSchedule | undefined =
-    data.schedules.find((s: ReviewSchedule): boolean => s.wordId === wordId);
-  const isNew: boolean = schedule !== undefined && schedule.stage === 'NEW';
-
-  if (isNew) {
-    // 新词：首测判定，走 F2 正常调度（认识→次日 R1；不认识→清零入错词本；模糊→停留+错词本）
-    const applied = applyJudgeToData(next, wordId, 'FIRST', verdict, now);
-    next = applied.data;
-  }
-  // 学习中词：不动调度（只进本次会话）
-
-  // 更新会话项
-  const items: SessionItem[] = session0.items.map((it: SessionItem): SessionItem => {
-    if (it.wordId !== wordId) {
-      return it;
-    }
-    // 模糊：本轮末尾重考，保持 pending；认识/不认识：reviewed
-    return {
-      wordId,
-      state: verdict === 'VAGUE' ? 'pending' : 'reviewed',
-      verdict,
-    };
-  });
-  const allReviewed: boolean = items.every((it: SessionItem): boolean => it.state === 'reviewed');
-  let knownCount: number = 0;
-  for (const it of items) {
-    if (it.verdict === 'KNOWN') {
-      knownCount += 1;
-    }
-  }
-  const completedAt: number = allReviewed ? now : 0;
-  const session: StudySession = {
-    ...session0,
-    items,
-    completedAt,
-    status: allReviewed ? 'completed' : 'in_progress',
-  };
-  const sessions: StudySession[] = next.sessions.slice();
-  sessions[idx] = session;
-  next = { ...next, sessions };
-
-  // 完成时回写梗句最近学习时间
-  if (allReviewed) {
-    next = {
-      ...next,
-      memes: next.memes.map((m: MemeSentence): MemeSentence =>
-        m.id === session.memeId ? { ...m, lastStudiedAt: now } : m),
-    };
-  }
-  return { data: next, session, completed: allReviewed, knownCount };
-}
-
-/** 会话内剩余未背词数 */
-export function sessionPendingCount(session: StudySession): number {
-  return session.items.filter((it: SessionItem): boolean => it.state === 'pending').length;
-}
-
-/** 找某梗句（或全局）最近一场未完成会话，用于「上次还差 n 个词，继续」 */
-export function findResumableSession(data: AppData, memeId?: string): StudySession | null {
-  let found: StudySession | null = null;
-  for (const s of data.sessions) {
-    if (s.status !== 'in_progress') {
-      continue;
-    }
-    if (memeId !== undefined && s.memeId !== memeId) {
-      continue;
-    }
-    if (found === null || s.createdAt > found.createdAt) {
-      found = s;
-    }
-  }
-  return found;
-}
-
 /* ================= F18 徽章分级（纯函数，先落在这里） ================= */
+
+/**
+ * 梗句关联词的已掌握数（实时口径：调度 stage/status=MASTERED 计已掌握，
+ * 与 buildCandidates 三态判定同源）。
+ */
+export function memeMasteredCount(data: AppData, meme: MemeSentence): number {
+  const schedMap: Map<string, ReviewSchedule> = new Map<string, ReviewSchedule>();
+  for (const s of data.schedules) {
+    schedMap.set(s.wordId, s);
+  }
+  let n: number = 0;
+  for (const id of meme.wordIds) {
+    if (kindOfScheduled(schedMap.get(id)) === 'MASTERED') {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+/**
+ * F18 解锁（梗句背诵并入统一背词流程后的唯一解锁口径）：
+ * 梗句关联的全部词都 mastered 时自动落梗卡；同梗句只落一张，已有卡不重复落。
+ * masteredCount 实时按梗句关联词内已掌握数计算；cardImagePath 留空串，
+ * 相册走同构 ArkUI 降级卡（专用背诵页的 Canvas 出卡入口已删除）。
+ * 每次学习判定落库后调用；不满足条件的梗句原样跳过（幂等）。
+ */
+export function unlockMemeCards(data: AppData, now: number): AppData {
+  if (data.memes.length === 0) {
+    return data;
+  }
+  const unlocked: Set<string> = new Set<string>(
+    data.memeCards.map((c: MemeCard): string => c.memeId));
+  let next: AppData = data;
+  for (const meme of data.memes) {
+    if (unlocked.has(meme.id) || meme.wordIds.length === 0) {
+      continue;
+    }
+    const mastered: number = memeMasteredCount(next, meme);
+    if (mastered < meme.wordIds.length) {
+      continue;
+    }
+    const result = upsertMemeCardInto(next.memeCards, {
+      memeId: meme.id,
+      cardImagePath: '',
+      masteredCount: mastered,
+      totalCount: meme.wordIds.length,
+      unlockedDay: dayKeyFromTs(now),
+    }, now);
+    next = { ...next, memeCards: result.cards };
+  }
+  return next;
+}
 
 /**
  * 掌握比例徽章：≥80% 梗王金 / 50–79% 梗手银 / <50% 梗新人铜。

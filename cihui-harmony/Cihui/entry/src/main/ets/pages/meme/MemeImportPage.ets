@@ -3,8 +3,9 @@
  * 步骤一：中文多行输入 + 自动英译（三级链路：端侧神经网络真翻译 → 离线整句/梗词库兜底）
  *        + 梗味命中建议（点一行把英文俚语插到英文框末尾）+ 英文多行框；
  * 步骤二：拆词确认——逐词三态标签（已掌握绿/学习中黄/新词蓝）、勾选、左滑删除、顶部汇总；
- *        有效词 <2 拦截；全部已掌握给「再背一遍强化」。
- * 「导入并开始背诵」单次事务落库后，回「我的词本」Tab 并压入梗句背诵页。
+ *        有效词 <2 拦截。
+ * 「导入」单次事务落库（建梗句词本 + 新词走统一导入流程）后，回「我的」Tab。
+ * 梗句背诵已并入统一背词流程：不再创建背诵会话，也不跳梗句闪卡页。
  *
  * 端侧翻译（F19）三条铁律：
  * 1. 模型只在**本页**存活：aboutToAppear 预热 + 挂载隐藏 Web 宿主，aboutToDisappear 卸载。
@@ -16,8 +17,6 @@
 import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
-import { RouteName } from '../../common/RouteNames';
-import type { MemeReviewRouteParam } from '../../common/RouteNames';
 import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { TranslateService } from '../../service/TranslateService';
@@ -30,7 +29,7 @@ import { appendEnglish, PLACEHOLDER, primarySlang } from '../../model/OfflineTra
 import type { NmtResult, NmtState } from '../../model/NmtEngine';
 import { nmtEngine } from '../../model/NmtEngine';
 import { NmtHost } from '../../components/NmtHost';
-import type { Word } from '../../model/Types';
+import type { IntakeMode, Word } from '../../model/Types';
 
 /** 英文框内容的来源标注：端侧模型 / 离线整句 / 离线相近 / 离线梗词脚手架 */
 type EnglishSource = '' | 'MODEL' | 'BANK' | 'NEAR' | 'SCAFFOLD';
@@ -74,6 +73,7 @@ export struct MemeImportPage {
   @Local englishSource: EnglishSource = '';
 
   aboutToAppear(): void {
+    // 输入页入场：stepOpacity 初值 0，这里必须跑一次动画，否则整页停在透明态
     this.playStepEnter();
     // 提前把 3.5MB 词典读进内存：进确认页时已就绪，用户点「拆词」不卡
     this.ensureDict();
@@ -449,7 +449,7 @@ export struct MemeImportPage {
       return;
     }
     const candidates: MemeCandidate[] = DataStore.INSTANCE.memeCandidates(this.english);
-    // 有效词 <2 必须在这里拦下：否则会进确认页卡住（导入时 createMemeImport 也会拒）
+    // 有效词 <2 必须在这里拦下：否则会进确认页卡住（导入时 importMeme 也会拒）
     if (candidates.length < 2) {
       this.toast(`这句英文只拆出 ${candidates.length} 个可背词，至少需要 2 个，请补充英文后再拆词`);
       return;
@@ -468,6 +468,7 @@ export struct MemeImportPage {
     });
     this.rows = rowList;
     this.step = 2;
+    this.releaseNmt();
     this.playStepEnter();
     if (!dictReady) {
       this.toast('离线词典未能加载，本次拆出的词暂无中文释义');
@@ -476,7 +477,13 @@ export struct MemeImportPage {
 
   private backToInput(): void {
     this.step = 1;
+    this.startNmt();
     this.playStepEnter();
+  }
+
+  /** 进确认页就卸载翻译宿主：确认页不需要翻译，却要背着 565MB 的 Web 渲染进程，整页会发卡 */
+  private releaseNmt(): void {
+    this.showNmt = false;
   }
 
   /** 复制候选并改勾选态：音标/释义/原形必须一起带走，否则导入后卡片背面又空了 */
@@ -523,7 +530,7 @@ export struct MemeImportPage {
     this.rows = this.rows.filter((r: CandidateRow): boolean => r !== row);
   }
 
-  /** 全部已掌握时的「再背一遍强化」：全部纳入本次会话 */
+  /** 全部已掌握时的「再背一遍强化」：全部纳入本次导入（梗卡再刷新一遍口径） */
   private forceRestudyAll(): void {
     const next: CandidateRow[] = this.rows.map((r: CandidateRow): CandidateRow => {
       const c: MemeCandidate = this.copyCandidate(r.candidate, true, true);
@@ -540,8 +547,11 @@ export struct MemeImportPage {
     return out;
   }
 
-  /** 导入并开始背诵（单次事务） */
-  private doImport(): void {
+  /**
+   * 导入梗句（单次事务）：建梗句词本 + 新词走统一导入流程（importWords 同口径），
+   * 不再创建背诵会话；成功回「我的」Tab 看新词本。
+   */
+  private doImport(intake: IntakeMode): void {
     const candidates: MemeCandidate[] = this.currentCandidates();
     const chosen: number = candidates.filter((c: MemeCandidate): boolean => c.selected).length;
     if (chosen < 2) {
@@ -549,18 +559,18 @@ export struct MemeImportPage {
       return;
     }
     if (this.chinese.trim().length === 0) {
-      // 允许没有中文？功能卡要求中文原句用于看原句/卡片，拦截
-      this.toast('请补填中文原句，背诵时可「看原句」');
+      // 功能卡要求中文原句用于梗卡相册展示，拦截
+      this.toast('请补填中文原句，梗卡相册需要展示原句');
       this.step = 1;
       this.playStepEnter();
       return;
     }
     try {
-      const info = DataStore.INSTANCE.importMeme(this.chinese, this.english, candidates);
-      this.toast('梗句词本已创建，开始背诵');
-      // 回「我的词本」Tab 再压入背诵页（沿用云书下载可靠落地范式）
-      const p: MemeReviewRouteParam = { memeId: info.memeId, sessionId: info.sessionId };
-      NavStore.INSTANCE.backToTabThenPush(2, RouteName.MEME_REVIEW, p);
+      DataStore.INSTANCE.importMeme(this.chinese.trim(), this.english.trim(), candidates, intake);
+      this.toast(intake === 'TODAY'
+        ? '梗句词本已创建，新词已加入今日计划'
+        : '梗句词本已创建，新词将按每日新词量排队');
+      NavStore.INSTANCE.backToTab(2);
     } catch (e) {
       this.toast((e as Error)?.message ?? '导入失败，请重试');
     }
@@ -587,79 +597,92 @@ export struct MemeImportPage {
   @Builder
   LabelTag(kind: MemeCandidateKind) {
     if (kind === 'NEW') {
-      Text('新词').fontSize(11).fontColor(Colors.BRAND)
-        .backgroundColor(Colors.BRAND_SOFT).borderRadius(8).padding({ left: 8, right: 8, top: 3, bottom: 3 })
+      Text('新词').fontSize(10).fontColor(Colors.BRAND)
+        .backgroundColor(Colors.BRAND_SOFT).borderRadius(6).padding({ left: 7, right: 7, top: 2, bottom: 2 })
     } else if (kind === 'LEARNING') {
-      Text('学习中').fontSize(11).fontColor(Colors.FUZZY_ORANGE)
-        .backgroundColor(Colors.FUZZY_ORANGE_SOFT).borderRadius(8)
-        .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+      Text('学习中').fontSize(10).fontColor(Colors.FUZZY_ORANGE)
+        .backgroundColor(Colors.FUZZY_ORANGE_SOFT).borderRadius(6)
+        .padding({ left: 7, right: 7, top: 2, bottom: 2 })
     } else {
-      Text('已掌握').fontSize(11).fontColor(Colors.KNOW_GREEN)
-        .backgroundColor(Colors.KNOW_GREEN_SOFT).borderRadius(8)
-        .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+      Text('已掌握').fontSize(10).fontColor(Colors.KNOW_GREEN)
+        .backgroundColor(Colors.KNOW_GREEN_SOFT).borderRadius(6)
+        .padding({ left: 7, right: 7, top: 2, bottom: 2 })
     }
   }
 
-  /** 确认页一行的中文副标题：释义 + 原形提示；未收录时明确告知 */
+  /** 确认页一行的中文副标题：只给释义本体（原形另起小标签，别把整行挤爆） */
   private rowMeaning(row: CandidateRow): string {
     const m: string = (row.candidate.meaning ?? '').trim();
-    if (m.length === 0) {
-      return '暂无释义，背诵时看原句语境';
-    }
-    const lemma: string = row.candidate.lemma ?? '';
-    return lemma.length > 0 ? `释义见原形 ${lemma}：${m}` : m;
+    return m.length === 0 ? '暂无释义，背诵时看原句语境' : m;
   }
 
   @Builder
-  CandidateRowView(row: CandidateRow) {
+  CandidateRowView(row: CandidateRow, idx: number) {
     Stack({ alignContent: Alignment.End }) {
       // 底层删除区
       Row() {
         Blank()
         Button('删除')
           .fontSize(14).fontColor(Colors.WHITE).backgroundColor(Colors.UNKNOWN_RED)
-          .height(60).width(72).borderRadius(Radius.CONTROL)
+          .height(68).width(76).borderRadius(0)
           .onClick(() => this.removeRow(row))
       }
-      .width('100%').height(64).padding({ right: 4 })
+      .width('100%').height(68)
 
       // 前景行（跟手左滑）
       Row() {
-        // 勾选圆
-        Stack() {
-          if (row.candidate.selected) {
-            Circle({ width: 22, height: 22 }).fill(Colors.BRAND)
-            Text('✓').fontSize(13).fontColor(Colors.WHITE).fontWeight(FontWeight.Bold)
-          } else {
-            Circle({ width: 22, height: 22 }).fill(Colors.WHITE)
-              .stroke(row.candidate.toggleable ? Colors.TEXT_WEAK : Colors.DIVIDER)
-              .strokeWidth(1.5)
-          }
-        }
-        .width(34).height(60)
+        Text(idx < 9 ? `0${idx + 1}` : `${idx + 1}`)
+          .fontSize(10).fontColor(Colors.TEXT_WEAK).width(20)
 
         Column() {
           Row() {
             Text(row.candidate.token)
-              .fontSize(17).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
+              .fontSize(15.5).fontFamily('Georgia').fontWeight(FontWeight.Medium)
+              .fontColor(row.candidate.selected ? Colors.BRAND_PRESSED : Colors.TEXT_MAIN)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              .flexShrink(1)
             if ((row.candidate.phonetic ?? '').length > 0) {
               Text(row.candidate.phonetic ?? '')
-                .fontSize(11).fontColor(Colors.TEXT_WEAK).margin({ left: 6 })
+                .fontSize(9.5).fontColor(Colors.TEXT_WEAK).flexShrink(0).margin({ left: 6 })
             }
+            Blank()
+            this.LabelTag(row.candidate.kind)
           }
-          .width('100%')
+          .width('100%').alignItems(VerticalAlign.Center)
 
-          Text(this.rowMeaning(row))
-            .fontSize(12).fontColor(Colors.TEXT_SUB)
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width('100%').margin({ top: 3 })
+          Row() {
+            if ((row.candidate.lemma ?? '').length > 0
+              && (row.candidate.lemma ?? '') !== row.candidate.token) {
+              Text(`≡${row.candidate.lemma}`)
+                .fontSize(9.5).fontColor(Colors.TEXT_WEAK).flexShrink(0).margin({ right: 5 })
+            }
+            Text(this.rowMeaning(row))
+              .fontSize(11.5).fontColor(Colors.TEXT_SUB)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+          }
+          .width('100%').margin({ top: 3 })
         }
-        .layoutWeight(1).alignItems(HorizontalAlign.Start).margin({ left: 4, right: 8 })
+        .layoutWeight(1).alignItems(HorizontalAlign.Start).margin({ left: 4 })
 
-        this.LabelTag(row.candidate.kind)
+        // 勾：方勾和「点名册」选词页同形，选中即填蓝
+        Stack() {
+          if (row.candidate.selected) {
+            Text('✓').fontSize(11).fontWeight(FontWeight.Bold).fontColor(Colors.WHITE)
+          }
+        }
+        .width(20).height(20).borderRadius(6)
+        .backgroundColor(row.candidate.selected ? Colors.BRAND : Color.Transparent)
+        .border({
+          width: 1.5,
+          color: row.candidate.selected ? Colors.BRAND
+            : (row.candidate.toggleable ? '#D3DAE6' : Colors.DIVIDER)
+        })
+        .margin({ left: 10 })
+        .animation({ duration: Motion.FEEDBACK, curve: Curve.EaseOut })
       }
-      .width('100%').height(64).padding({ left: 12, right: 14 })
-      .backgroundColor(Colors.WHITE).borderRadius(Radius.CONTROL)
+      .width('100%').height(68).padding({ left: 14, right: 14 })
+      .backgroundColor(Colors.WHITE)
       .opacity(row.candidate.kind === 'MASTERED' && !row.candidate.selected ? 0.55 : 1)
       .translate({ x: row.offsetX })
       .gesture(
@@ -690,7 +713,7 @@ export struct MemeImportPage {
       )
       .onClick(() => this.toggleRow(row))
     }
-    .width('100%').height(64).margin({ bottom: 10 })
+    .width('100%').height(68)
   }
 
   @Builder
@@ -827,7 +850,7 @@ export struct MemeImportPage {
     Button(this.preparing ? '匹配中文…' : '拆词 →')
       .fontSize(17).fontColor(Colors.WHITE)
       .backgroundColor(this.preparing ? Colors.TEXT_WEAK : Colors.BRAND)
-      .borderRadius(Radius.BUTTON).height(52).width('92%').margin({ bottom: 26 })
+      .borderRadius(Radius.BUTTON).height(52).width('92%').margin({ bottom: 48 })
       .enabled(!this.preparing)
       .onClick(() => {
         this.goConfirm();
@@ -837,18 +860,47 @@ export struct MemeImportPage {
   @Builder
   ConfirmStep() {
     Column() {
-      // 汇总条
+      // 标题区：和「今日例句」选词页同一套骨架——小字眉题 → 26fp 主张 → 一句说明
       Column() {
-        Text(this.summaryText())
-          .fontSize(15).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN).width('100%')
-        Text('点词可勾选/取消，左滑删除；已掌握的词默认不背')
-          .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_WEAK).width('100%').margin({ top: 5 })
+        Text(`本句 ${this.rows.length} 个词`)
+          .fontSize(11).fontColor(Colors.TEXT_WEAK).letterSpacing(1.1)
+        Text('确认要背的词')
+          .fontSize(26).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
+          .margin({ top: 6 })
+        Text('默认全选；点一下取消，左滑删除，已掌握的不背')
+          .fontSize(12.5).fontColor(Colors.TEXT_SUB).margin({ top: 7 })
       }
-      .width('100%').backgroundColor(Colors.BRAND_SOFT).borderRadius(Radius.CARD)
-      .padding(14).margin({ left: 18, right: 18, top: 6, bottom: 12 })
+      .width('100%').alignItems(HorizontalAlign.Start)
+      .padding({ left: 20, right: 20, top: 4 })
+
+      // 汇总 chips：把原来那句长文案拆成可扫读的颗粒；为 0 的维度不占位
+      Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
+        this.SumChip(`共 ${this.rows.length} 词`, Colors.TEXT_MAIN, Colors.WHITE, Colors.DIVIDER)
+        this.SumChip(`新词 ${this.countKind('NEW')}`, Colors.BRAND, Colors.BRAND_SOFT, Colors.BRAND_SOFT)
+        if (this.countKind('LEARNING') > 0) {
+          this.SumChip(`学习中 ${this.countKind('LEARNING')}`, Colors.FUZZY_ORANGE,
+            Colors.FUZZY_ORANGE_SOFT, Colors.FUZZY_ORANGE_SOFT)
+        }
+        if (this.countKind('MASTERED') > 0) {
+          this.SumChip(`已掌握 ${this.countKind('MASTERED')}`, Colors.KNOW_GREEN,
+            Colors.KNOW_GREEN_SOFT, Colors.KNOW_GREEN_SOFT)
+        }
+      }
+      .width('100%').padding({ left: 20, right: 20 }).margin({ top: 14 })
+
+      // 计数行 + 一键全选
+      Row() {
+        Text(`已选 ${this.selectedCount()} / ${this.rows.length}`)
+          .fontSize(11).fontColor(Colors.TEXT_WEAK).letterSpacing(0.6)
+        Blank()
+        Text(this.allSelected() ? '全部取消' : '全选')
+          .fontSize(12).fontWeight(FontWeight.Bold).fontColor(Colors.BRAND)
+          .padding({ left: 8, right: 2, top: 5, bottom: 5 })
+          .onClick(() => this.setAllSelected(!this.allSelected()))
+      }
+      .width('100%').padding({ left: 20, right: 20 }).margin({ top: 12, bottom: 9 })
 
       if (this.allMastered()) {
-        // 全掌握特殊态
         Column() {
           Text('这句里的词你都背过啦')
             .fontSize(TypeScale.CARD_TITLE).fontWeight(FontWeight.Medium).fontColor(Colors.KNOW_GREEN)
@@ -859,33 +911,151 @@ export struct MemeImportPage {
             .borderRadius(Radius.BUTTON).height(44).margin({ top: 16 })
             .onClick(() => this.forceRestudyAll())
         }
-        .width('100%').padding({ top: 30 })
+        .width('100%').padding({ top: 8, bottom: 8 })
       }
 
-      List({ space: 0 }) {
-        ForEach(this.rows, (row: CandidateRow) => {
-          ListItem() {
-            this.CandidateRowView(row)
+      // 册页：一张白卡内的单列行，而不是三张散卡
+      Column() {
+        Column() {
+          ForEach(this.rows, (row: CandidateRow, idx: number) => {
+            Column() {
+              this.CandidateRowView(row, idx)
+            }
+            .width('100%')
+            .border({
+              width: { bottom: idx === this.rows.length - 1 ? 0 : 1 },
+              color: '#F0F3F8'
+            })
+          }, (row: CandidateRow): string =>
+            `${row.candidate.token}-${row.candidate.selected}-${row.candidate.kind}`)
+        }
+        .width('100%')
+        .backgroundColor(Colors.WHITE).borderRadius(16)
+        .border({ width: 1, color: Colors.DIVIDER })
+        .clip(true)
+
+        // 两种入列方式的区别：紧贴列表下方，别浮在底部悬空
+        Column({ space: 6 }) {
+          Row({ space: 7 }) {
+            Text('今天')
+              .fontSize(10).fontColor(Colors.WHITE).backgroundColor(Colors.BRAND)
+              .borderRadius(5).padding({ left: 5, right: 5, top: 1, bottom: 1 })
+            Text('加入今天计划，现在就能背，不占每日新词额度')
+              .fontSize(11).fontColor(Colors.TEXT_SUB).layoutWeight(1)
           }
-        }, (row: CandidateRow) => row.candidate.token)
-      }
-      .layoutWeight(1).padding({ left: 18, right: 18 })
-      .scrollBar(BarState.Off)
+          .width('100%').alignItems(VerticalAlign.Center)
 
-      Row() {
-        Button('返回修改')
-          .fontSize(16).fontColor(Colors.TEXT_SUB).backgroundColor(Colors.WHITE)
-          .borderRadius(Radius.BUTTON).height(52).layoutWeight(1).margin({ right: 10 })
-          .onClick(() => this.backToInput())
-        Button('导入并开始背诵')
-          .fontSize(16).fontColor(Colors.WHITE).backgroundColor(Colors.BRAND)
-          .borderRadius(Radius.BUTTON).height(52).layoutWeight(1.4)
-          .onClick(() => this.doImport())
+          Row({ space: 7 }) {
+            Text('排队')
+              .fontSize(10).fontColor(Colors.TEXT_SUB).backgroundColor('#E9ECF3')
+              .borderRadius(5).padding({ left: 5, right: 5, top: 1, bottom: 1 })
+            Text('加入词本，按你设的每日新词量慢慢排')
+              .fontSize(11).fontColor(Colors.TEXT_SUB).layoutWeight(1)
+          }
+          .width('100%').alignItems(VerticalAlign.Center)
+        }
+        .width('100%').padding({ left: 6, right: 6 }).margin({ top: 12 })
       }
-      .width('92%').margin({ bottom: 26 })
+      .width('100%').padding({ left: 16, right: 16 }).layoutWeight(1)
+
+      // 底部：主操作占满一行，两个次操作退到第二行，不再三个挤一行截断
+      Column() {
+        Row() {
+          Text() {
+            Span('已选 ').fontSize(12).fontColor(Colors.TEXT_SUB)
+            Span(`${this.selectedCount()}`).fontSize(13).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
+            Span(' 个词').fontSize(12).fontColor(Colors.TEXT_SUB)
+          }
+          Blank()
+          Text(this.selectedCount() < 2 ? '至少留 2 个词' : '现在就能背')
+            .fontSize(11).fontColor(this.selectedCount() < 2 ? Colors.UNKNOWN_RED : Colors.TEXT_WEAK)
+        }
+        .width('100%').margin({ bottom: 10 })
+
+        Row() {
+          Text('加入今天计划 · 现在背')
+            .fontSize(16).fontWeight(FontWeight.Medium).fontColor(Colors.WHITE).letterSpacing(0.5)
+        }
+        .width('100%').height(52).borderRadius(Radius.BUTTON)
+        .justifyContent(FlexAlign.Center)
+        .linearGradient({ angle: 135, colors: [[Colors.BRAND, 0], [Colors.BRAND_PRESSED, 1]] })
+        .shadow({ radius: 14, color: 'rgba(10,89,247,0.28)', offsetY: 6 })
+        .opacity(this.selectedCount() < 2 ? 0.45 : 1)
+        .enabled(this.selectedCount() >= 2)
+        .onClick(() => this.doImport('TODAY'))
+
+        Row({ space: 10 }) {
+          Text('加入词本排队')
+            .fontSize(14).fontColor(Colors.BRAND).fontWeight(FontWeight.Medium)
+            .layoutWeight(1).height(46).textAlign(TextAlign.Center)
+            .borderRadius(Radius.BUTTON)
+            .backgroundColor(Colors.WHITE)
+            .border({ width: 1, color: Colors.BRAND_SOFT })
+            .enabled(this.selectedCount() >= 2)
+            .onClick(() => this.doImport('QUEUE'))
+
+          Text('返回修改')
+            .fontSize(14).fontColor(Colors.TEXT_SUB)
+            .width(96).height(46).textAlign(TextAlign.Center)
+            .borderRadius(Radius.BUTTON)
+            .backgroundColor('#EEF1F6')
+            .onClick(() => this.backToInput())
+        }
+        .width('100%').margin({ top: 10 })
+      }
+      .width('100%').padding({ left: 16, right: 16, top: 12, bottom: 48 })
+      .backgroundColor(Colors.PAGE_BG)
+      .border({ width: { top: 1 }, color: Colors.DIVIDER })
     }
     .width('100%').height('100%')
     .translate({ x: this.stepShift }).opacity(this.stepOpacity)
+  }
+
+  @Builder
+  SumChip(label: string, fg: ResourceColor, bg: ResourceColor, border: ResourceColor) {
+    Text(label)
+      .fontSize(11).fontColor(fg).backgroundColor(bg)
+      .borderRadius(8).border({ width: 1, color: border })
+      .padding({ left: 9, right: 9, top: 4, bottom: 4 })
+      .margin({ right: 6, bottom: 6 })
+  }
+
+  private countKind(kind: MemeCandidateKind): number {
+    let n: number = 0;
+    this.rows.forEach((r: CandidateRow): void => {
+      if (r.candidate.kind === kind) {
+        n++;
+      }
+    });
+    return n;
+  }
+
+  private selectedCount(): number {
+    let n: number = 0;
+    this.rows.forEach((r: CandidateRow): void => {
+      if (r.candidate.selected) {
+        n++;
+      }
+    });
+    return n;
+  }
+
+  private allSelected(): boolean {
+    if (this.rows.length === 0) {
+      return false;
+    }
+    return this.selectedCount() === this.rows.length;
+  }
+
+  private setAllSelected(flag: boolean): void {
+    const next: CandidateRow[] = this.rows.map((r: CandidateRow): CandidateRow => {
+      const want: boolean = flag ? (r.candidate.toggleable ? true : r.candidate.selected) : false;
+      if (want === r.candidate.selected) {
+        return r;
+      }
+      return new CandidateRow(this.copyCandidate(r.candidate, want, r.candidate.toggleable));
+    });
+    this.rows = next;
   }
 
   private summaryText(): string {
@@ -908,7 +1078,7 @@ export struct MemeImportPage {
       // showNmt 变 false 时 Web 组件离树，渲染进程整体退出，565MB 归还系统
       Stack({ alignContent: Alignment.BottomStart }) {
         Column() {
-          this.TopBar(this.step === 1 ? '梗句背单词' : '确认要背的词')
+          this.TopBar('梗句背单词')
           if (this.step === 1) {
             Column() {
               this.InputStep()

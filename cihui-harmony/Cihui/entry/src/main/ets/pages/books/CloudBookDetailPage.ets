@@ -6,11 +6,9 @@
  * （F-D：自定义 10–1000，一次性设置直到学完；下方红字感叹号提示复习负担）
  * → 确认后回我的词本，新书置顶带「刚导入」。
  * F-D 一次只能背一本：已有背诵中词本且未学完时，下载前先弹切书确认。
- * 分年级词书内容未接入（coming），详情页显示「筹备中」，不提供下载。
  */
 import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
-import { AuthStore } from '../../viewmodel/AuthStore';
 import { RouteName } from '../../common/RouteNames';
 import type { BookWordsRouteParam, CloudBookDetailRouteParam } from '../../common/RouteNames';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
@@ -144,42 +142,27 @@ export struct CloudBookDetailPage {
     }
   }
 
-  /** 顶栏右侧标签：已导入未在背 → 「切换」可点回这本 */
+  /** 顶栏右侧标签：已导入未在背 → 「切换」可点回这本；未导入 → 下载导入 */
   private headerLabel(): string {
     if (this.imported()) {
       return this.isActiveBook() ? '背诵中' : '切换';
     }
-    if (this.meta !== null && this.meta.coming === true) {
-      return '筹备中';
-    }
     return '下载导入';
   }
 
-  /** 顶栏标签是否用弱化色（背诵中 / 筹备中不可当主行动） */
+  /** 顶栏标签是否用弱化色（背诵中不可当主行动） */
   private headerMuted(): boolean {
-    if (this.imported()) {
-      return this.isActiveBook();
-    }
-    return this.meta !== null && this.meta.coming === true;
+    return this.imported() && this.isActiveBook();
   }
 
-  /** 点击右上角：筹备中只提示；已导入 → 在背则移除确认、不在背则切换；未导入走下载 */
+  /** 点击右上角：已导入 → 在背则移除确认、不在背则切换；未导入走下载 */
   private onHeaderAction(): void {
-    if (this.meta && this.meta.coming === true) {
-      this.toast('该词书正在接入开源教材词表，暂未开放');
-      return;
-    }
     if (this.imported()) {
       if (this.isActiveBook()) {
         this.confirmRemove = true;
       } else {
         this.confirmSwitchToThis();
       }
-      return;
-    }
-    // F14：下载强制登录，未登录弹引导跳登录页；登录后再次点击直接下载
-    if (!AuthStore.INSTANCE.isLoggedIn()) {
-      this.phase = 'gate';
       return;
     }
     // F-D 一次只能背一本：已有背诵中词本且还有没学完的新词 → 先确认切换
@@ -325,17 +308,12 @@ export struct CloudBookDetailPage {
           .fontSize(12).fontColor(Colors.TEXT_SUB).margin({ top: 6 })
           .width('100%').textAlign(TextAlign.Start)
         Row() {
-          if (this.meta && this.meta.coming === true) {
-            Text('教材词表接入中，暂未开放下载')
-              .fontSize(11).fontColor(Colors.FUZZY_ORANGE).layoutWeight(1)
-          } else {
-            Text(this.meta ? `共 ${this.meta.totalCount} 词 · 离线词库` : '')
-              .fontSize(11).fontColor(Colors.TEXT_WEAK).layoutWeight(1)
-            Text(`预览 ${this.samples.length} 词`)
-              .fontSize(11).fontColor(Colors.BRAND)
-              .backgroundColor('#EAF1FF').borderRadius(8)
-              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-          }
+          Text(this.meta ? `共 ${this.meta.totalCount} 词 · 离线词库` : '')
+            .fontSize(11).fontColor(Colors.TEXT_WEAK).layoutWeight(1)
+          Text(`预览 ${this.samples.length} 词`)
+            .fontSize(11).fontColor(Colors.BRAND)
+            .backgroundColor('#EAF1FF').borderRadius(8)
+            .padding({ left: 8, right: 8, top: 3, bottom: 3 })
         }
         .width('100%').margin({ top: 8 })
       }
@@ -349,46 +327,32 @@ export struct CloudBookDetailPage {
     Row() {
       Text('单词预览')
         .fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN).layoutWeight(1)
-      if (this.meta && this.meta.coming !== true) {
-        Text(`查看全部 ${this.meta.totalCount} 词 ›`)
-          .fontSize(12).fontColor(Colors.BRAND)
-          .onClick(() => {
-            if (this.meta) {
-              const cid: string = this.meta.id;
-              const p: BookWordsRouteParam = { cloudBookId: cid };
-              NavStore.INSTANCE.push(RouteName.BOOK_WORDS, p);
-            }
-          })
-      }
+      Text(`查看全部 ${this.meta ? this.meta.totalCount : 0} 词 ›`)
+        .fontSize(12).fontColor(Colors.BRAND)
+        .onClick(() => {
+          if (this.meta) {
+            const cid: string = this.meta.id;
+            const p: BookWordsRouteParam = { cloudBookId: cid };
+            NavStore.INSTANCE.push(RouteName.BOOK_WORDS, p);
+          }
+        })
     }
     .width('100%').margin({ top: 18, bottom: 10 })
-    if (this.samples.length === 0) {
-      Column() {
-        Text('词书内容正在接入开源教材词表')
-          .fontSize(13).fontColor(Colors.TEXT_WEAK)
-        Text('开放下载后可在此预览单词')
-          .fontSize(12).fontColor(Colors.TEXT_WEAK).margin({ top: 6 })
-      }
-      .width('100%').padding({ top: 28, bottom: 28 })
-      .backgroundColor(Colors.WHITE).borderRadius(14)
-      .justifyContent(FlexAlign.Center)
-    } else {
-      Column() {
-        ForEach(this.samples, (w: CloudSampleWord) => {
-          Row() {
-            Text(w.english).fontSize(15).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
-              .layoutWeight(1)
-            Text(w.meaning).fontSize(13).fontColor(Colors.TEXT_SUB).maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '52%' })
-              .textAlign(TextAlign.End)
-          }
-          .width('100%').height(46)
-          .padding({ left: 14, right: 14 })
-          .backgroundColor(Colors.WHITE)
-        }, (w: CloudSampleWord): string => w.english)
-      }
-      .width('100%').borderRadius(14).clip(true)
+    Column() {
+      ForEach(this.samples, (w: CloudSampleWord) => {
+        Row() {
+          Text(w.english).fontSize(15).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
+            .layoutWeight(1)
+          Text(w.meaning).fontSize(13).fontColor(Colors.TEXT_SUB).maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '52%' })
+            .textAlign(TextAlign.End)
+        }
+        .width('100%').height(46)
+        .padding({ left: 14, right: 14 })
+        .backgroundColor(Colors.WHITE)
+      }, (w: CloudSampleWord): string => w.english)
     }
+    .width('100%').borderRadius(14).clip(true)
   }
 
   @Builder
@@ -624,11 +588,9 @@ export struct CloudBookDetailPage {
               Column() {
                 this.CoverCard()
                 this.PreviewList()
-                if (this.meta && this.meta.coming !== true) {
-                  Text('词库来自开源 ECDICT（MIT 许可），随包内置，导入不耗流量')
-                    .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
-                    .width('100%').margin({ top: 18, bottom: 24 })
-                }
+                Text('词库来自开源 ECDICT（MIT 许可），随包内置，导入不耗流量')
+                  .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
+                  .width('100%').margin({ top: 18, bottom: 24 })
               }
               .width('100%').padding({ left: 16, right: 16 })
               .alignItems(HorizontalAlign.Start)

@@ -171,7 +171,7 @@ export struct DiyBookPage {
         this.saving = false;
         this.mode = 'preview';
         this.mutated = true;
-        this.toast('已保存，登录后将自动上云备份');
+        this.toast('已保存到本地');
       } catch (e) {
         this.saving = false;
         this.toast('保存失败：' + (e as Error).message);

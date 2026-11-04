@@ -129,6 +129,11 @@ export class HmsSpeechService implements SpeechService {
       this.notifyError(-1, '语音引擎未初始化');
       return;
     }
+    // 防并发（F19b）：上一会话还活着（重开定时器与换词竞态）先拆干净，
+    // 同一引擎并发 startListening 会报错/死锁，麦克风从此不再识别
+    if (this.sessionId.length > 0) {
+      this.endWord();
+    }
     this.seq += 1;
     const sid: string = `cihui-asr-${this.seq}`;
     this.sessionId = sid;
