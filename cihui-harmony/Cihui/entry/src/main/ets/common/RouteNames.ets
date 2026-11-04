@@ -36,9 +36,11 @@ export enum RouteName {
   MAKEUP_DETAIL = 'MakeupDetailPage',
   /** F12 每日新词量（iOS 时钟式滚轮 + 实时预览） */
   DAILY_NEW = 'DailyNewPage',
-  /** F14 登录页（微信 / QQ / 登录注册三按钮） */
+  /** F14 登录页（华为账号一键登录 + 邮箱通道入口） */
   LOGIN = 'LoginPage',
-  /** F14 注册表单页（名称 / 手机 / 邮箱 / 微信） */
+  /** F14 邮箱登录页（邮箱 + 密码） */
+  EMAIL_LOGIN = 'EmailLoginPage',
+  /** F14 邮箱注册页（昵称 / 邮箱 / 密码） */
   REGISTER = 'RegisterPage',
   /** F14 账号资料页（头像昵称 + 字段行 + 退出登录） */
   ACCOUNT = 'AccountPage',
@@ -46,11 +48,9 @@ export enum RouteName {
   FIELD_EDIT = 'FieldEditPage',
   /** F17 梗句导入（中文输入/离线翻译/拆词确认两态同页） */
   MEME_IMPORT = 'MemeImportPage',
-  /** F17 梗句背诵闪卡（复用 F9 三档手势 + 会话可恢复 + 看原句） */
-  MEME_REVIEW = 'MemeReviewPage',
   /** F18 梗卡册（倒序大图 / 再分享 / 左滑删除） */
   MEME_ALBUM = 'MemeAlbumPage',
-  /** F19 今日例句（大模型分批生成 + 高亮 + TTS + 收藏） */
+  /** F19 今日例句（离线词库逐词例句 + 高亮 + TTS + 收藏） */
   TODAY_SENTENCE = 'TodaySentencePage',
   /** F19 我的例句本（收藏例句回看） */
   SENTENCE_FAVORITES = 'SentenceFavoritesPage'
@@ -140,10 +140,4 @@ export interface CloudBookDetailRouteParam {
 export interface BookWordsRouteParam {
   bookId?: string;
   cloudBookId?: string;
-}
-
-/** F17 梗句背诵入参：指定梗句；sessionId 存在时直接续背指定会话 */
-export interface MemeReviewRouteParam {
-  memeId: string;
-  sessionId?: string;
 }
