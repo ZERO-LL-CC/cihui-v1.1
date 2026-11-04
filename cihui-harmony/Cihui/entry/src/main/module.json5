@@ -4,7 +4,7 @@
     "type": "entry",
     "description": "$string:module_desc",
     "mainElement": "EntryAbility",
-    "deviceTypes": ["phone", "tablet", "2in1"],
+    "deviceTypes": ["phone"],
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
@@ -37,9 +37,9 @@
       }
     ],
     "requestPermissions": [
-      {
-        "name": "ohos.permission.INTERNET"
-      },
+      // 注：本应用已全离线（例句来自 rawfile，AI 造句已下线），
+      // 故不再申请 ohos.permission.INTERNET；上架时隐私声明与备案口径都更简单。
+      // 若将来接入云同步，需在此恢复 INTERNET 并补充隐私政策说明。
       {
         "name": "ohos.permission.CAMERA",
         "reason": "$string:perm_camera_reason",

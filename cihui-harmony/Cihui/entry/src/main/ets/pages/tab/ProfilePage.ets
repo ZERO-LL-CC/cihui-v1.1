@@ -148,6 +148,31 @@ export struct ProfilePage {
     }
   }
 
+  /**
+   * 隐私与关于：上架要求「隐私政策必须能在应用内打开」，
+   * 同时这里承担 Tatoeba 例句库的 CC BY 2.0 署名义务。
+   */
+  private showAbout(): void {
+    const msg: string =
+      '学习数据全部保存在本机，应用没有申请网络权限，不联网、不上传任何内容。\n' +
+      '权限只用三项：相机（拍照识词）、麦克风（语音快过）、振动（翻卡反馈）。\n' +
+      '例句来源：Tatoeba 开放语料库（CC BY 2.0 FR），部分生僻词例句由大模型预先生成并人工抽检。\n' +
+      '开发者：张俞蔚';
+    try {
+      AlertDialog.show({
+        title: '隐私与关于',
+        message: msg,
+        confirm: {
+          value: '知道了',
+          action: () => {
+          }
+        }
+      });
+    } catch (_e) {
+      this.toast('隐私说明打开失败');
+    }
+  }
+
   private pad2(n: number): string {
     return n < 10 ? `0${n}` : `${n}`;
   }
@@ -177,7 +202,7 @@ export struct ProfilePage {
       try {
         promptAction.showDialog({
           title: '通知权限未开启',
-          message: '需要在系统通知设置中允许词慧发送通知，才能收到每日复习提醒。',
+          message: '需要在系统通知设置中允许说词发送通知，才能收到每日复习提醒。',
           buttons: [
             { text: '取消', color: Colors.TEXT_SUB },
             { text: '去设置', color: Colors.BRAND },
@@ -492,7 +517,7 @@ export struct ProfilePage {
               }
             })
             Divider().color(Colors.DIVIDER).margin({ left: 0 })
-            this.NavRow('隐私与关于', '', () => this.toast('隐私政策与关于页将在后续版本提供'))
+            this.NavRow('隐私与关于', '', () => this.showAbout())
           }
           .width('100%').padding({ left: 16, right: 16, top: 4, bottom: 4 })
           .borderRadius(Radius.CARD).backgroundColor(Colors.WHITE)

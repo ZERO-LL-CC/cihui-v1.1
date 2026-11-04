@@ -1,27 +1,31 @@
 /**
- * F19 今日例句页（整段生成版）
+ * F19 今日例句页（离线词库版）
  *
  * 词源硬规则：只取"今日已学新词 + 今日已复习词"（DataStore.todayWords），不碰未学词；
  * 例句只做语境强化，不进入艾宾浩斯调度、不改任何单词节点（本页对调度数据只读）。
  *
- * 界面口径见 `cihui-ui/daily-sentence-passage-demo.html`，从上到下：
+ * 例句来源：`rawfile/examples/<cloudBookId>.json`（Tatoeba 真人语料 + AI 补生成，
+ * 构建脚本见 `tools/examples/build_examples.py`）。一个词一条，按当前词书懒加载，
+ * 全程不联网、不消耗任何额度，也没有 API Key。
+ *
+ * 从上到下：
  *   1 顶栏（返回 / 今日例句 / 今日 N 词 + 例句本入口）
  *   2 批次条（第 n 批 · 共 m 批 + 圆点指示器）
- *   3 覆盖率卡（本段覆盖 X/Y 词 + 百分比徽章 + 进度条 + 未覆盖词 chips + 补漏按钮）
- *   4 整段卡（AI 生成 · 整段 / 小标题 / **连续一段**英文 + 折叠中文对照）
- *   5 底部固定操作栏（朗读 / 收藏 / 分享 / 换一批）
+ *   3 覆盖率卡（本批覆盖 X/Y 词 + 百分比徽章 + 进度条 + 缺例句词 chips）
+ *   4 例句卡（逐词一条：序号 / 目标词 / 高亮英文 / 中文）
+ *   5 底部固定操作栏（朗读 / 收藏 / 分享 / 重选）
  *
  * 状态机沿用 BatchState：
- *   idle      未生成，给「生成例句」大按钮（不白扣一次模型调用）
- *   loading   骨架屏 4~7 条灰条呼吸 + 「正在用今天的词写一段…」
+ *   idle      未组装，先批内勾选本批词（默认全选、各批独立，<3 个拦下）
+ *   loading   读本地例句表时的骨架屏
  *   ok        渲染 3、4
- *   fallback  本批单词释义 + 重试横幅（未配 Key / 无网 / 超时 / 非法 JSON）
+ *   fallback  该批一个例句都没有（手动词书 / 未收录），退回释义视图
  */
 import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
 import { RouteName } from '../../common/RouteNames';
-import type { SentenceSegment, Word } from '../../model/Types';
+import type { SentenceSegment, Word, WordBook } from '../../model/Types';
 import type { PassageResult, PassageSentence } from '../../model/SentenceCore';
 import {
   MIN_WORDS_FOR_SENTENCE,
@@ -31,7 +35,9 @@ import {
   highlightSegments,
 } from '../../model/SentenceCore';
 import { dayKeyFromTs } from '../../model/SchedulerCore';
-import { SentenceGenerator } from '../../service/SentenceGeneratorService';
+import { ExampleService } from '../../service/ExampleService';
+import { buildWordPassage } from '../../model/ExampleCore';
+import type { ExampleEntry } from '../../model/ExampleCore';
 import { TtsService } from '../../service/TtsService';
 import type { TtsState } from '../../service/TtsService';
 import { MemeCardService } from '../../service/MemeCardService';
@@ -40,6 +46,11 @@ import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
 
+/* 点名册选词页的局部色：只服务这一屏，不进全局令牌 */
+const PICK_ROW_ON_BG: string = '#F4F8FF';
+const PICK_ROW_LINE: string = '#F0F3F8';
+const PICK_BOX_LINE: string = '#D3DAE6';
+
 /** 单批加载状态机：idle 未生成 / loading 生成中 / ok 成功 / fallback 本地降级 */
 @ObservedV2
 class BatchState {
@@ -47,11 +58,14 @@ class BatchState {
   status: string;
   /** 整段结果（ok 时非空） */
   passage: PassageResult | null;
+  /** 本批实际送去生成的词（批内勾选后的子集，补漏时复用） */
+  words: Word[];
 
   constructor(index: number) {
     this.index = index;
     this.status = 'idle';
     this.passage = null;
+    this.words = [];
   }
 }
 
@@ -62,6 +76,8 @@ export struct TodaySentencePage {
   @Local showTick: number = 0;
   @Local todayCount: number = 0;
   @Local batches: Word[][] = [];
+  /** 各批勾选状态，与 batches 平行；默认全选，各批互相独立（切批不继承） */
+  @Local selectedFlags: boolean[][] = [];
   @Local batchStates: BatchState[] = [];
   @Local current: number = 0;
   @Local contentOpacity: number = 1;
@@ -78,6 +94,8 @@ export struct TodaySentencePage {
   /** 分享快照目标（createFromBuilder 只接受无参 CustomBuilder） */
   @Local shareTarget: PassageResult | null = null;
   @Local busy: boolean = false;
+  /** 点名册列表的错峰入场开关：进页先 false 再置 true，配合每行 animation delay 形成瀑布 */
+  @Local rowsIn: boolean = false;
   private sourceDay: string = dayKeyFromTs(Date.now());
   private loadingSeq: number = 0;
 
@@ -119,17 +137,118 @@ export struct TodaySentencePage {
       return;
     }
     this.batches = chunkItems(words, SENTENCE_BATCH_SIZE);
+    // 勾选状态与批次同步重建，默认全选；batches 为空则是空数组
+    const flags: boolean[][] = [];
+    for (let i = 0; i < this.batches.length; i++) {
+      const row: boolean[] = [];
+      this.batches[i].forEach((): void => {
+        row.push(true);
+      });
+      flags.push(row);
+    }
+    this.selectedFlags = flags;
     const states: BatchState[] = [];
     for (let i = 0; i < this.batches.length; i++) {
       states.push(new BatchState(i));
     }
     this.batchStates = states;
     this.current = 0;
-    // 首屏停在 idle：整段生成一次要花十几秒、还会消耗额度，等用户主动点「生成例句」。
+    this.playRowsIn();
+    // 首屏停在 idle：先让用户确认本批词，再读本地例句表。
     // 切到别的批时不拦（用户明确想看那一批），见 switchBatch。
   }
 
-  /** 生成 / 重新生成一批 */
+  /* ================= 批内勾选 ================= */
+
+  /** 某批按勾选过滤出的词（防御：勾选行缺失时按全选处理） */
+  private selectedWordsOf(index: number): Word[] {
+    const batch: Word[] | undefined = this.batches[index];
+    if (batch === undefined) {
+      return [];
+    }
+    const flags: boolean[] | undefined = this.selectedFlags[index];
+    if (flags === undefined) {
+      return batch.slice();
+    }
+    const out: Word[] = [];
+    for (let i = 0; i < batch.length; i++) {
+      if (i < flags.length && flags[i]) {
+        out.push(batch[i]);
+      }
+    }
+    return out;
+  }
+
+  private selectedCount(index: number): number {
+    return this.selectedWordsOf(index).length;
+  }
+
+  private enoughSelected(): boolean {
+    return this.selectedCount(this.current) >= MIN_WORDS_FOR_SENTENCE;
+  }
+
+  /** 单个 chip 的勾选态（防御：越界按全选） */
+  private wordFlag(wordIndex: number): boolean {
+    const flags: boolean[] | undefined = this.selectedFlags[this.current];
+    if (flags === undefined || wordIndex >= flags.length) {
+      return true;
+    }
+    return flags[wordIndex];
+  }
+
+  /** 点 chip 切换勾选；生成中忽略（防生成词集与展示漂移），整体 slice() 赋值保证响应式 */
+  private toggleWordFlag(wordIndex: number): void {
+    if (this.currentState().status === 'loading') {
+      return;
+    }
+    const flags: boolean[] | undefined = this.selectedFlags[this.current];
+    if (flags === undefined || wordIndex >= flags.length) {
+      return;
+    }
+    const next: boolean[][] = this.selectedFlags.slice();
+    const row: boolean[] = flags.slice();
+    row[wordIndex] = !row[wordIndex];
+    next[this.current] = row;
+    this.selectedFlags = next;
+  }
+
+  /** 本批是否全选（决定右上角按钮文案：全部取消 / 全选） */
+  private allSelected(): boolean {
+    const batch: Word[] | undefined = this.batches[this.current];
+    if (batch === undefined) {
+      return false;
+    }
+    return this.selectedCount(this.current) === batch.length;
+  }
+
+  /** 一键全选 / 全部取消：同样整体 slice() 赋值，保证 ForEach 重算 */
+  private setAllFlags(flag: boolean): void {
+    if (this.currentState().status === 'loading') {
+      return;
+    }
+    const flags: boolean[] | undefined = this.selectedFlags[this.current];
+    if (flags === undefined) {
+      return;
+    }
+    const next: boolean[][] = this.selectedFlags.slice();
+    next[this.current] = flags.map((v: boolean): boolean => flag);
+    this.selectedFlags = next;
+  }
+
+  /** 序号补零：01、02…（点名册的册页感靠它） */
+  private pad2(n: number): string {
+    return n < 10 ? `0${n}` : `${n}`;
+  }
+
+  /** 列表错峰入场：复位后再置位，单次状态变化 + 每行不同 delay，比逐帧 setInterval 稳 */
+  private playRowsIn(): void {
+    this.rowsIn = false;
+    setTimeout((): void => {
+      this.rowsIn = true;
+    }, 40);
+  }
+
+  /** 组装一批的例句：全部读本地词库，不联网 */
   private loadBatch(index: number, refresh: boolean): void {
     if (index < 0 || index >= this.batchStates.length || this.batches.length === 0) {
       return;
@@ -138,72 +257,66 @@ export struct TodaySentencePage {
     if (state.status === 'loading') {
       return;
     }
+    const words: Word[] = this.selectedWordsOf(index);
+    if (words.length < MIN_WORDS_FOR_SENTENCE) {
+      this.toast(`至少选 ${MIN_WORDS_FOR_SENTENCE} 个词才能看例句，当前选了 ${words.length} 个`);
+      return;
+    }
     this.loadingSeq++;
     const seq: number = this.loadingSeq;
     state.status = 'loading';
     state.passage = null;
-    this.patching = false;
-    this.patchedWords = [];
-    this.zhOpen = false;
+    state.words = words;
+    this.zhOpen = true;
     this.batchStates = this.batchStates.slice();
-    const words: Word[] = this.batches[index];
-    if (!SentenceGenerator.available()) {
-      // 未配置 Key：不发请求，直接本地释义降级
-      this.finishFallback(seq, index);
-      return;
+
+    // 只用这批词所属词书的例句表：切词书才换文件，别的词书不读
+    const keys: string[] = [];
+    words.forEach((w: Word): void => {
+      const k: string = this.exampleKey(w);
+      if (k.length > 0 && keys.indexOf(k) < 0) {
+        keys.push(k);
+      }
+    });
+    // 梗句本/自定义词本的词没有例句表，借当前词书兜底，所以当前词书总要读一次
+    const activeKey: string = this.keyOfBookId(DataStore.INSTANCE.settings.activeBookId);
+    if (activeKey.length > 0 && keys.indexOf(activeKey) < 0) {
+      keys.push(activeKey);
     }
-    SentenceGenerator.generatePassage(words)
-      .then((result: PassageResult): void => {
+    ExampleService.INSTANCE.ensure(keys, getContext(this) as common.Context)
+      .then((): void => {
         if (seq !== this.loadingSeq) {
           return; // 期间又切了批，丢弃过期结果
         }
+        const result: PassageResult = buildWordPassage(words, (w: Word): ExampleEntry | null => {
+          const key: string = this.exampleKey(w);
+          const hit: ExampleEntry | null = ExampleService.INSTANCE.get(key, w.english);
+          return hit !== null ? hit : ExampleService.INSTANCE.getAny(w.english);
+        });
         state.passage = result;
-        state.status = 'ok';
+        state.status = result.sentences.length > 0 ? 'ok' : 'fallback';
         this.batchStates = this.batchStates.slice();
         this.fadeIn();
       })
-      .catch((e: Object): void => {
-        console.warn(`[Sentence] batch ${index} fallback: ${(e as Error)?.message ?? e}`);
+      .catch((): void => {
         this.finishFallback(seq, index);
       });
   }
 
-  /** 覆盖率卡上的「补漏一次」：只补一次，失败保留现有短文 */
-  private patchCurrent(): void {
-    if (this.patching || this.batches.length === 0) {
-      return;
+  /** word -> 例句库文件名（云词书 id）；手动词书/自定义词本没有例句表 */
+  private exampleKey(w: Word): string {
+    return this.keyOfBookId(w.bookId);
+  }
+
+  private keyOfBookId(bookId: string): string {
+    if (bookId.length === 0) {
+      return '';
     }
-    const state: BatchState = this.currentState();
-    const before: PassageResult | null = state.passage;
-    if (before === null || before.missedWords.length === 0) {
-      return;
+    const b: WordBook | null = DataStore.INSTANCE.bookById(bookId);
+    if (b === null || b.cloudBookId === undefined) {
+      return '';
     }
-    if (!SentenceGenerator.available()) {
-      this.toast('当前无法生成例句，先看看单词释义');
-      return;
-    }
-    this.patching = true;
-    const pending: string[] = before.missedWords.slice();
-    SentenceGenerator.patchPassage(before, this.batches[this.current])
-      .then((next: PassageResult): void => {
-        this.patching = false;
-        const gained: number = next.coveredWords.length - before.coveredWords.length;
-        state.passage = next;
-        state.status = 'ok';
-        if (gained > 0) {
-          this.patchedWords = pending;
-          this.toast(`又用上 ${gained} 个词`);
-        } else {
-          this.patchedWords = [];
-          this.toast('这次没补上新词，换一批试试');
-        }
-        this.batchStates = this.batchStates.slice();
-      })
-      .catch((e: Object): void => {
-        this.patching = false;
-        console.warn(`[Sentence] patch: ${(e as Error)?.message ?? e}`);
-        this.toast('补漏没成功，已保留当前短文');
-      });
+    return b.cloudBookId;
   }
 
   private finishFallback(seq: number, index: number): void {
@@ -234,11 +347,15 @@ export struct TodaySentencePage {
     }, 60);
   }
 
-  /** 「换一批」：先淡出再请求，回来淡入（整段约 300ms） */
+  /** 「重选」：淡出回到勾选态，让用户改写本批词 */
   private refreshBatch(): void {
     const reduced: boolean = NavStore.INSTANCE.reducedMotion;
+    const back: () => void = (): void => {
+      this.currentState().status = 'idle';
+      this.batchStates = this.batchStates.slice();
+    };
     if (reduced) {
-      this.loadBatch(this.current, true);
+      back();
       return;
     }
     this.getUIContext().animateTo(
@@ -247,7 +364,10 @@ export struct TodaySentencePage {
         this.contentOpacity = 0.2;
       }
     );
-    setTimeout(() => this.loadBatch(this.current, true), 160);
+    setTimeout((): void => {
+      back();
+      this.contentOpacity = 1;
+    }, 160);
   }
 
   private switchBatch(index: number): void {
@@ -543,7 +663,7 @@ export struct TodaySentencePage {
       Text(`再背 ${MIN_WORDS_FOR_SENTENCE - this.todayCount} 个就能生成例句`)
         .fontSize(TypeScale.BODY).fontColor(Colors.BRAND).fontWeight(FontWeight.Medium)
         .textAlign(TextAlign.Center).width('76%').margin({ top: 10 })
-      Text('用今天背的词写一段，读完就记住了')
+      Text('每个词配一条真人例句，读完就记住了')
         .fontSize(13).fontColor(Colors.TEXT_SUB)
         .textAlign(TextAlign.Center).width('76%').margin({ top: 6 })
       Button('去背单词 →')
@@ -554,15 +674,15 @@ export struct TodaySentencePage {
     }.width('100%').layoutWeight(1)
   }
 
-  /** 批次条：第 n 批 · 共 m 批 + 圆点指示器（当前批是加长胶囊） */
+  /** 批次条：BATCH 01 / 8 WORDS 胶囊 + 多批才画的圆点（单批时原实现的蓝条像渲染残留） */
   @Builder
   BatchBar() {
     Row() {
       Row() {
-        Text(`第 ${this.current + 1} 批`)
-          .fontSize(TypeScale.CAPTION).fontColor(Colors.BRAND).fontWeight(FontWeight.Medium)
-        Text(` · 共 ${this.batchStates.length} 批`)
-          .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_SUB)
+        Text(`BATCH ${this.pad2(this.current + 1)}`)
+          .fontSize(10).fontWeight(FontWeight.Bold).fontColor(Colors.BRAND).letterSpacing(0.7)
+        Text(` / ${this.batches.length > 0 ? this.batches[this.current].length : 0} WORDS`)
+          .fontSize(10).fontColor(Colors.TEXT_WEAK).letterSpacing(0.7)
       }
       .padding({ left: 12, right: 12, top: 6, bottom: 6 })
       .backgroundColor(Colors.WHITE).borderRadius(99)
@@ -570,16 +690,19 @@ export struct TodaySentencePage {
 
       Blank()
 
-      Row({ space: 5 }) {
-        ForEach(this.batchStates, (st: BatchState) => {
-          Row()
-            .width(st.index === this.current ? 18 : 7)
-            .height(7)
-            .borderRadius(99)
-            .backgroundColor(st.index === this.current ? Colors.BRAND : Colors.TEXT_WEAK)
-            .opacity(st.index === this.current ? 1 : 0.45)
-            .onClick(() => this.switchBatch(st.index))
-        }, (st: BatchState): string => `dot-${st.index}`)
+      if (this.batchStates.length > 1) {
+        Row({ space: 5 }) {
+          ForEach(this.batchStates, (st: BatchState) => {
+            Row()
+              .width(st.index === this.current ? 18 : 7)
+              .height(7)
+              .borderRadius(99)
+              .backgroundColor(st.index === this.current ? Colors.BRAND : Colors.TEXT_WEAK)
+              .opacity(st.index === this.current ? 1 : 0.45)
+              .animation({ duration: Motion.FEEDBACK, curve: Motion.pageCurve() })
+              .onClick(() => this.switchBatch(st.index))
+          }, (st: BatchState): string => `dot-${st.index}`)
+        }
       }
     }
     .width('100%').margin({ top: 2, bottom: 12 })
@@ -591,7 +714,7 @@ export struct TodaySentencePage {
   CoverageCard() {
     Column() {
       Row() {
-        Text('本段覆盖')
+        Text('本批覆盖')
           .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_SUB)
         Text(`${this.coveredCount()}`)
           .fontSize(19).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
@@ -640,21 +763,10 @@ export struct TodaySentencePage {
           .fontSize(11).fontColor(Colors.KNOW_GREEN).width('100%').margin({ top: 12 })
       }
 
-      // 补漏按钮：覆盖率不足且有漏词才出现
-      if (this.currentPassage().missedWords.length > 0 && !this.coverageOk()) {
-        Button() {
-          Text(this.patching
-            ? `正在补写剩下 ${this.currentPassage().missedWords.length} 个词…`
-            : `补漏一次，把剩下 ${this.currentPassage().missedWords.length} 个词写进去`)
-            .fontSize(13).fontWeight(FontWeight.Medium)
-            .fontColor(this.patching ? Colors.TEXT_WEAK : Colors.BRAND)
-        }
-        .width('100%').height(38).borderRadius(Radius.CONTROL)
-        .backgroundColor(Colors.BRAND_SOFT)
-        .border({ width: 1, color: this.patching ? Colors.DIVIDER : Colors.BRAND })
-        .enabled(!this.patching)
-        .margin({ top: 12 })
-        .onClick(() => this.patchCurrent())
+      // 缺例句的词：只提示，不再请求模型（例句全部来自本地词库）
+      if (this.currentPassage().missedWords.length > 0) {
+        Text(`这 ${this.currentPassage().missedWords.length} 个词暂未收录例句，先看它们的释义`)
+          .fontSize(11).fontColor(Colors.TEXT_WEAK).width('100%').margin({ top: 12 })
       }
     }
     .width('100%').padding({ left: 18, right: 18, top: 16, bottom: 16 })
@@ -663,29 +775,49 @@ export struct TodaySentencePage {
     .opacity(this.contentOpacity)
   }
 
-  /** 整段卡：小标题 + 连续一段英文（今日词高亮）+ 折叠中文对照 */
+  /** 例句卡：一个词一条，逐条列出（序号 / 目标词 / 英文 / 中文） */
   @Builder
   PassageCard() {
     Column() {
       Row() {
-        Text('AI 生成 · 整段')
+        Text('词库例句 · 逐词')
           .fontSize(11).fontWeight(FontWeight.Medium).fontColor(Colors.BRAND)
           .backgroundColor(Colors.BRAND_SOFT).borderRadius(6)
           .padding({ left: 8, right: 8, top: 3, bottom: 3 })
         Blank()
+        Text(`${this.currentPassage().sentences.length} 条`)
+          .fontSize(11).fontColor(Colors.TEXT_WEAK)
       }
-      .width('100%').margin({ bottom: 12 })
+      .width('100%').margin({ bottom: 2 })
 
-      if (this.currentPassage().title.length > 0) {
-        Text(this.currentPassage().title)
-          .fontSize(16).fontWeight(FontWeight.Medium).fontColor(Colors.TEXT_MAIN)
-          .width('100%').margin({ bottom: 10 })
-          .textAlign(TextAlign.Start)
+      ForEach(this.currentPassage().sentences, (s: PassageSentence, idx: number) => {
+        this.ExampleRow(s, idx)
+      }, (s: PassageSentence, idx: number): string => `ex-${idx}-${s.sentence}`)
+    }
+    .width('100%').padding({ left: 18, right: 18, top: 16, bottom: 6 })
+    .backgroundColor(Colors.WHITE).borderRadius(Radius.CARD)
+    .margin({ bottom: 14 })
+    .opacity(this.contentOpacity)
+  }
+
+  /** 单条例句：序号 + 目标词 + 高亮英文 + 中文 */
+  @Builder
+  ExampleRow(s: PassageSentence, idx: number) {
+    Column() {
+      Row() {
+        Text(this.pad2(idx + 1))
+          .fontSize(11).fontFamily('Georgia').fontColor(Colors.TEXT_WEAK)
+        if (s.words.length > 0) {
+          Text(s.words[0])
+            .fontSize(12).fontWeight(FontWeight.Medium).fontColor(Colors.BRAND)
+            .margin({ left: 8 })
+        }
+        Blank()
       }
+      .width('100%').margin({ bottom: 7 })
 
-      // 连续段落：所有句子拼成一段，不分句成卡
       Text() {
-        ForEach(this.passageSegments(), (seg: SentenceSegment, idx: number) => {
+        ForEach(highlightSegments(s.sentence, this.highlightWords()), (seg: SentenceSegment, i: number) => {
           Span(seg.text)
             .fontColor(seg.hit ? Colors.BRAND : Colors.TEXT_MAIN)
             .fontWeight(seg.hit ? FontWeight.Bold : FontWeight.Regular)
@@ -693,41 +825,18 @@ export struct TodaySentencePage {
               color: seg.hit ? Colors.BRAND_SOFT : Color.Transparent,
               radius: 3
             })
-        }, (seg: SentenceSegment, idx: number): string => `ps-${idx}-${seg.hit}`)
+        }, (seg: SentenceSegment, i: number): string => `exs-${idx}-${i}-${seg.hit}`)
       }
-      .fontSize(TypeScale.BODY).lineHeight(27).width('100%')
-      .fontFamily('Georgia')
+      .fontSize(TypeScale.BODY).lineHeight(26).width('100%').fontFamily('Georgia')
 
-      // 折叠中文对照
-      Row() {
-        Text(this.zhOpen ? '收起中文对照' : '展开中文对照')
-          .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_SUB)
-        Text(this.zhOpen ? '▴' : '▾')
-          .fontSize(TypeScale.CAPTION).fontColor(Colors.TEXT_SUB).margin({ left: 4 })
-      }
-      .width('100%').justifyContent(FlexAlign.Center)
-      .padding({ top: 10, bottom: 2 })
-      .border({ width: { top: 1 }, color: Colors.DIVIDER })
-      .margin({ top: 14 })
-      .onClick(() => {
-        this.zhOpen = !this.zhOpen;
-      })
-
-      if (this.zhOpen) {
-        Column() {
-          ForEach(this.currentPassage().sentences, (s: PassageSentence, idx: number) => {
-            Text(s.translation)
-              .fontSize(13.5).lineHeight(24).fontColor(Colors.TEXT_SUB)
-              .width('100%').margin({ bottom: 8 })
-          }, (s: PassageSentence, idx: number): string => `zh-${idx}`)
-        }
-        .width('100%').margin({ top: 10 })
-      }
+      Text(s.translation)
+        .fontSize(13).lineHeight(21).fontColor(Colors.TEXT_SUB)
+        .width('100%').margin({ top: 6 })
     }
-    .width('100%').padding({ left: 18, right: 18, top: 18, bottom: 12 })
-    .backgroundColor(Colors.WHITE).borderRadius(Radius.CARD)
-    .margin({ bottom: 14 })
-    .opacity(this.contentOpacity)
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .padding({ top: 14, bottom: 12 })
+    .border({ width: { top: idx === 0 ? 0 : 1 }, color: Colors.DIVIDER })
   }
 
   /** 骨架屏：4~7 条灰条呼吸 + 一行进行时文案 */
@@ -755,7 +864,7 @@ export struct TodaySentencePage {
       .width('100%').alignItems(HorizontalAlign.Start)
 
       Row() {
-        Text('正在用今天的词写一段…')
+        Text('正在翻这本文库…')
           .fontSize(13).fontColor(Colors.TEXT_SUB)
       }
       .width('100%').padding({ top: 6 })
@@ -790,7 +899,7 @@ export struct TodaySentencePage {
   FallbackView() {
     Column() {
       Row() {
-        Text('当前无法生成例句，先看看这批单词的意思。网络恢复后点「重试」。')
+        Text('这批词还没收例句，先看单词释义。')
           .fontSize(12.5).lineHeight(20).fontColor(Colors.FUZZY_ORANGE).layoutWeight(1)
         Button('重试')
           .fontSize(12).fontColor(Colors.BRAND).backgroundColor(Colors.WHITE)
@@ -824,22 +933,152 @@ export struct TodaySentencePage {
     .width('100%').opacity(this.contentOpacity)
   }
 
-  /** idle：还没生成，给一个大按钮（不替用户白扣额度） */
+  /** idle：点名册（默认全选，点掉不想用的）+ 底部单条 CTA；列表自己滚，不再三个 Blank 硬顶居中 */
   @Builder
   IdleView() {
     Column() {
-      Blank()
-      Text('今天有 ' + this.batches.length + ' 批词')
-        .fontSize(13).fontColor(Colors.TEXT_SUB)
-      Text('点下面的按钮，用今天的词写一段连贯短文')
-        .fontSize(13).fontColor(Colors.TEXT_WEAK).margin({ top: 6 })
-      Button('生成例句')
-        .fontSize(16).fontColor(Colors.WHITE).backgroundColor(Colors.BRAND)
-        .borderRadius(Radius.BUTTON).height(50).width(220).margin({ top: 22 })
-        .onClick(() => this.loadBatch(this.current, false))
-      Blank()
+      Scroll() {
+        Column() {
+          // 标题区：eyebrow → 26fp 主标题 → 12.5fp 说明，三级落差就是"眼睛的落点"
+          Column() {
+            Text('今天要用的词')
+              .fontSize(11).fontColor(Colors.TEXT_WEAK).letterSpacing(1.1)
+            Text('点掉不想用的')
+              .fontSize(26).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
+              .margin({ top: 6 })
+            Text('默认全选，扫一眼把不合适的取消就行。')
+              .fontSize(12.5).fontColor(Colors.TEXT_SUB).margin({ top: 7 })
+          }
+          .width('100%').alignItems(HorizontalAlign.Start)
+          .padding({ left: 20, right: 20, top: 6 })
+          .opacity(this.rowsIn ? 1 : 0)
+          .translate({ y: this.rowsIn ? 0 : 8 })
+          .animation({ duration: Motion.PAGE, curve: Motion.pageCurve() })
+
+          // 计数行 + 一键全选 / 全部取消
+          Row() {
+            Text(`已选 ${this.selectedCount(this.current)} / ${this.batches.length > 0 ? this.batches[this.current].length : 0}`)
+              .fontSize(11).fontColor(Colors.TEXT_WEAK).letterSpacing(0.6)
+            Blank()
+            Text(this.allSelected() ? '全部取消' : '全选')
+              .fontSize(12).fontWeight(FontWeight.Bold).fontColor(Colors.BRAND)
+              .padding({ left: 8, right: 2, top: 5, bottom: 5 })
+              .onClick(() => {
+                this.setAllFlags(!this.allSelected());
+              })
+          }
+          .width('100%').padding({ left: 20, right: 20 })
+          .margin({ top: 16, bottom: 9 })
+          .opacity(this.rowsIn ? 1 : 0)
+          .animation({ duration: Motion.PAGE, delay: 40, curve: Motion.pageCurve() })
+
+          // 册页：单列 52vp 行 = 序号 / 英文 / 音标 / 释义 / 方勾，扫读最快
+          Column() {
+            Column() {
+              if (this.batches.length > 0) {
+                ForEach(this.batches[this.current], (w: Word, wi: number) => {
+                  Row() {
+                    // 选中标记：左侧 3vp 蓝条从 0 滑出，比整行换色更克制
+                    Row()
+                      .width(this.wordFlag(wi) ? 3 : 0)
+                      .height(22).borderRadius(2)
+                      .backgroundColor(Colors.BRAND)
+                      .margin({ right: 11 })
+                      .animation({ duration: Motion.FEEDBACK, curve: Motion.pageCurve() })
+
+                    Text(this.pad2(wi + 1))
+                      .fontSize(10).fontColor(Colors.TEXT_WEAK).width(18)
+
+                    Row() {
+                      Text(w.english)
+                        .fontSize(15).fontFamily('Georgia')
+                        .fontColor(this.wordFlag(wi) ? Colors.BRAND_PRESSED : Colors.TEXT_MAIN)
+                        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .flexShrink(1)
+                        .animation({ duration: Motion.FEEDBACK, curve: Motion.pageCurve() })
+                      if (w.phonetic.length > 0) {
+                        Text(w.phonetic)
+                          .fontSize(9.5).fontColor(Colors.TEXT_WEAK).maxLines(1)
+                          .flexShrink(0).margin({ left: 7 })
+                      }
+                    }
+                    .layoutWeight(1).alignItems(VerticalAlign.Center)
+
+                    Text(w.meanings.length > 0 ? w.meanings[0] : '—')
+                      .fontSize(10.5).fontColor(Colors.TEXT_WEAK).maxLines(1)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                      .width(70).textAlign(TextAlign.End)
+                      .margin({ left: 8, right: 10 })
+
+                    Stack() {
+                      if (this.wordFlag(wi)) {
+                        Text('✓').fontSize(11).fontWeight(FontWeight.Bold).fontColor(Colors.WHITE)
+                      }
+                    }
+                    .width(20).height(20).borderRadius(6)
+                    .backgroundColor(this.wordFlag(wi) ? Colors.BRAND : Color.Transparent)
+                    .border({ width: 1.5, color: this.wordFlag(wi) ? Colors.BRAND : PICK_BOX_LINE })
+                    .margin({ left: 10 })
+                    .animation({ duration: Motion.FEEDBACK, curve: Motion.pageCurve() })
+                  }
+                  .width('100%').height(52).padding({ left: 14, right: 14 })
+                  .backgroundColor(this.wordFlag(wi) ? PICK_ROW_ON_BG : Colors.WHITE)
+                  .border({
+                    width: { bottom: wi === this.batches[this.current].length - 1 ? 0 : 1 },
+                    color: PICK_ROW_LINE
+                  })
+                  .opacity(this.rowsIn ? 1 : 0)
+                  .translate({ y: this.rowsIn ? 0 : 6 })
+                  .animation({
+                    duration: Motion.FEEDBACK,
+                    delay: 60 + Math.min(wi, 20) * 24,
+                    curve: Motion.pageCurve()
+                  })
+                  .onClick(() => this.toggleWordFlag(wi))
+                }, (w: Word, wi: number): string => `pick-${this.current}-${wi}-${w.id}`)
+              }
+            }
+            .width('100%')
+            .backgroundColor(Colors.WHITE).borderRadius(16)
+            .border({ width: 1, color: Colors.DIVIDER })
+            .clip(true)
+          }
+          .width('100%').padding({ left: 16, right: 16 })
+        }
+        .width('100%').padding({ bottom: 18 })
+      }
+      .layoutWeight(1).width('100%').scrollBar(BarState.Off).align(Alignment.Top)
+
+      // 底部固定 CTA：一处动作，一个按钮，不当场消耗额度
+      Column() {
+        Row() {
+          Text() {
+            Span('已选 ').fontSize(12).fontColor(Colors.TEXT_SUB)
+            Span(`${this.selectedCount(this.current)}`)
+              .fontSize(13).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
+            Span(' 个词').fontSize(12).fontColor(Colors.TEXT_SUB)
+          }
+          Blank()
+          Text(`最低 ${MIN_WORDS_FOR_SENTENCE} 个`).fontSize(11).fontColor(Colors.TEXT_WEAK)
+        }
+        .width('100%').margin({ bottom: 10 })
+
+        Button(this.enoughSelected()
+          ? `看 ${this.selectedCount(this.current)} 个词的例句`
+          : `至少选 ${MIN_WORDS_FOR_SENTENCE} 个词`)
+          .fontSize(16).fontWeight(FontWeight.Medium)
+          .fontColor(Colors.WHITE).backgroundColor(Colors.BRAND)
+          .width('100%').height(50).borderRadius(Radius.BUTTON)
+          .enabled(this.enoughSelected())
+          .opacity(this.enoughSelected() ? 1 : 0.45)
+          .animation({ duration: Motion.FEEDBACK, curve: Motion.pageCurve() })
+          .onClick(() => this.loadBatch(this.current, false))
+      }
+      .width('100%').padding({ left: 16, right: 16, top: 12, bottom: 30 })
+      .backgroundColor(Colors.PAGE_BG)
+      .border({ width: { top: 1 }, color: Colors.DIVIDER })
     }
-    .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
+    .width('100%').layoutWeight(1)
   }
 
   /** 底部固定操作栏：朗读 / 收藏 / 分享 / 换一批 */
@@ -870,7 +1109,7 @@ export struct TodaySentencePage {
           this.sharePassage();
         })
 
-      Button(this.currentState().status === 'loading' ? '生成中…' : '换一批')
+      Button(this.currentState().status === 'loading' ? '加载中…' : '重选')
         .fontSize(13).fontColor(Colors.WHITE)
         .backgroundColor(this.currentState().status === 'loading' ? Colors.TEXT_WEAK : Colors.BRAND)
         .borderRadius(Radius.BUTTON).height(44).layoutWeight(1.35)
@@ -887,7 +1126,7 @@ export struct TodaySentencePage {
   PassageShareView() {
     Column() {
       Row() {
-        Text('词慧 · 今日例句').fontSize(12).fontColor('rgba(255,255,255,0.78)')
+        Text('说词 · 今日例句').fontSize(12).fontColor('rgba(255,255,255,0.78)')
         Blank()
         if (this.shareTarget !== null) {
           Text(`覆盖 ${this.shareTarget.coveredWords.length}/${this.shareTarget.coveredWords.length + this.shareTarget.missedWords.length} 词`)
@@ -907,7 +1146,7 @@ export struct TodaySentencePage {
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
       Blank()
-      Text('词慧 · 让背单词变有趣')
+      Text('说词 · 让背单词变有趣')
         .fontSize(11).fontColor('rgba(255,255,255,0.66)').width('100%')
     }
     .width('100%').aspectRatio(0.8).borderRadius(20).padding(20)
