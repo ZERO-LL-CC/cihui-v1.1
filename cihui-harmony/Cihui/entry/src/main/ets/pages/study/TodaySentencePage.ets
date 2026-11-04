@@ -25,7 +25,7 @@ import { NavStore } from '../../viewmodel/NavStore';
 import { DataStore } from '../../viewmodel/DataStore';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
 import { RouteName } from '../../common/RouteNames';
-import type { SentenceSegment, Word, WordBook } from '../../model/Types';
+import type { MemeSentence, SentenceSegment, Word, WordBook } from '../../model/Types';
 import type { PassageResult, PassageSentence } from '../../model/SentenceCore';
 import {
   MIN_WORDS_FOR_SENTENCE,
@@ -38,6 +38,7 @@ import { dayKeyFromTs } from '../../model/SchedulerCore';
 import { ExampleService } from '../../service/ExampleService';
 import { buildWordPassage } from '../../model/ExampleCore';
 import type { ExampleEntry } from '../../model/ExampleCore';
+import { findMemeExample } from '../../model/MemeExampleCore';
 import { TtsService } from '../../service/TtsService';
 import type { TtsState } from '../../service/TtsService';
 import { MemeCardService } from '../../service/MemeCardService';
@@ -272,10 +273,15 @@ export struct TodaySentencePage {
 
     // 只用这批词所属词书的例句表：切词书才换文件，别的词书不读
     const keys: string[] = [];
+    let hasNoBookWord: boolean = false;
     words.forEach((w: Word): void => {
       const k: string = this.exampleKey(w);
-      if (k.length > 0 && keys.indexOf(k) < 0) {
-        keys.push(k);
+      if (k.length > 0) {
+        if (keys.indexOf(k) < 0) {
+          keys.push(k);
+        }
+      } else {
+        hasNoBookWord = true;
       }
     });
     // 梗句本/自定义词本的词没有例句表，借当前词书兜底，所以当前词书总要读一次
@@ -283,15 +289,25 @@ export struct TodaySentencePage {
     if (activeKey.length > 0 && keys.indexOf(activeKey) < 0) {
       keys.push(activeKey);
     }
+    // 还有落在词书之外的词（梗句本/手动加词）：补读通用包，常用词能查到
+    if (hasNoBookWord && keys.indexOf(ExampleService.COMMON_KEY) < 0) {
+      keys.push(ExampleService.COMMON_KEY);
+    }
     ExampleService.INSTANCE.ensure(keys, getContext(this) as common.Context)
       .then((): void => {
         if (seq !== this.loadingSeq) {
           return; // 期间又切了批，丢弃过期结果
         }
+        const memes: MemeSentence[] = DataStore.INSTANCE.memes;
         const result: PassageResult = buildWordPassage(words, (w: Word): ExampleEntry | null => {
           const key: string = this.exampleKey(w);
           const hit: ExampleEntry | null = ExampleService.INSTANCE.get(key, w.english);
-          return hit !== null ? hit : ExampleService.INSTANCE.getAny(w.english);
+          if (hit !== null) {
+            return hit;
+          }
+          // 词书/通用包里没有：直接拿用户导入的梗句原句当例句，语境最贴
+          const anyHit: ExampleEntry | null = ExampleService.INSTANCE.getAny(w.english);
+          return anyHit !== null ? anyHit : findMemeExample(w.english, memes);
         });
         state.passage = result;
         state.status = result.sentences.length > 0 ? 'ok' : 'fallback';

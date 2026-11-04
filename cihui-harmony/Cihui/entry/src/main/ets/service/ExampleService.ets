@@ -26,9 +26,11 @@ interface RawExampleBook {
 }
 
 export class ExampleService {
-  /** 同时缓存的词书数：上一本 + 当前本，够覆盖「刚切过去还想回看」的场景 */
-  private static readonly MAX_BOOKS: number = 3;
+  /** 同时缓存的词书数：上一本 + 当前本 + 通用包，够覆盖「刚切过去还想回看」的场景 */
+  private static readonly MAX_BOOKS: number = 4;
   private static readonly DIR: string = 'examples';
+  /** 通用包文件名：梗句本/自定义词本的词靠它兜底，常驻不被淘汰 */
+  static readonly COMMON_KEY: string = 'common';
   private static inst: ExampleService = new ExampleService();
 
   static get INSTANCE(): ExampleService {
@@ -121,10 +123,17 @@ export class ExampleService {
 
   private evict(): void {
     while (this.order.length > ExampleService.MAX_BOOKS) {
-      const old: string | undefined = this.order.shift();
-      if (old !== undefined) {
-        this.cache.delete(old);
+      let idx: number = 0;
+      // 通用包不淘汰，否则梗句本的词会连着掉两轮
+      while (idx < this.order.length && this.order[idx] === ExampleService.COMMON_KEY) {
+        idx++;
       }
+      if (idx >= this.order.length) {
+        return;
+      }
+      const old: string = this.order[idx];
+      this.order.splice(idx, 1);
+      this.cache.delete(old);
     }
   }
 }

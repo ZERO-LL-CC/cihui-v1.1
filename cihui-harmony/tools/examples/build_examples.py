@@ -36,31 +36,32 @@ CLEAN_EN = re.compile(r"^[A-Za-z][A-Za-z ,.'\-!?;:]*$")
 # 中文译文必须基本是中文（允许标点与少量英文缩写）
 BAD_ZH_RATIO = 0.25
 
-# 上架审核红线：涉政 / 涉黄 / 暴力 / 毒品 / 脏话 / 宗教敏感，命中即丢
-BLACKLIST = [
-    # 脏话与侮辱
-    'fuck', 'fucking', 'shit', 'bitch', 'bastard', 'damn', 'asshole', 'crap', 'slut', 'whore',
-    'nigger', 'nigga', 'retard', 'idiot', 'stupid', 'moron', 'dumb',
-    # 性
-    'sex', 'sexual', 'porn', 'naked', 'nude', 'rape', 'prostitute', 'condom', 'penis', 'vagina',
-    'breast', 'orgasm', 'masturbat', 'horny', 'virgin',
-    # 暴力与死亡
-    'kill', 'killed', 'killing', 'murder', 'murdered', 'suicide', 'corpse', 'gun', 'shoot', 'shot',
-    'blood', 'stab', 'bomb', 'terrorist', 'war', 'weapon', 'torture',
-    # 毒品与酒精滥用
-    'drug', 'cocaine', 'heroin', 'marijuana', 'weed', 'drunk', 'alcohol', 'cigarette', 'smoking',
-    # 政治与宗教敏感
-    'god', 'jesus', 'christ', 'bible', 'church', 'pray', 'religion', 'muslim', 'islam', 'jew',
-    'communis', 'capitalis', 'socialis', 'president', 'election', 'vote', 'government', 'politic',
-    'war', 'army', 'soldier', 'nazi', 'hitler', 'racis', 'slavery', 'slave',
-    # 缩写与专名噪声
-    'ok', 'okay', 'hi', 'hello', 'yeah', 'wow', 'oh', 'ah', 'uh', 'hmm',
+# 上架审核红线分两档：
+#   HARD 命中即丢（任何情况下不出现），SOFT 只在自己是目标词时放行，
+#   否则整句不给别的词用（避免「学 grape 的例句里出现枪」这种连带风险）。
+HARD_EN = [
+    'fuck', 'shit', 'bitch', 'bastard', 'asshole', 'slut', 'whore', 'nigger', 'nigga', 'retard',
+    'porn', 'nude', 'naked', 'rape', 'prostitut', 'condom', 'penis', 'vagina', 'orgasm',
+    'masturbat', 'horny', 'nazi', 'hitler', 'terrorist', 'negro',
+    'cocaine', 'heroin', 'marijuan', 'methamphet', 'suicide',
 ]
-BLACKLIST_ZH = [
-    '杀', '死', '自杀', '枪', '血', '尸', '强奸', '性', '裸', '妓', '毒品', '吸毒', '醉',
-    '战', '军队', '恐怖', '炸', '总统', '选举', '投票', '政府', '政治', '宗教', '上帝', '教堂',
-    '祈祷', '纳粹', '希特勒', '种族', '奴隶', '屁', '屎', '妈的', '操',
+SOFT_EN = [
+    'kill', 'murder', 'corpse', 'gun', 'shoot', 'shot', 'blood', 'stab', 'bomb', 'war', 'weapon',
+    'torture', 'drug', 'weed', 'drunk', 'alcohol', 'cigarette', 'smoking', 'sex', 'sexual',
+    'breast', 'virgin', 'damn', 'god', 'jesus', 'christ', 'bible', 'church', 'pray', 'religion',
+    'muslim', 'islam', 'jew', 'president', 'election', 'vote', 'government', 'politic', 'army',
+    'soldier', 'racis', 'slaver', 'slave', 'communis', 'capitalis', 'socialis',
 ]
+# 中文侧只保留真正需要整句回避的词；单字（死/杀/血/性/裸/战）误伤太狠，全部剔除
+HARD_ZH = ['强奸', '色情', '裸体', '自杀', '纳粹', '希特勒', '毒品', '吸毒', '妓女', '妈的', '操你']
+ZH_FAMILY = {
+    '战争': ['war'], '军队': ['army', 'soldier'], '恐怖袭击': ['terrorist'], '炸弹': ['bomb'],
+    '枪支': ['gun'], '尸体': ['corpse'], '鲜血': ['blood'], '总统': ['president'],
+    '选举': ['election', 'vote'], '政治': ['politic', 'government'], '宗教': ['religion'],
+    '上帝': ['god'], '祈祷': ['pray'], '种族歧视': ['racis'], '奴隶': ['slave'],
+}
+SOFT_ZH = ['战争', '军队', '恐怖袭击', '炸弹', '枪支', '尸体', '鲜血', '总统', '选举', '政治',
+           '宗教', '上帝', '祈祷', '种族歧视', '奴隶']
 
 # 常见不规则动词 -> 各种形态，补前缀规则覆盖不到的
 IRREGULAR = {
@@ -133,10 +134,42 @@ SUFFIXES = ('s', 'es', 'ed', 'd', 'ing', 'er', 'est', 'ly', 'ment', 'ness', 'ion
             'ation', 'ions', 'ings', 'ers', 'al', 'ful', 'less')
 
 
+ALIAS = {}
+
+
+def load_alias():
+    """ECDICT 的词形表（wore->wear / griddles->griddle），比后缀规则准得多"""
+    global ALIAS
+    if ALIAS:
+        return ALIAS
+    p = os.path.join(RAW, 'dict', 'ecdict-lite.json')
+    if os.path.exists(p):
+        d = json.load(open(p, encoding='utf-8'))
+        for k, v in (d.get('alias') or {}).items():
+            k = str(k).strip().lower()
+            v = str(v).strip().lower()
+            if k and v and k != v:
+                ALIAS[k] = v
+    return ALIAS
+
+
+def alias_variants(tok):
+    """沿 alias 链向上追原形（最多 3 跳），并带上每一跳的后缀规则候选"""
+    out = {tok}
+    cur = tok
+    for _ in range(3):
+        nxt = ALIAS.get(cur)
+        if not nxt or nxt in out:
+            break
+        out.add(nxt)
+        cur = nxt
+    return out
+
+
 def token_variants(tok):
     """token -> 可能的原形候选（含自身）"""
     t = tok.lower()
-    out = {t}
+    out = alias_variants(t)
     for suf in ('ies', 'ied', 'ing', 'est', 'ers', 'ed', 'es', 'er', 'ly', 's', 'd'):
         if t.endswith(suf) and len(t) > len(suf) + 2:
             base = t[: -len(suf)]
@@ -208,10 +241,43 @@ def zh_ok(zh):
     letters = len(LATIN.findall(zh))
     if letters / max(len(zh), 1) > BAD_ZH_RATIO:
         return False
-    for b in BLACKLIST_ZH:
+    for b in HARD_ZH:
         if b in zh:
             return False
     return True
+
+
+def zh_soft(zh):
+    return {b for b in SOFT_ZH if b in zh}
+
+
+_INFLECT = r'(s|es|ed|ing|d|er|ers|ly)?'
+
+
+def _hit(low, b):
+    """整词 + 常见屈折后缀匹配，避免 'heroin' 命中 'heroine'、'sex' 命中 'Sussex'"""
+    return re.search(r'\b' + re.escape(b) + _INFLECT + r'\b', low) is not None
+
+
+def sensitive_ok(word, en, zh):
+    """目标词自己属于敏感词家族时放行（politics / slavery / gun），否则含敏感词的句子不给它用"""
+    bases = set(en_soft(en))
+    for z in zh_soft(zh):
+        bases |= set(ZH_FAMILY.get(z, ()))
+    if not bases:
+        return True
+    for b in bases:
+        if word.startswith(b[:5]) or b.startswith(word[:5]):
+            return True
+    return False
+
+
+def same_family(word, soft_hits):
+    """word 是否属于命中敏感词的同一词干（politics/politician、slave/slavery）"""
+    for b in soft_hits:
+        if word.startswith(b[:5]) or b.startswith(word[:5]):
+            return True
+    return False
 
 
 def en_ok(en):
@@ -221,14 +287,15 @@ def en_ok(en):
     if len(words) < 4 or len(words) > 18:
         return False
     low = en.lower()
-    for b in BLACKLIST:
-        if len(b) <= 3:
-            # 短词要求整词命中，避免 "shot" 命中 "photoshoot"、'ok' 命中 'look'
-            if re.search(r'\b' + re.escape(b) + r'\b', low):
-                return False
-        elif b in low:
+    for b in HARD_EN:
+        if _hit(low, b):
             return False
     return True
+
+
+def en_soft(en):
+    low = en.lower()
+    return {b for b in SOFT_EN if _hit(low, b)}
 
 
 def score(en, exact):
@@ -258,27 +325,46 @@ def load_ai_pairs():
     return out
 
 
-def harvest_tatoeba(pairs, best, srcs, all_words):
+def build_phrase_index(all_words):
+    """短语词条（ice cream / take off）按首词索引，token 命中首词时再核对整条短语"""
+    idx = {}
+    for w in all_words:
+        if ' ' in w:
+            idx.setdefault(w.split()[0], []).append(w)
+    return idx
+
+
+def harvest_tatoeba(pairs, best, srcs, all_words, phrases):
     """整句扫描：一条中英句对可能同时命中多个词，取该词的最高分句"""
     import zhconv
     for en, zh in pairs:
         if not en_ok(en):
             continue
+        en_soft_hit = en_soft(en)
+        low_en = en.lower()
         hit = {}
         for t in re.findall(r"[A-Za-z][A-Za-z'-]*", en):
-            if t.lower() in all_words:
-                hit[t.lower()] = True
+            tl = t.lower()
+            if tl in all_words:
+                hit[tl] = True
                 continue
-            for v in token_variants(t):
+            for v in token_variants(tl):
                 if v in all_words:
                     hit[v] = False
                     break
+            for ph in phrases.get(tl, ()):
+                if ph in low_en:
+                    hit[ph] = False
         if not hit:
             continue
         zhs = zhconv.convert(zh, 'zh-cn')
         if not zh_ok(zhs):
             continue
+        zh_soft_hit = zh_soft(zhs)
         for w, exact in hit.items():
+            # 句子含敏感词时只留给敏感词自己用（同性词干算自己，如 politics/politician）
+            if (en_soft_hit or zh_soft_hit) and not sensitive_ok(w, en, zhs):
+                continue
             sc = score(en, exact)
             old = best.get(w)
             if old is None or sc > old[0]:
@@ -294,15 +380,47 @@ def harvest_ai(ai_pairs, best, srcs):
             continue
         if not en_ok(en) or not zh_ok(zh):
             continue
+        if en_soft(en) or zh_soft(zh):
+            continue
         best[w] = (score(en, True), en, zh, True)
         srcs[w] = 'ai'
         n += 1
     return n
 
 
+COMMON_TOP = 6000
+
+
+def build_common(best, pairs, all_words):
+    """通用例句包：词书并集里最常用的 COMMON_TOP 个词，给梗句本/自定义词本兜底。
+    频次取自 Tatoeba 中英句对（变形经词形表归到原形）。"""
+    freq = collections.Counter()
+    for en, zh in pairs:
+        for t in re.findall(r"[A-Za-z][A-Za-z'-]*", en):
+            tl = t.lower()
+            if tl in all_words:
+                freq[tl] += 1
+                continue
+            for v in token_variants(tl):
+                if v in all_words:
+                    freq[v] += 1
+                    break
+    ranked = [w for w in all_words if w in best and freq.get(w, 0) > 0]
+    ranked.sort(key=lambda w: (-freq[w], w))
+    picked = ranked[:COMMON_TOP]
+    items = [{'w': w, 'e': best[w][1], 'z': best[w][2]} for w in picked]
+    payload = {'book': 'common', 'src': 'tatoeba', 'v': 1, 'items': items}
+    p = os.path.join(OUT_DIR, 'common.json')
+    text = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+    open(p, 'w', encoding='utf-8', newline='\n').write(text)
+    print(f'  {"common":12} {len(items):5} 条  {len(text.encode("utf-8")) / 1024:6.1f} KB')
+    return len(text.encode('utf-8'))
+
+
 def main():
     dry = '--dry' in sys.argv
 
+    load_alias()
     book_words, word_books = load_book_words()
     all_words = set(word_books.keys())
     tatoeba = load_tatoeba_pairs()
@@ -312,7 +430,8 @@ def main():
 
     best = {}   # word -> (score, en, zh, exact)
     srcs = {}   # word -> 'tatoeba' | 'ai'
-    harvest_tatoeba(tatoeba, best, srcs, all_words)
+    phrases = build_phrase_index(all_words)
+    harvest_tatoeba(tatoeba, best, srcs, all_words, phrases)
     n_ai = harvest_ai(ai_pairs, best, srcs)
     print(f'Tatoeba 覆盖 {len(best) - n_ai} 词，AI 补 {n_ai} 词')
 
@@ -352,6 +471,7 @@ def main():
         open(p, 'w', encoding='utf-8', newline='\n').write(s)
         size_total += len(s.encode('utf-8'))
         print(f'  {b:12} {len(items):5} 条  {len(s.encode("utf-8"))/1024:6.1f} KB')
+    size_total += build_common(best, tatoeba, all_words)
     print(f'总计 {size_total/1024/1024:.2f} MB')
 
 
