@@ -18,6 +18,10 @@ interface ProfileSnapshot {
   qq: string;
   avatarText: string;
   cloudEnabled: boolean;
+  /** 账号唯一标识（华为 unionID，或本机生成的 local-* ） */
+  accountId?: string;
+  /** 登录通道：huawei / local */
+  loginChannel?: string;
 }
 
 /** 用户资料（F14 注册表单与账号二级编辑页同构） */
@@ -37,6 +41,10 @@ export class UserProfile {
   @Trace avatarText: string = '';
   /** 云备份是否已开启（F15） */
   @Trace cloudEnabled: boolean = false;
+  /** 账号唯一标识：华为登录取 unionID，本地注册取 local-<时间戳> */
+  @Trace accountId: string = '';
+  /** 登录通道：huawei / local */
+  @Trace loginChannel: string = '';
 }
 
 /** 资料字段局部更新入参 */
@@ -75,7 +83,17 @@ export class AuthStore {
       p.qq = snap.qq;
       p.avatarText = snap.avatarText;
       p.cloudEnabled = snap.cloudEnabled;
+      p.loginChannel = snap.loginChannel !== undefined ? snap.loginChannel : 'local';
+      // 老版本 profile.json 无 accountId：补一个并立刻落盘，避免每次启动都变
+      if (snap.accountId !== undefined && snap.accountId !== '') {
+        p.accountId = snap.accountId;
+      } else {
+        p.accountId = `local-${Date.now()}`;
+      }
       this.profile = p;
+      if (snap.accountId === undefined || snap.accountId === '') {
+        this.persist();
+      }
     } catch (_e) {
       // 损坏资料忽略，保持未登录
     }
@@ -95,6 +113,8 @@ export class AuthStore {
       qq: p.qq,
       avatarText: p.avatarText,
       cloudEnabled: p.cloudEnabled,
+      accountId: p.accountId,
+      loginChannel: p.loginChannel,
     };
     LocalStateFiles.write(AuthStore.FILE, JSON.stringify(snap));
   }

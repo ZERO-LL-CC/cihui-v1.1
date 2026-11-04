@@ -11,6 +11,7 @@
 import { AuthStore, UserProfile } from '../viewmodel/AuthStore';
 import { SyncStore } from '../viewmodel/SyncStore';
 import { DataStore } from '../viewmodel/DataStore';
+import { AccountKitService, CHANNEL_HUAWEI, CHANNEL_LOCAL } from './AccountKitService';
 import {
   emptyRegisterForm,
   validateFieldEdit,
@@ -27,6 +28,7 @@ export interface AuthResult {
 export interface AuthService {
   isLoggedIn(): boolean;
   register(form: RegisterForm): AuthResult;
+  loginByHuawei(unionID: string): AuthResult;
   loginByThird(channel: string): AuthResult;
   updateField(field: AccountField, value: string): AuthResult;
   logout(): void;
@@ -61,7 +63,30 @@ export class LocalAuthService implements AuthService {
     profile.phone = form.phone.trim();
     profile.email = form.email.trim();
     profile.wechat = form.wechat.trim();
+    profile.accountId = `local-${Date.now()}`;
+    profile.loginChannel = CHANNEL_LOCAL;
     // F15：注册即开启云备份（首次本地备份由注册页在登录后静默触发）
+    profile.cloudEnabled = true;
+    this.store.login(profile);
+    return success('登录成功');
+  }
+
+  /**
+   * 华为账号登录（Account Kit 拿到的 unionID 直接当账号标识，无后端）。
+   * 已登录其他账号时拒绝，避免两台设备/两个账号的学习数据串到同一分区。
+   */
+  loginByHuawei(unionID: string): AuthResult {
+    if (unionID === '') {
+      return fail('未获取到华为账号标识，请重试', null);
+    }
+    const cur: UserProfile | null = this.store.profile;
+    if (cur !== null && cur.accountId !== '' && cur.accountId !== unionID) {
+      return fail('当前已登录其他账号，请先退出后再登录本账号', null);
+    }
+    const profile: UserProfile = new UserProfile();
+    profile.accountId = unionID;
+    profile.loginChannel = CHANNEL_HUAWEI;
+    profile.name = AccountKitService.INSTANCE.defaultNickname(unionID);
     profile.cloudEnabled = true;
     this.store.login(profile);
     return success('登录成功');

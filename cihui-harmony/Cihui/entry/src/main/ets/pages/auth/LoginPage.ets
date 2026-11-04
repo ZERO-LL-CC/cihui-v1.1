@@ -1,19 +1,20 @@
 /**
- * F14 登录页：微信一键登录（品牌绿）、QQ 一键登录（品牌蓝）、登录/注册（描边）。
- * 微信 / QQ 真实授权需开放平台资质与 SDK，本期由 LocalAuthService 生成本机演示账号
- * 跑通登录闭环，文案明确标注「演示登录」。
+ * F14 登录页：华为账号一键登录（官方组件，符合上架 UX 规范）+ 手机号/邮箱本地注册。
+ *
+ * 华为账号登录走 Account Kit 客户端直取 unionID，无需服务端；
+ * 微信 / QQ 一键登录需企业资质与开放平台审核，个人开发者走不通，已从入口下线。
  * 注册成功回到本页时 onShown 检测已登录，自动关闭回我的页。
  */
 import { NavStore } from '../../viewmodel/NavStore';
 import { AuthStore } from '../../viewmodel/AuthStore';
 import { LocalAuthService } from '../../service/LocalAuthService';
+import { AccountKitService } from '../../service/AccountKitService';
 import { RouteName } from '../../common/RouteNames';
 import { Colors, TypeScale, Radius, Motion } from '../../common/DesignTokens';
 import { promptAction } from '@kit.ArkUI';
+import { LoginWithHuaweiIDButton, loginComponentManager } from '@kit.AccountKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { REFRESH_BUS, RefreshListener } from '../../common/RefreshBus';
-
-const WECHAT_GREEN: string = '#07C160';
-const QQ_BLUE: string = '#12B7F5';
 
 @ComponentV2
 export struct LoginPage {
@@ -56,18 +57,34 @@ export struct LoginPage {
     }
   }
 
-  private thirdLogin(channel: string): void {
-    const r = LocalAuthService.INSTANCE.loginByThird(channel);
+  /** 华为账号登录回调：失败按错误码给可执行提示，成功落 profile */
+  private handleHuaweiCredential(err: BusinessError | null, cred: loginComponentManager.HuaweiIDCredential | null): void {
+    if (err) {
+      this.toast(AccountKitService.INSTANCE.describeError(err));
+      return;
+    }
+    const auth = AccountKitService.INSTANCE.fromCredential(cred);
+    if (!auth.ok) {
+      this.toast(auth.message);
+      return;
+    }
+    const r = LocalAuthService.INSTANCE.loginByHuawei(auth.unionID);
     this.toast(r.message);
     if (r.ok) {
-      // 演示登录成功：稍等 Toast 露出后关闭登录页回「我的」，与注册回流一致
+      // 稍等 Toast 露出后关闭登录页回「我的」，与注册回流一致
       setTimeout(() => {
         if (AuthStore.INSTANCE.isLoggedIn()) {
           NavStore.INSTANCE.back();
         }
-      }, 600);
+      }, 500);
     }
   }
+
+  private hwController: loginComponentManager.LoginWithHuaweiIDButtonController =
+    new loginComponentManager.LoginWithHuaweiIDButtonController()
+      .onClickLoginWithHuaweiIDButton((err: BusinessError, cred: loginComponentManager.HuaweiIDCredential): void => {
+        this.handleHuaweiCredential(err, cred);
+      });
 
   @Builder
   TopBar() {
@@ -96,7 +113,7 @@ export struct LoginPage {
           .width(84).height(84).borderRadius(24).backgroundColor(Colors.BRAND)
           .shadow({ radius: 18, color: '#330A59F7', offsetX: 0, offsetY: 8 })
 
-          Text('词慧').fontSize(26).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
+          Text('说词').fontSize(26).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_MAIN)
             .margin({ top: 18 })
           Text('拍照导入 · 语音快过 · 艾宾浩斯复习')
             .fontSize(13).fontColor(Colors.TEXT_SUB).margin({ top: 8 })
@@ -104,22 +121,21 @@ export struct LoginPage {
         .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
 
         Column({ space: 12 }) {
-          Button() {
-            Text('微信一键登录').fontSize(16).fontColor(Colors.WHITE)
-          }
-          .type(ButtonType.Capsule).width('100%').height(50)
-          .backgroundColor(WECHAT_GREEN)
-          .onClick(() => this.thirdLogin('wechat'))
+          LoginWithHuaweiIDButton({
+            params: {
+              style: loginComponentManager.Style.BUTTON_RED,
+              borderRadius: 25,
+              loginType: loginComponentManager.LoginType.ID,
+              supportDarkMode: true,
+              verifyPhoneNumber: false,
+            },
+            controller: this.hwController
+          })
+            .width('100%')
+            .height(50)
 
           Button() {
-            Text('QQ 一键登录').fontSize(16).fontColor(Colors.WHITE)
-          }
-          .type(ButtonType.Capsule).width('100%').height(50)
-          .backgroundColor(QQ_BLUE)
-          .onClick(() => this.thirdLogin('qq'))
-
-          Button() {
-            Text('登录 / 注册（手机号 / 邮箱）').fontSize(16).fontColor(Colors.BRAND)
+            Text('手机号 / 邮箱登录').fontSize(16).fontColor(Colors.BRAND)
           }
           .type(ButtonType.Capsule).width('100%').height(50)
           .backgroundColor(Color.Transparent)
@@ -131,7 +147,7 @@ export struct LoginPage {
         Text('登录即代表同意《用户协议》与《隐私政策》，未登录也可先体验本机功能')
           .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
           .width('100%').padding({ bottom: 6 })
-        Text('微信 / QQ 当前为本机演示登录，正式授权需接入开放平台 SDK 与服务端')
+        Text('学习数据保存在本机，换机请在「账号与云备份」中导出备份后导入恢复')
           .fontSize(10).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
           .width('100%').padding({ bottom: 22 })
       }

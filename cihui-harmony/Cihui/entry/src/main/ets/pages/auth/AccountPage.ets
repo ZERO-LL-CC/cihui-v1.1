@@ -360,7 +360,7 @@ export struct AccountPage {
               .margin({ top: 28 })
               .onClick(() => this.confirmLogout())
 
-            Text('微信 / QQ 一键登录能力待接入；当前为本地账号，资料保存在本机')
+            Text('账号用于区分本机学习数据，资料与进度均保存在本机；换机请导出备份后导入')
               .fontSize(11).fontColor(Colors.TEXT_WEAK).textAlign(TextAlign.Center)
               .width('100%').margin({ top: 16, bottom: 24 })
           }
